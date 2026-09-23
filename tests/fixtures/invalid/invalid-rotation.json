@@ -1,0 +1,41 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "id": "FIX-91",
+  "title": "허용되지 않은 회전",
+  "purpose": "CircuitDocument 스키마가 직각이 아닌 회전을 거부하는지 검증",
+  "document": {
+    "format": "edu-circuit",
+    "version": 1,
+    "documentId": "invalid-rotation",
+    "title": "허용되지 않은 회전",
+    "components": [
+      {
+        "id": "R1",
+        "type": "resistor",
+        "label": "R1",
+        "position": { "x": 0, "y": 0 },
+        "rotation": 45,
+        "properties": { "resistanceOhm": 10 },
+        "terminals": [
+          { "id": "R1.a", "role": "a" },
+          { "id": "R1.b", "role": "b" }
+        ]
+      }
+    ],
+    "wires": [],
+    "junctions": [],
+    "annotations": [],
+    "referenceNode": null,
+    "activity": null
+  },
+  "expected": {
+    "status": "error",
+    "tolerance": { "absolute": 0, "relative": 0 },
+    "probeVoltagesV": {},
+    "branchCurrentsA": {},
+    "componentVoltagesV": {},
+    "componentPowersW": {},
+    "diagnostics": [],
+    "invariants": []
+  }
+}

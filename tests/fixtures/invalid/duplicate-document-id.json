@@ -1,0 +1,43 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "id": "FIX-92",
+  "title": "문서 요소 ID 중복",
+  "purpose": "서로 다른 요소 종류 사이의 ID 중복을 거부하는지 검증",
+  "document": {
+    "format": "edu-circuit",
+    "version": 1,
+    "documentId": "duplicate-document-id",
+    "title": "문서 요소 ID 중복",
+    "components": [
+      {
+        "id": "shared-id",
+        "type": "resistor",
+        "label": "R1",
+        "position": { "x": 0, "y": 0 },
+        "rotation": 0,
+        "properties": { "resistanceOhm": 10 },
+        "terminals": [
+          { "id": "R1.a", "role": "a" },
+          { "id": "R1.b", "role": "b" }
+        ]
+      }
+    ],
+    "wires": [],
+    "junctions": [
+      { "id": "shared-id", "position": { "x": 100, "y": 0 } }
+    ],
+    "annotations": [],
+    "referenceNode": null,
+    "activity": null
+  },
+  "expected": {
+    "status": "error",
+    "tolerance": { "absolute": 0, "relative": 0 },
+    "probeVoltagesV": {},
+    "branchCurrentsA": {},
+    "componentVoltagesV": {},
+    "componentPowersW": {},
+    "diagnostics": [],
+    "invariants": []
+  }
+}

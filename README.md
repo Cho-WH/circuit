@@ -1,12 +1,40 @@
-# 교육용 전기회로 웹앱 개발 명세 v0.2.0
+# 회로 실험실 · 1차 MVP 0.1
 
-회로를 한 번 그리면 표준 2D 회로도, 직류 시뮬레이션, 측정, 전위 색상·숫자·3D 높이, 문제지와 정답지를 같은 데이터에서 만드는 교육용 회로 작업대의 개발 기준이다.
+같은 회로 데이터에서 편집·직류 해석·전위 시각화·측정·문제 출력을 연결하는 한국어 교육용 웹앱이다. 이상적인 선형 직류 저항 회로를 지원한다.
+
+## 실행
+
+```bash
+npm ci
+npm run dev
+```
+
+Node.js 20.19 이상이 필요하다. 기본 주소는 http://localhost:5173 이다. 이 Windows 작업 환경에서는 `powershell -ExecutionPolicy Bypass -File tools/run-dev.ps1`로 번들 Node와 설치된 의존성을 사용해 실행할 수도 있다.
+
+빌드: `npm run build` → `dist/`. 정적 웹앱이며 외부 서버·로그인·API 키가 필요 없다.
+
+## 사용 흐름
+
+1. **회로 만들기**: 예제를 열거나 전원·저항·스위치·계기를 배치하고 단자를 연결한다.
+2. **전위 보기**: 숫자·색상·3D 높이와 경로 그래프를 비교한다.
+3. **측정하기**: 탐침, 임시 전류계, 등가저항, KCL·KVL, 기록 CSV와 값 변화 실험을 사용한다.
+4. **문제 만들기**: 문제/정답 표기, 주석과 숫자 형식을 정하고 SVG·PNG를 저장하거나 그림을 복사한다.
+
+[빠른 시작과 단축키](docs/ux/quick-start.md) · [MVP 검증 추적](docs/implementation/mvp-tracker.md)
+
+자동 저장은 현재 브라우저에 남으며 JSON으로 별도 보관할 수 있다. 측정 기록은 메모리에 있으므로 페이지를 닫기 전에 CSV로 저장한다. 파일 형식은 `edu-circuit` v1이다.
+
+이번 1차 범위는 **단계 0~5**다. 공유 링크·학생 활동 배포와 실제 교실 사용성 평가는 단계 6~7의 후속 범위다. 원격 배포와 실제 교사·학생 대상 연구는 수행하지 않았다.
 
 ## 현재 단계
 
-현재 구현 단계는 **단계 0 — 기반 설계**다. 앱 코드를 확장하기 전에 문서 스키마, 모듈 경계, 기준 회로, 기술 결정 기록을 확정한다.
+**단계 0~5 기능 MVP 완료.** 최종 228개 테스트·타입·경계·명세·빌드를 통과했고 메인 에이전트가 데스크톱·모바일 시각 검증을 마쳤다. [검증 범위와 제한](docs/testing/mvp-coverage.md)을 함께 확인한다.
+
+현재 진행은 [현재 단계](docs/implementation/current-phase.md)와 [MVP 작업 추적](docs/implementation/mvp-tracker.md)에서 확인한다. 각 단계의 검증 게이트를 통과한 뒤 다음 단계로 진행한다.
 
 ## 문서 지도
+
+- MVP 작업 추적: [`docs/implementation/mvp-tracker.md`](docs/implementation/mvp-tracker.md)
 
 - 제품 목표와 범위: [`docs/product/`](docs/product/)
 - 사용자 경험: [`docs/ux/`](docs/ux/)
@@ -20,6 +48,10 @@
 - 개발 운영: [`docs/operations/`](docs/operations/)
 
 ## 명세 검증
+
+개발 환경은 Node.js 20.19 이상에서 `npm install` 후 `npm run dev`로 시작한다.
+코드 검증 명령은 `npm run typecheck`, `npm test`, `npm run check:boundaries`, `npm run build`다.
+현재 협업에서는 검증 담당 에이전트가 이 명령을 실행하고 결과를 MVP 추적 문서에 기록한다.
 
 ```bash
 python -m pip install -r requirements.txt

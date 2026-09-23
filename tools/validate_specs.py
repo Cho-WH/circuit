@@ -128,6 +128,8 @@ def validate_markdown_links() -> list[str]:
     errors: list[str] = []
     link_pattern = re.compile(r'\[[^\]]+\]\(([^)]+)\)')
     for path in ROOT.rglob('*.md'):
+        if any(part in {'node_modules', '.git', 'dist', '.venv', '.npm-cli', '.pnpm-store'} for part in path.relative_to(ROOT).parts):
+            continue
         text = path.read_text(encoding='utf-8')
         for target in link_pattern.findall(text):
             if '://' in target or target.startswith('#'):

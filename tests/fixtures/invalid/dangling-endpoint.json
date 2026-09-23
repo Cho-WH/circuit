@@ -1,0 +1,48 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "id": "FIX-93",
+  "title": "존재하지 않는 단자 참조",
+  "purpose": "도선 끝점의 끊어진 참조를 거부하는지 검증",
+  "document": {
+    "format": "edu-circuit",
+    "version": 1,
+    "documentId": "dangling-endpoint",
+    "title": "존재하지 않는 단자 참조",
+    "components": [
+      {
+        "id": "R1",
+        "type": "resistor",
+        "label": "R1",
+        "position": { "x": 0, "y": 0 },
+        "rotation": 0,
+        "properties": { "resistanceOhm": 10 },
+        "terminals": [
+          { "id": "R1.a", "role": "a" },
+          { "id": "R1.b", "role": "b" }
+        ]
+      }
+    ],
+    "wires": [
+      {
+        "id": "W1",
+        "start": { "kind": "terminal", "id": "R1.a" },
+        "end": { "kind": "terminal", "id": "missing-terminal" },
+        "waypoints": []
+      }
+    ],
+    "junctions": [],
+    "annotations": [],
+    "referenceNode": null,
+    "activity": null
+  },
+  "expected": {
+    "status": "error",
+    "tolerance": { "absolute": 0, "relative": 0 },
+    "probeVoltagesV": {},
+    "branchCurrentsA": {},
+    "componentVoltagesV": {},
+    "componentPowersW": {},
+    "diagnostics": [],
+    "invariants": []
+  }
+}

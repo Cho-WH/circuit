@@ -7,6 +7,7 @@
 
 ## 사용자 경험
 
+- [`ux/quick-start.md`](ux/quick-start.md): 실행, 편집, 전위·측정, 저장과 단축키
 - [`ux/overview.md`](ux/overview.md): 화면 모드와 반응형 구조
 - [`ux/interactions.md`](ux/interactions.md): 부품 배치, 배선, 값 수정, 오류 피드백
 - [`ux/workflows.md`](ux/workflows.md): 교사·학생의 주요 작업 흐름
@@ -30,7 +31,9 @@
 
 - [`implementation/phases.md`](implementation/phases.md): 단계 0~7의 산출물과 종료 조건
 - [`implementation/current-phase.md`](implementation/current-phase.md): 현재 단계의 작업 목록
+- [`implementation/mvp-tracker.md`](implementation/mvp-tracker.md): MVP 진행 상태·에이전트 역할·검증 근거
 - [`implementation/definition-of-done.md`](implementation/definition-of-done.md): 공통 완료 조건
+- [`testing/mvp-coverage.md`](testing/mvp-coverage.md): 요구사항별 최종 검증·도구 제한·사용자 연구 미수행 범위
 - [`testing/strategy.md`](testing/strategy.md): 테스트 층과 물리 불변식
 - [`testing/fixtures.md`](testing/fixtures.md): FIX-01~FIX-10의 목적
 - [`testing/usability.md`](testing/usability.md): 교사·학생 사용성 과제
