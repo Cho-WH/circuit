@@ -99,6 +99,7 @@ src/simulation/index.ts
 src/simulation/measurements.ts
 src/visualization/index.ts
 tests/boundaries.test.ts
+tests/canvas-drag.test.ts
 tests/editor-persistence.test.ts
 tests/fixtures/invalid/dangling-endpoint.json
 tests/fixtures/invalid/duplicate-document-id.json

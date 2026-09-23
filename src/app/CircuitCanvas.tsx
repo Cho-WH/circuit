@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CircuitDocument, ComponentType, EndpointRef, Point, SimulationResult } from '../domain';
+import { previewCommand } from '../editor';
 import { componentPresentation, annotationPlacements, type WorksheetMode, type NumberFormat, componentValue, documentBounds, endpointPosition, pointsAttribute, symbolMarkup, terminalPosition, wirePoints } from '../component-library';
 
 export interface CanvasProps {
@@ -22,9 +23,22 @@ export function CircuitCanvas(props: CanvasProps) {
   const [view, setView] = useState(() => documentBounds(document, 110));
   useEffect(() => { setView(documentBounds(document, 110)); }, [document.documentId]);
   const [pointer, setPointer] = useState<Point>({ x: 500, y: 300 });
-  const [drag, setDrag] = useState<{ start: Point; positions: Record<string, Point>; pointerId: number } | null>(null);
+  const [drag, setDrag] = useState<{ start: Point; current: Point; positions: Record<string, Point>; pointerId: number; document: CircuitDocument } | null>(null);
   const [pan, setPan] = useState<{ x: number; y: number; view: typeof view } | null>(null);
-  const [preview, setPreview] = useState<Record<string, Point>>({});
+  const capturedPointer = useRef<number | null>(null);
+  function cancelGesture() {
+    setDrag(null); setPan(null);
+    const id = capturedPointer.current;
+    capturedPointer.current = null;
+    if (id !== null && svg.current?.hasPointerCapture(id)) svg.current.releasePointerCapture(id);
+  }
+  useEffect(() => { cancelGesture(); }, [document, tool, placement, props.readOnly]);
+  useEffect(() => {
+    const cancel = (e: KeyboardEvent) => { if (e.key === 'Escape') cancelGesture(); };
+    window.addEventListener('keydown', cancel);
+    window.addEventListener('blur', cancelGesture);
+    return () => { window.removeEventListener('keydown', cancel); window.removeEventListener('blur', cancelGesture); };
+  }, []);
   const [viewport, setViewport] = useState({ width: 1000, height: 620 });
   useEffect(() => { if (!svg.current) return; const observer = new ResizeObserver(([entry]) => setViewport({ width: entry.contentRect.width, height: entry.contentRect.height })); observer.observe(svg.current); return () => observer.disconnect(); }, []);
   const drawingScale = Math.max(.01, Math.min(viewport.width / view.width, viewport.height / view.height));
@@ -35,7 +49,19 @@ export function CircuitCanvas(props: CanvasProps) {
     if (!matrix) return { x: 0, y: 0 };
     const p = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse()); return { x: p.x, y: p.y };
   }
-  const effective = { ...document, components: document.components.map(c => preview[c.id] ? { ...c, position: preview[c.id] } : c), wires: document.wires.map(w => Object.keys(preview).length ? { ...w, waypoints: [] } : w) };
+  const activeDrag = drag?.document === document && tool === 'select' && !placement && !props.readOnly ? drag : null;
+  function dragPositions(session: NonNullable<typeof drag>, current: Point): Record<string, Point> {
+    const delta = snap({ x: current.x - session.start.x, y: current.y - session.start.y });
+    if (delta.x === 0 && delta.y === 0) return {};
+    return Object.fromEntries(Object.entries(session.positions).map(([id, pos]) => [id, { x: pos.x + delta.x, y: pos.y + delta.y }]));
+  }
+  const effective = useMemo(() => {
+    if (!activeDrag) return document;
+    const positions = dragPositions(activeDrag, activeDrag.current);
+    if (!Object.keys(positions).length) return document;
+    const result = previewCommand(document, { type: 'MoveComponents', positions });
+    return result.ok ? result.document : document;
+  }, [document, activeDrag]);
   // One callout per electrical net. Reserve component label areas before placing callouts.
   const occupied = effective.components.map(c => ({ x: c.position.x - 68 * labelScale, y: c.position.y - 55 * labelScale, w: 136 * labelScale, h: 110 * labelScale }));
   const seenNets = new Set<string>();
@@ -79,20 +105,28 @@ export function CircuitCanvas(props: CanvasProps) {
         if (tool === 'pan' && e.key.startsWith('Arrow')) { e.preventDefault(); e.stopPropagation(); setView(v => ({ ...v, x: v.x + (e.key === 'ArrowRight' ? 40 : e.key === 'ArrowLeft' ? -40 : 0), y: v.y + (e.key === 'ArrowDown' ? 40 : e.key === 'ArrowUp' ? -40 : 0) })); }
       }}
       onPointerDown={e => {
-        if (e.button === 1 || tool === 'pan') { e.preventDefault(); setPan({ x: e.clientX, y: e.clientY, view }); e.currentTarget.setPointerCapture(e.pointerId); return; }
+        if (capturedPointer.current !== null) return;
+        if (e.button === 1 || tool === 'pan') { e.preventDefault(); setPan({ x: e.clientX, y: e.clientY, view }); capturedPointer.current = e.pointerId; e.currentTarget.setPointerCapture(e.pointerId); return; }
+        if (e.button !== 0) return;
         if (e.target !== e.currentTarget && !(e.target as Element).classList.contains('canvas-background')) return;
         const p = snap(point(e.clientX, e.clientY));
-        if (placement) props.onPlace(placement, p); else { props.onSelect(null); props.onBackground(p); }
+        if (placement && !props.readOnly) props.onPlace(placement, p); else { props.onSelect(null); props.onBackground(p); }
       }}
       onPointerMove={e => {
         const p = point(e.clientX, e.clientY); setPointer(p);
-        if (pan && svg.current) { const scale = pan.view.width / svg.current.clientWidth; setView({ ...pan.view, x: pan.view.x - (e.clientX - pan.x) * scale, y: pan.view.y - (e.clientY - pan.y) * scale }); }
-        if (drag) { const delta = snap({ x: p.x - drag.start.x, y: p.y - drag.start.y }); setPreview(Object.fromEntries(Object.entries(drag.positions).map(([id, pos]) => [id, { x: pos.x + delta.x, y: pos.y + delta.y }]))); }
+        if (pan && capturedPointer.current === e.pointerId && svg.current) { const scale = pan.view.width / svg.current.clientWidth; setView({ ...pan.view, x: pan.view.x - (e.clientX - pan.x) * scale, y: pan.view.y - (e.clientY - pan.y) * scale }); }
+        if (activeDrag?.pointerId === e.pointerId) setDrag({ ...activeDrag, current: p });
       }}
       onPointerUp={e => {
-        if (drag && Object.keys(preview).length && Object.entries(preview).some(([id, p]) => p.x !== drag.positions[id].x || p.y !== drag.positions[id].y)) props.onMove(preview);
-        setDrag(null); setPreview({}); setPan(null); if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-      }} onPointerCancel={() => { setDrag(null); setPreview({}); setPan(null); }}>
+        if (capturedPointer.current !== e.pointerId) return;
+        // Commit the release coordinates, not a possibly older pointermove render.
+        if (activeDrag?.pointerId === e.pointerId) {
+          const positions = dragPositions(activeDrag, point(e.clientX, e.clientY));
+          if (Object.keys(positions).length) props.onMove(positions);
+        }
+        cancelGesture();
+      }} onPointerCancel={e => { if (capturedPointer.current === e.pointerId) cancelGesture(); }}
+      onLostPointerCapture={e => { if (capturedPointer.current === e.pointerId) cancelGesture(); }}>
       <defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r="1" fill="#d5dce3" /></pattern></defs>
       <rect className="canvas-background" x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" />
       {!document.components.length && <g pointerEvents="none"><text x="500" y="270" textAnchor="middle" fontSize="24" fill="#5c6978">{props.readOnly ? '측정할 회로가 없습니다' : '첫 번째 회로를 그려볼까요?'}</text><text x="500" y="306" textAnchor="middle" fontSize="15" fill="#8290a0">{props.readOnly ? '회로 편집에서 부품을 추가하세요' : '왼쪽에서 부품을 선택하고 이곳에 놓으세요.'}</text></g>}
@@ -107,13 +141,16 @@ export function CircuitCanvas(props: CanvasProps) {
         return <g key={c.id} onMouseEnter={() => props.onHoverElement?.(c.id)} onMouseLeave={() => props.onHoverElement?.(null)}>
           {(select || glow) && <rect x={c.position.x - 62} y={c.position.y - 58} width="124" height="116" rx="12" fill={glow ? '#fff4d6' : '#eaf1ff'} stroke={glow ? '#efb14c' : '#3478f6'} strokeWidth="1.5" strokeDasharray={select ? '5 4' : undefined} />}
           <g role="button" tabIndex={0} aria-label={`${c.label} ${componentValue(c)}`} className="component" onPointerDown={e => {
+            if (e.button !== 0 || capturedPointer.current !== null) return;
             if (props.readOnly) { e.stopPropagation(); props.onSelect(c.id); return; }
             if (tool === 'path') { e.stopPropagation(); props.onSelect(c.id); return; }
             if (tool !== 'select' || placement) return; e.stopPropagation();
             const ids = selected.includes(c.id) ? selected : [c.id];
             if (!selected.includes(c.id) || e.shiftKey) props.onSelect(c.id, e.shiftKey);
             if (e.shiftKey) return;
-            setDrag({ start: point(e.clientX, e.clientY), positions: Object.fromEntries(document.components.filter(x => ids.includes(x.id)).map(x => [x.id, x.position])), pointerId: e.pointerId });
+            const start = point(e.clientX, e.clientY);
+            setDrag({ start, current: start, positions: Object.fromEntries(document.components.filter(x => ids.includes(x.id)).map(x => [x.id, x.position])), pointerId: e.pointerId, document });
+            capturedPointer.current = e.pointerId;
             svg.current?.setPointerCapture(e.pointerId);
           }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onSelect(c.id, e.shiftKey); } }} onDoubleClick={() => { if(!props.readOnly) { if(c.type === 'switch') props.onSwitch(c.id); else props.onValue(c.id); } }}>
             <rect x={c.position.x - 36} y={c.position.y - 30} width="72" height="60" fill="transparent" />

@@ -9,12 +9,13 @@ import {
   type Annotation,
   type CircuitDocument,
 } from "../src/domain";
-import { terminalPosition, wirePoints } from "../src/component-library";
+import { createComponent, terminalPosition, wirePoints } from "../src/component-library";
 import {
   copySelection,
   createHistory,
   executeCommand,
   parseValue,
+  previewCommand,
   redo,
   undo,
   type Command,
@@ -288,6 +289,100 @@ describe("structural editor invariants", () => {
     if (result.ok) return;
     expect(result.diagnostics.map(({ code }) => code)).toContain("DUPLICATE_ID");
     expect(history.present).toStrictEqual(document);
+  });
+});
+
+describe("command previews and wire route stability (EDT-001/002/005/006)", () => {
+  function routedSeries(): CircuitDocument {
+    const document = cloneDocument(fixture("FIX-02"));
+    document.components.push(createComponent("resistor", "R3", { x: 400, y: 200 }));
+    // A deliberate return loop from R2 to V1 must survive unrelated manipulation.
+    document.wires.find(w => w.id === "W4")!.waypoints = [
+      { x: 500, y: 0 }, { x: 500, y: 300 }, { x: 0, y: 300 },
+    ];
+    return document;
+  }
+
+  it("preserves every existing path throughout an unconnected R3 drag, commit, undo and redo", () => {
+    const history = deepFreeze(createHistory(routedSeries()));
+    const before = JSON.stringify(history);
+    const originalPaths = history.present.wires.map(w => wirePoints(history.present, w));
+    for (const position of [{ x: 400, y: 200 }, { x: 440, y: 220 }, { x: 700, y: 400 }, { x: 400, y: 200 }]) {
+      const preview = previewCommand(history.present, { type: "MoveComponents", positions: { R3: position } });
+      expect(preview.ok).toBe(true);
+      if (!preview.ok) throw new Error("preview failed");
+      expect(preview.document.wires.map(w => wirePoints(preview.document, w))).toEqual(originalPaths);
+      expect(preview.document.wires).toEqual(history.present.wires);
+    }
+    expect(JSON.stringify(history)).toBe(before);
+    const committed = mustExecute(history, { type: "MoveComponents", positions: { R3: { x: 700, y: 400 } } });
+    expect(committed.present.wires).toEqual(history.present.wires);
+    expect(committed.past).toHaveLength(1);
+    expect(undo(committed).present).toEqual(history.present);
+    expect(redo(undo(committed)).present).toEqual(committed.present);
+  });
+
+  it.each([
+    ["connected move", { type: "MoveComponents", positions: { R2: { x: 600, y: 200 } } }],
+    ["group move", { type: "MoveComponents", positions: { R1: { x: 500, y: 200 }, R2: { x: 700, y: 200 } } }],
+    ["rotation", { type: "RotateComponents", ids: ["R2"] }],
+    ["placement", { type: "AddComponent", component: createComponent("resistor", "R4", { x: 400, y: 400 }) }],
+    ["explicit route cleanup", { type: "SetWireWaypoints", paths: { W4: [] } }],
+  ] as const)("shows exactly the committed geometry for %s without changing input", (_name, command) => {
+    const history = deepFreeze(createHistory(routedSeries()));
+    const before = JSON.stringify(history);
+    const preview = previewCommand(history.present, command as Command);
+    const committed = mustExecute(history, command as Command);
+    expect(preview).toEqual({ ok: true, document: committed.present });
+    expect(JSON.stringify(history)).toBe(before);
+    expect(undo(committed).present).toEqual(history.present);
+    expect(redo(undo(committed)).present).toEqual(committed.present);
+  });
+
+  it("reroutes only wires attached to genuinely moved terminals, including mixed selections", () => {
+    const document = routedSeries();
+    const history = createHistory(document);
+    const committed = mustExecute(history, { type: "MoveComponents", positions: {
+      R1: { x: 420, y: 100 },
+      R2: { ...document.components.find(c => c.id === "R2")!.position },
+    } });
+    for (const wire of document.wires) {
+      const changed = [wire.start.id, wire.end.id].some(id => ["R1.a", "R1.b"].includes(id));
+      const actual = committed.present.wires.find(w => w.id === wire.id)!;
+      expect(actual).toEqual({ ...wire, waypoints: changed ? [] : wire.waypoints });
+    }
+    expect(committed.present.wires.find(w => w.id === "W4")!.waypoints).toHaveLength(3);
+  });
+
+  it("keeps no-op moves and redo history intact", () => {
+    const base = createHistory(routedSeries());
+    const history = undo(mustExecute(base, { type: "MoveComponents", positions: { R3: { x: 500, y: 200 } } }));
+    const command: Command = { type: "MoveComponents", positions: Object.fromEntries(history.present.components.map(c => [c.id, { ...c.position }])) };
+    expect(previewCommand(history.present, command)).toEqual({ ok: true, document: history.present });
+    const committed = mustExecute(history, command);
+    expect(committed).toBe(history);
+    expect(committed.future).toHaveLength(1);
+  });
+
+  it.each([
+    { type: "MoveComponents", positions: { missing: { x: 10, y: 20 } } },
+    { type: "MoveComponents", positions: { R3: { x: NaN, y: 20 } } },
+  ] as Command[])("rejects invalid preview and commit identically: %j", command => {
+    const history = deepFreeze(createHistory(routedSeries()));
+    const before = JSON.stringify(history);
+    const preview = previewCommand(history.present, command);
+    expect(preview.ok).toBe(false);
+    expect(executeCommand(history, command)).toEqual(preview);
+    expect(JSON.stringify(history)).toBe(before);
+  });
+
+  it("enforces activity policy in preview as well as commit", () => {
+    const document = routedSeries();
+    document.activity = { allowedCommands: ["SetProperties"], revealSteps: [] };
+    const command: Command = { type: "MoveComponents", positions: { R3: { x: 500, y: 200 } } };
+    const preview = previewCommand(document, command);
+    expect(preview).toEqual({ ok: false, diagnostics: [expect.objectContaining({ code: "COMMAND_NOT_ALLOWED" })] });
+    expect(executeCommand(createHistory(document), command)).toEqual(preview);
   });
 });
 

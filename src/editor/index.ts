@@ -49,13 +49,17 @@ export type ExecuteCommandResult =
   | { ok: true; history: History }
   | { ok: false; diagnostics: Diagnostic[] };
 
+export type PreviewCommandResult =
+  | { ok: true; document: CircuitDocument }
+  | { ok: false; diagnostics: Diagnostic[] };
+
 const HISTORY_CAPACITY = 200;
 
 function commandError(
   code: string,
   affectedIds: string[] = [],
   parameters: Diagnostic['parameters'] = {},
-): ExecuteCommandResult {
+): { ok: false; diagnostics: Diagnostic[] } {
   return { ok: false, diagnostics: [diagnostic(code, affectedIds, 'error', parameters)] };
 }
 
@@ -164,11 +168,17 @@ function applyCommand(
       const ids = Object.keys(command.positions);
       const missing = missingTargets(ids, componentIds);
       if (missing.length) return [diagnostic('COMMAND_TARGET_NOT_FOUND', missing)];
+      const invalid = ids.filter(id => !Number.isFinite(command.positions[id].x) || !Number.isFinite(command.positions[id].y));
+      if (invalid.length) return [diagnostic('INVALID_COMMAND', invalid, 'error', { command: command.type })];
+      const movedIds = new Set<string>();
       for (const component of document.components) {
         const position = command.positions[component.id];
-        if (position) component.position = { ...position };
+        if (position && (position.x !== component.position.x || position.y !== component.position.y)) {
+          component.position = { ...position };
+          movedIds.add(component.id);
+        }
       }
-      clearConnectedWirePaths(document, new Set(ids));
+      clearConnectedWirePaths(document, movedIds);
       break;
     }
 
@@ -274,28 +284,37 @@ export function createHistory(document: CircuitDocument): History {
   return { past: [], present: cloneDocument(document), future: [] };
 }
 
-export function executeCommand(history: History, command: Command): ExecuteCommandResult {
-  const policy = history.present.activity;
+/** The same validated transformation is used by previews and committed edits. No history or persistence. */
+export function previewCommand(document: CircuitDocument, command: Command): PreviewCommandResult {
+  const policy = document.activity;
   if (policy && !policy.allowedCommands.includes(command.type)) {
     return commandError('COMMAND_NOT_ALLOWED', [], { command: command.type });
   }
 
   try {
-    const applied = applyCommand(history.present, command);
+    const applied = applyCommand(document, command);
     if (Array.isArray(applied)) return { ok: false, diagnostics: applied };
     const validation = validateDocument(applied);
     if (!validation.ok) return { ok: false, diagnostics: validation.diagnostics };
 
-    const past = [...history.past, cloneDocument(history.present)].slice(-HISTORY_CAPACITY);
-    return {
-      ok: true,
-      history: { past, present: cloneDocument(validation.document), future: [] },
-    };
+    return { ok: true, document: cloneDocument(validation.document) };
   } catch (error) {
     return commandError('INVALID_COMMAND', [], {
       detail: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+export function executeCommand(history: History, command: Command): ExecuteCommandResult {
+  const preview = previewCommand(history.present, command);
+  if (!preview.ok) return preview;
+  // A click, sub-grid movement, or returning to the starting position is not an edit.
+  if (command.type === 'MoveComponents' && Object.entries(command.positions).every(([id, p]) => {
+    const original = history.present.components.find(c => c.id === id)!;
+    return original.position.x === p.x && original.position.y === p.y;
+  })) return { ok: true, history };
+  const past = [...history.past, cloneDocument(history.present)].slice(-HISTORY_CAPACITY);
+  return { ok: true, history: { past, present: preview.document, future: [] } };
 }
 
 export function undo(history: History): History {
