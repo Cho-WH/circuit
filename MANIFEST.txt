@@ -1,3 +1,4 @@
+.github/workflows/deploy-pages.yml
 .github/workflows/verify.yml
 .gitignore
 AGENTS.md

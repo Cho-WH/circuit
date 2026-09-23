@@ -24,11 +24,11 @@ Node.js 20.19 이상이 필요하다. 기본 주소는 http://localhost:5173 이
 
 자동 저장은 현재 브라우저에 남으며 JSON으로 별도 보관할 수 있다. 측정 기록은 메모리에 있으므로 페이지를 닫기 전에 CSV로 저장한다. 파일 형식은 `edu-circuit` v1이다.
 
-이번 1차 범위는 **단계 0~5**다. 공유 링크·학생 활동 배포와 실제 교실 사용성 평가는 단계 6~7의 후속 범위다. 원격 배포와 실제 교사·학생 대상 연구는 수행하지 않았다.
+이번 1차 범위는 **단계 0~5**다. 공유 링크·학생 활동 배포와 실제 교실 사용성 평가는 단계 6~7의 후속 범위다. GitHub Pages 게시 설정을 추가했다. 실제 교사·학생 대상 연구는 수행하지 않았다.
 
 ## 현재 단계
 
-**단계 0~5 기능 MVP 완료.** 최종 228개 테스트·타입·경계·명세·빌드를 통과했고 메인 에이전트가 데스크톱·모바일 시각 검증을 마쳤다. [검증 범위와 제한](docs/testing/mvp-coverage.md)을 함께 확인한다.
+**단계 0~5 기능 MVP 완료.** 최종 232개 테스트·타입·경계·명세·빌드를 통과했고 메인 에이전트가 데스크톱·모바일 시각 검증을 마쳤다. [검증 범위와 제한](docs/testing/mvp-coverage.md)을 함께 확인한다.
 
 현재 진행은 [현재 단계](docs/implementation/current-phase.md)와 [MVP 작업 추적](docs/implementation/mvp-tracker.md)에서 확인한다. 각 단계의 검증 게이트를 통과한 뒤 다음 단계로 진행한다.
 
@@ -63,3 +63,14 @@ python tools/validate_specs.py
 ## 제품 한 문장 정의
 
 > 교과서처럼 익숙하고, 프레젠테이션처럼 쉽고, 실험 장치처럼 즉각 반응하는 교육용 회로 작업대.
+
+
+## GitHub Pages 배포
+
+게시 주소: https://cho-wh.github.io/circuit/
+
+`codex/mvp`에 푸시하면 `.github/workflows/deploy-pages.yml`이 명세·경계·테스트·타입·빌드를 확인한 뒤 `dist`를 GitHub Pages에 게시한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**다. 현재 배포 브랜치는 `codex/mvp` 하나이며, `main`으로 전환할 때 워크플로의 push 브랜치와 build 조건, github-pages 환경의 허용 브랜치를 함께 변경한다.
+
+배포 빌드만 `GITHUB_PAGES=true`를 설정해 `/circuit/` 경로를 사용한다. 로컬 개발은 기존 `/` 경로다. 빌드 결과만 업로드하며 소스·테스트·로컬 저장 데이터는 배포 산출물에 포함하지 않는다. 다른 기기에서 회로를 이어서 쓰려면 JSON으로 옮겨야 한다.
+
+배포 실패 시 Actions의 **Deploy GitHub Pages** 실행 로그를 확인한다. 재배포는 해당 실행의 Re-run jobs를 사용한다. 회귀 문제가 있으면 문제 커밋을 revert한 새 커밋을 배포 브랜치에 푸시한다.

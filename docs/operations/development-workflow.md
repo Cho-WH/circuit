@@ -56,3 +56,8 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 - 앱 정보에 빌드 버전과 문서 스키마 버전을 함께 표시한다.
 - 이전 안정 배포를 유지한다.
 - 핵심 자산과 파일 입출력은 서버 API에 의존하지 않는다.
+
+
+### MVP 정적 사이트 게시
+
+GitHub Pages + Actions로 `codex/mvp`의 검증된 `dist`를 게시한다. URL은 https://cho-wh.github.io/circuit/ 이다. `GITHUB_PAGES=true`는 배포 빌드에만 적용한다. `github-pages` 환경은 이 브랜치만 허용하고 deploy job에만 `pages: write`, `id-token: write`를 부여한다. 빌드 검증 실패 시 배포 job을 실행하지 않는다. 단계 6의 학생 활동·공유 서버 기능과 별개인 현재 정적 MVP의 게시다.
