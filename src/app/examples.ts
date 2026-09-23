@@ -1,19 +1,75 @@
-import { cloneDocument, type CircuitDocument } from '../domain';
+import { cloneDocument, type CircuitDocument, type ComponentInstance } from '../domain';
+
+type Placement = readonly [x: number, y: number, rotation: ComponentInstance['rotation']];
+interface ExampleLayout {
+  components: Record<string, Placement>;
+  junctions?: Record<string, readonly [x: number, y: number]>;
+  routes: Record<string, readonly (readonly [x: number, y: number])[]>;
+}
+
+// Presentation only: keep fixture IDs, endpoint references, values and reference nodes intact.
+// Routes are explicit so automatic elbows cannot run through a symbol or double back.
+const series: ExampleLayout = {
+  components: { V1: [240, 340, 90], R1: [440, 220, 0], R2: [660, 220, 0] },
+  junctions: { J1: [550, 220] },
+  routes: { W1: [[240, 220]], W4: [[860, 220], [860, 460], [240, 460]] },
+};
+
+const layouts: Record<string, ExampleLayout> = {
+  'fix-01': {
+    components: { V1: [240, 340, 90], R1: [520, 220, 0] },
+    routes: { W1: [[240, 220]], W2: [[800, 220], [800, 460], [240, 460]] },
+  },
+  'fix-02': series,
+  'fix-03': {
+    // Equal-width horizontal branches, with a centered source on the bottom rail.
+    components: { V1: [560, 520, 0], R1: [560, 200, 0], R2: [560, 360, 0] },
+    junctions: { JT: [320, 360], JB: [800, 360] },
+    routes: {
+      W1: [[320, 520]], W2: [[320, 200]], W4: [[800, 200]], W6: [[800, 520]],
+    },
+  },
+  'fix-04': {
+    components: { V1: [580, 540, 0], R1: [400, 300, 0], R2: [680, 200, 0], R3: [680, 400, 0] },
+    junctions: { JM: [520, 300], JG: [840, 300] },
+    routes: {
+      W1: [[240, 540], [240, 300]], W3: [[520, 200]], W4: [[520, 400]],
+      W5: [[840, 200]], W6: [[840, 400]], W7: [[920, 300], [920, 540]],
+    },
+  },
+  'fix-05': {
+    components: { V1: [240, 340, 90], S1: [440, 220, 0], R1: [660, 220, 0] },
+    routes: { W1: [[240, 220]], W3: [[860, 220], [860, 460], [240, 460]] },
+  },
+  'fix-09': {
+    // Two matching vertical resistor stacks and a horizontal center bridge.
+    components: {
+      V1: [240, 360, 90], R1: [480, 280, 90], R2: [480, 440, 90],
+      R3: [800, 280, 90], R4: [800, 440, 90], R5: [640, 360, 0],
+    },
+    junctions: { JT: [480, 200], JB: [480, 520], JL: [480, 360], JR: [800, 360] },
+    routes: { W1: [[240, 200]], W6: [[800, 200]], W9: [[800, 520]], W12: [[240, 520]] },
+  },
+  'fix-10': series,
+};
+
 export function layoutExample(input: CircuitDocument): CircuitDocument {
   const document = cloneDocument(input);
-  if(document.documentId==='ux-wire-editing')return document;
-  for (const c of document.components) { c.position = { x: 240 + c.position.x * 1.2, y: 320 + c.position.y * 1.2 }; if (c.type === 'dc-voltage-source') c.rotation = 90; }
-  for (const j of document.junctions) j.position = { x: 240 + j.position.x * 1.2, y: 320 + j.position.y * 1.2 };
-  const put = (id: string, x: number, y: number) => { const item = [...document.components, ...document.junctions].find(i => i.id === id); if (item) item.position = { x, y }; };
-  const route = (id: string, points: [number, number][]) => { const wire = document.wires.find(w => w.id === id); if (wire) wire.waypoints = points.map(([x, y]) => ({ x, y })); };
-  if (['fix-01', 'fix-02', 'fix-05', 'fix-10'].includes(document.documentId)) {
-    put('V1', 240, 340); put('R1', document.documentId === 'fix-01' ? 540 : document.documentId === 'fix-05' ? 660 : 440, 220); put('R2', 660, 220); put('S1', 440, 220); put('J1', 550, 220);
-    const returnId = document.documentId === 'fix-01' ? 'W2' : document.documentId === 'fix-05' ? 'W3' : 'W4';
-    route(returnId, [[800, 220], [800, 460], [240, 460]]);
+  const layout = layouts[document.documentId];
+  if (!layout) return document;
+  for (const component of document.components) {
+    const placement = layout.components[component.id];
+    if (!placement) continue;
+    const [x, y, rotation] = placement;
+    component.position = { x, y };
+    component.rotation = rotation;
   }
-  if (document.documentId === 'fix-03') {
-    put('V1', 240, 340); put('R1', 560, 240); put('R2', 560, 440); put('JT', 420, 240); put('JB', 740, 440);
-    route('W4', [[740, 240]]); route('W6', [[740, 500], [240, 500]]);
+  for (const junction of document.junctions) {
+    const placement = layout.junctions?.[junction.id];
+    if (placement) junction.position = { x: placement[0], y: placement[1] };
+  }
+  for (const wire of document.wires) {
+    wire.waypoints = (layout.routes[wire.id] ?? []).map(([x, y]) => ({ x, y }));
   }
   return document;
 }
