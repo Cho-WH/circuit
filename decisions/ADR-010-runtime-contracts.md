@@ -5,7 +5,7 @@
 
 ## 결정
 
-`src/domain/index.ts`에 현재 JSON Schema와 대응하는 저장 타입과 최소 공개 계산 계약을 둔다. JSON Schema를 Ajv 2020으로 검증한 뒤 ID 유일성과 참조 대상 종류를 검사한다. 파일 형식은 version 2이며 계산값과 UI 상태를 문서에 추가하지 않는다. v1 호환 변환은 ADR-012를 따른다.
+`src/domain/index.ts`에 현재 JSON Schema와 대응하는 저장 타입과 최소 공개 계산 계약을 둔다. JSON Schema를 Ajv 2020으로 검증한 뒤 ID 유일성과 참조 대상 종류를 검사한다. 현재 파일 형식은 version 4이며 계산값과 UI 상태를 문서에 추가하지 않는다. v1~v3 순차 호환 변환은 ADR-012를 따른다.
 
 `CompiledCircuit`는 결정론적인 net 목록, 부품 요소, endpoint→net 대응 및 명시적 기준점을 가진다. 부품 방향은 첫 단자→두 번째 단자이며 전압원은 positive→negative 순서로 정규화한다. `SimulationResult`는 상태, net 전위, 가지 전류, 부품 전압·전력과 구조화된 진단을 제공한다. 정의되지 않은 수치는 결과 맵에 넣지 않는다.
 

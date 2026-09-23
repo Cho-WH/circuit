@@ -3,6 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OutputCanvas } from '../src/app/OutputCanvas';
+import { WorksheetPanel } from '../src/app/WorksheetPanel';
 import { layoutExample } from '../src/app/examples';
 import { examples } from '../src/fixtures';
 import { createHistory, executeCommand } from '../src/editor';
@@ -84,5 +85,30 @@ describe('arrow length handles',()=>{
     expect(c.dispatch).not.toHaveBeenCalled();
     c.pointer(start(),'pointerdown',100,100);c.pointer(c.svg,'pointerup',120,70);
     expect(c.history().present.annotations[0]).toMatchObject({position:{x:100,y:70},arrow:{length:110,legLength:60,rotation:90}});
+  });
+});
+
+describe('contextual output settings',()=>{
+  it('keeps independent arrow notation controls and groups picture options under the selected target',()=>{
+    const doc=layoutExample(examples[1].document);
+    doc.annotations=[{id:'arrow',kind:'arrow',anchor:null,position:{x:100,y:100},content:'I_1',visibility:'always',presentation:{answerText:'3/4 A',labelOffsetX:25,answerOffsetX:40}}];
+    const dispatch=vi.fn(()=>true);
+    const toolbar=document.createElement('div');toolbar.id='worksheet-actions';document.body.append(toolbar);
+    try {
+      act(()=>root.render(createElement(WorksheetPanel,{active:true,document:doc,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},selected:['arrow'],tool:'select',onTool:()=>{},options:{monochrome:true},onOptions:()=>{},onFontPreview:()=>{},onSelect:()=>{},dispatch,onNotice:()=>{},undo:()=>{},redo:()=>{},canUndo:false,canRedo:false,toolbarEnd:createElement('button',null,'상세 설정')})));
+      expect(host.querySelector('h3')?.textContent).toBe('화살표');
+      expect(host.querySelector('h4')).toBeNull();
+      expect(host.querySelector('fieldset legend')?.textContent).toBe('그림 설정');
+      expect(host.querySelector<HTMLInputElement>('[aria-label="값 출력 문자"]')?.value).toBe('3/4 A');
+      act(()=>host.querySelector<HTMLInputElement>('[aria-label="기호·이름 표시"]')!.click());
+      expect(dispatch).toHaveBeenLastCalledWith({type:'UpdateAnnotation',id:'arrow',changes:{presentation:{...doc.annotations[0].presentation,labelVisible:false}}});
+      act(()=>host.querySelector<HTMLInputElement>('[aria-label="값 빈칸"]')!.click());
+      expect(dispatch).toHaveBeenLastCalledWith({type:'UpdateAnnotation',id:'arrow',changes:{presentation:{...doc.annotations[0].presentation,answerBlank:true}}});
+      act(()=>host.querySelector<HTMLButtonElement>('[aria-label="기호·이름 위치 초기화"]')!.click());
+      expect(dispatch).toHaveBeenLastCalledWith({type:'UpdateAnnotation',id:'arrow',changes:{presentation:{...doc.annotations[0].presentation,labelOffsetX:0,labelOffsetY:0}}});
+      expect(toolbar.querySelector('[aria-label="화살표 방향 반전"]')).not.toBeNull();
+      expect(toolbar.textContent).toContain('그림 복사');
+      expect(toolbar.textContent).toContain('상세 설정');
+    } finally {toolbar.remove();}
   });
 });

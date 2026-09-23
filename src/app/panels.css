@@ -1,0 +1,26 @@
+.worksheet-panel{color:var(--ink,#30382f)}
+section.worksheet-panel>h3{font-size:15px;margin:0 0 16px;line-height:1.6}
+.worksheet-panel .annotation-edit{background:none;border-radius:0;padding:0;margin:0;gap:8px}
+.worksheet-panel .output-notation{margin:0 0 18px}
+.worksheet-panel .output-field-heading{font-size:13px;margin-bottom:8px}
+.worksheet-panel .output-field-heading input[role=switch]{background:#838b7b}
+.worksheet-panel .output-field-heading input[role=switch]:checked{background:var(--accent,#53694b)}
+.output-field-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.worksheet-panel .output-field-actions .check-label{margin:0;min-height:32px;font-size:12px}
+.worksheet-panel .output-reset{position:static;font-size:12px;padding:6px;color:var(--muted,#667060);min-height:32px}
+.worksheet-panel .output-decoration-list{border-top:1px solid var(--line,#deded5);padding-top:12px;margin-top:16px;font-size:13px}
+.output-decoration-list summary{cursor:pointer;font-weight:600}
+.worksheet-panel .annotation-list button{background:none;border:1px solid var(--line,#deded5);border-radius:4px;min-height:34px;font-size:13px}
+.worksheet-panel .annotation-list button.active{background:#e8ecdf;border-color:var(--accent,#53694b)}
+.worksheet-panel .output-export-options{border:0;border-top:1px solid var(--line,#deded5);margin:20px 0 0;padding:12px 0 0;min-width:0;display:flex;flex-direction:column;gap:4px}
+.worksheet-panel .output-export-options legend{padding:0 8px 0 0;font-size:13px;font-weight:600}
+.worksheet-panel .output-export-options .check-label{font-size:13px;color:var(--ink,#30382f)}
+.worksheet-topbar .output-actions{display:flex;align-items:center;gap:8px}
+.worksheet-topbar .output-actions button{margin-left:0}
+.worksheet-topbar .output-actions .output-copy{min-width:88px;justify-content:center;background:var(--accent,#53694b);color:white;box-shadow:none}
+.worksheet-topbar .output-actions .output-copy:hover{background:#42583b}
+.worksheet-topbar .output-font-scale{color:var(--muted,#667060)}
+.worksheet-topbar .output-font-scale input{accent-color:var(--accent,#53694b)}
+.worksheet-topbar .arrow-controls{background:none;border-radius:0;border-left:1px solid var(--line,#deded5);padding:0 0 0 8px}
+.worksheet-topbar .arrow-controls input{border-color:var(--line,#deded5)}
+@media(max-width:640px){.worksheet-topbar .output-actions{flex-wrap:wrap;gap:6px}.worksheet-topbar .output-copy{min-width:84px}}

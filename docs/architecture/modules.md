@@ -16,9 +16,10 @@
 | `export` | 공통 기호 자원에서 인쇄용 SVG·PNG 생성 | 화면 캡처에 의존 |
 | `persistence` | 자동 저장, 파일 입출력, 버전 변환 | 계산 결과를 정답으로 저장 |
 | `feedback` | 후기 타입, 입력 정책, 일반·관리자 게이트웨이 계약 | React, 브라우저, Firebase SDK, 회로 문서 결합 |
-| `feedback-local` | 후기 로컬 미리보기, 익명 ID 소유권 확인, 작성 제한·수정·소프트 삭제 | 물리·편집 모듈 접근, 운영 백엔드로 사용 |
+| `feedback-firebase` | 운영 후기의 익명 인증·Firestore 읽기/쓰기·관리자 접근 | 회로 문서·물리 계산 결합 |
+| `feedback-local` | 이전 로컬 자료와 계약 검증용 어댑터 | 물리·편집 모듈 접근, 운영 백엔드로 사용 |
 
-활동의 허용 명령은 현재 `domain.ActivityDefinition`과 `editor`의 실행 단계에서 검사한다. 독립 `activity` 모듈과 활동 제작·배포 UI는 단계 6의 후속 범위다. 후기 게시판의 운영 전환 조건은 [게시판 구조](feedback.md)를 따른다.
+활동의 허용 명령은 현재 `domain.ActivityDefinition`과 `editor`의 실행 단계에서 검사한다. 독립 `activity` 모듈과 활동 제작·배포 UI는 단계 6의 후속 범위다. 후기 게시판의 운영 구조는 [게시판 구조](feedback.md)를 따른다.
 
 ## 핵심 공개 인터페이스
 
@@ -81,9 +82,9 @@ interface DocumentMigrator {
 
 관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v4이며 v1·v2·v3 호환 변환은 ADR-012를 따른다.
 
-`measurement`는 `probeVoltage(compilation, result, red, black)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
+`measurement`는 `probeVoltage(compilation, result, red, black)`, `probeCurrent(document, compilation, result, target)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
 
-전류계 삽입은 선택 부품의 첫 전기 단자를 사용하되 전원은 positive 단자를 우선한다. 복제한 임시 문서·계기 ID·변경된 연결 정보를 반환하며 원본을 보존한다. 등가저항과 KCL·KVL 해석은 `simulation`의 공개 함수를 사용한다. 물리 의미와 기록·실험 규칙은 [측정 규약](../physics/measurement-and-display.md)을 따른다.
+측정 탭은 `probeCurrent`의 부호 있는 전류와 기준 방향을 읽는다. 도선은 해당 edge를 제거한 연결 그래프와 단자 전류 합으로 처리하며, 도선 고리에는 미정 진단을 반환한다. 화면의 배치·스냅은 `app/measurement-tools`에 격리한다. 기존 전류계 삽입 공개 함수는 학습·계약 호환용으로 유지하며 측정 탭에서는 호출하지 않는다. 이 함수는 선택 부품의 첫 전기 단자를 사용하되 전원은 positive 단자를 우선한다. 복제한 임시 문서·계기 ID·변경된 연결 정보를 반환하며 원본을 보존한다. 등가저항과 KCL·KVL 해석은 `simulation`의 공개 함수를 사용한다. 저항 측정 UI는 `equivalentResistance`의 `excludeSourceIds`에 모든 직류 전원 ID를 전달해 개방하며 원본 문서를 수정하지 않는다. 저수준 API의 나머지 독립원 비활성화 계약은 유지한다. `CircuitCanvas`의 측정 표시 옵션과 공통 `symbolMarkup(component, { disconnectedSource })`는 전원의 리드 단절·흐림만 표현하며 전기 계산에 관여하지 않는다. 물리 의미와 기록·실험 규칙은 [측정 규약](../physics/measurement-and-display.md)을 따른다.
 
 `component-library`의 공통 표기와 `export`의 SVG·PNG·클립보드 함수 및 옵션은 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)에 모았다. `domain`의 `Exporter<TOptions>`는 확장용 인터페이스이며 앱은 현재 `exportSvg`, `exportPng`, `copyPng` 함수를 사용한다.
 

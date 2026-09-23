@@ -23,6 +23,54 @@ export interface ProbeVoltage {
   blackNetId: string;
 }
 
+export interface CurrentTarget { kind: 'component' | 'wire'; id: string }
+export interface CurrentReading { amperes: number; from: EndpointRef; to: EndpointRef }
+
+/** Non-contact measurement. Wire direction is start → end, never inferred from coordinates. */
+export function probeCurrent(document: CircuitDocument, compilation: CompileResult, result: SimulationResult, target: CurrentTarget | null): MeasurementResult<CurrentReading> {
+  if (!target) return fail('INCOMPLETE_PROBE');
+  const upstream = [...compilation.diagnostics, ...result.diagnostics];
+  if (result.status === 'error' || hasErrors(upstream)) return { ok: false, diagnostics: upstream.length ? upstream : [diagnostic('MEASUREMENT_UNAVAILABLE', [target.id])] };
+  const pair = (c: ComponentInstance) => {
+    const positive = c.type === 'dc-voltage-source' ? c.terminals.find(t => t.role === 'positive') : undefined;
+    const first = positive ?? c.terminals[0];
+    return [first, c.terminals.find(t => t.id !== first?.id)] as const;
+  };
+  if (target.kind === 'component') {
+    const c = document.components.find(c => c.id === target.id);
+    if (!c) return fail('MEASUREMENT_TARGET_NOT_FOUND', [target.id]);
+    const [a, b] = pair(c), amperes = result.branchCurrents[c.id];
+    if (!a || !b || !owns(result.branchCurrents, c.id) || !Number.isFinite(amperes)) return fail('MEASUREMENT_UNAVAILABLE', [c.id]);
+    return ok({ amperes, from: {kind:'terminal',id:a.id}, to: {kind:'terminal',id:b.id} });
+  }
+  const wire = document.wires.find(w => w.id === target.id);
+  if (!wire) return fail('MEASUREMENT_TARGET_NOT_FOUND', [target.id]);
+  // Remove only the queried wire from the ideal conductor graph. A remaining path
+  // means a zero-resistance cycle: its individual wire currents are not unique.
+  const neighbors = new Map<string, string[]>();
+  for (const w of document.wires) {
+    if (w.id === wire.id) continue;
+    for (const [a,b] of [[w.start.id,w.end.id],[w.end.id,w.start.id]]) neighbors.set(a,[...(neighbors.get(a) ?? []),b]);
+  }
+  const side = new Set<string>([wire.start.id]), queue = [wire.start.id];
+  for (let i=0;i<queue.length;i++) for (const id of neighbors.get(queue[i]) ?? []) if (!side.has(id)) { side.add(id); queue.push(id); }
+  if (side.has(wire.end.id)) return fail('WIRE_CURRENT_UNDEFINED', [wire.id]);
+  let amperes = 0;
+  // KCL on one side of the cut. Sum all terminal injections, including several
+  // components at a junction; assigning one current to an entire net is invalid.
+  for (const c of [...document.components].sort((a,b)=>a.id.localeCompare(b.id))) {
+    const [a,b] = pair(c);
+    if (!a || !b) return fail('MEASUREMENT_UNAVAILABLE', [c.id]);
+    const sign = Number(side.has(b.id)) - Number(side.has(a.id));
+    if (!sign) continue;
+    const current = result.branchCurrents[c.id];
+    if (!owns(result.branchCurrents,c.id) || !Number.isFinite(current)) return fail('MEASUREMENT_UNAVAILABLE', [wire.id,c.id]);
+    amperes += sign * current;
+  }
+  if (!Number.isFinite(amperes)) return fail('MEASUREMENT_UNAVAILABLE', [wire.id]);
+  return ok({amperes,from:wire.start,to:wire.end});
+}
+
 export interface AmmeterInsertionRequest {
   componentId: string;
   ammeter: ComponentInstance;

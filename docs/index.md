@@ -14,11 +14,12 @@
 
 ## 사용자 경험
 
+- [프론트엔드 디자인 검토·개선 제안](ux/2026-09-24-frontend-design-review.md): ‘한마디’를 기준으로 한 화면별 진단, 공식 디자인 사례, 문구·위계·모션·3D 개선안. 검토 당시 근거와 현재 구현 반영표 포함
 - [`ux/quick-start.md`](ux/quick-start.md): 실행, 편집, 전위·측정, 저장과 단축키
 - [`ux/overview.md`](ux/overview.md): 화면 모드와 반응형 구조
 - [`ux/interactions.md`](ux/interactions.md): 부품 배치, 배선, 값 수정, 오류 피드백
 - [`ux/workflows.md`](ux/workflows.md): 현재 교사·학생 흐름과 후속 활동 배포 구분
-- [2026-09-23 UX 검토](ux/reviews/2026-09-23-mvp-ux-review.md): 개선 전 관찰·제안과 화면 근거를 보존한 역사 기록
+- [2026-09-23 UX 검토](archive/ux-review/2026-09-23-mvp-ux-review.md): 개선 전 관찰·제안과 화면 근거를 보존한 역사 기록
 
 ## 물리 규약
 
@@ -35,7 +36,7 @@
 - [`architecture/extension-points.md`](architecture/extension-points.md): 부품·엔진·출력 확장 경계
 - [`architecture/persistence-and-sharing.md`](architecture/persistence-and-sharing.md): 자동 저장, 파일, 마이그레이션, 공유
 
-- [`architecture/feedback.md`](architecture/feedback.md): 후기 로컬 미리보기와 원격 전환 조건
+- [`architecture/feedback.md`](architecture/feedback.md): Firebase 후기 게시판의 데이터·권한·운영 구조
 - [ADR-012](../decisions/ADR-012-worksheet-presentation.md): 출력 표기 속성과 출력 계약
 - [ADR-013](../decisions/ADR-013-wire-editing-ux.md): 삽입·분기·교차와 문맥 배선
 - [ADR-014](../decisions/ADR-014-feedback-board.md): 후기 저장·공개·삭제 정책
@@ -45,6 +46,7 @@
 - [`implementation/phases.md`](implementation/phases.md): 단계 0~7의 산출물과 종료 조건
 - [`implementation/current-phase.md`](implementation/current-phase.md): 현재 구현 범위·게시 상태·남은 작업
 - [`implementation/mvp-tracker.md`](implementation/mvp-tracker.md): 초기 MVP와 후속 작업의 검증 이력
+- [`implementation/firebase-setup.md`](implementation/firebase-setup.md): Firebase와 공개 사이트 설정·검증 기록
 - [`implementation/definition-of-done.md`](implementation/definition-of-done.md): 공통 완료 조건
 - [`testing/mvp-coverage.md`](testing/mvp-coverage.md): 초기 요구사항별 근거·후속 검증 범위·남은 한계
 - [`testing/strategy.md`](testing/strategy.md): 테스트 층과 물리 불변식

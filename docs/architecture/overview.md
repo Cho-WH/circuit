@@ -12,10 +12,10 @@
 
 ```mermaid
 flowchart TB
-    UI[app / editor / measurement / shared-ui]
-    VIEW[visualization / potential-3d / export]
-    CORE[domain / connectivity / simulation / diagnostics / activity]
-    INFRA[persistence / browser / Three.js / SVG / file APIs]
+    UI[app / editor / measurement]
+    VIEW[visualization / potential-3d / export / notation / typography]
+    CORE[domain / connectivity / simulation / diagnostics / feedback contract]
+    INFRA[persistence / feedback-firebase / browser / Three.js / SVG / file APIs]
 
     UI --> CORE
     VIEW --> CORE
@@ -26,7 +26,7 @@ flowchart TB
 
 `CORE`는 `UI`, `VIEW`, `INFRA`를 import하지 않는다.
 
-## 권장 디렉터리
+## 현재 디렉터리
 
 ```text
 src/
@@ -37,17 +37,22 @@ src/
   simulation/         MNA 직류 해석과 결과 타입
   diagnostics/        오류·경고 규칙
   editor/             선택, 배치, 배선, 명령, 실행 취소
-  measurement/        탐침, 전류계 삽입, 측정 기록
+  measurement/        탐침, 비접촉 전류 측정, 측정 기록
   visualization/      전위 색·숫자·전류 레이어
   potential-3d/       Three.js 전위 높이 어댑터
-  activity/           학생 권한, 예측, 공개 단계
   export/             SVG, PNG, 클립보드
   persistence/        자동 저장, JSON, 마이그레이션
+  notation/           수치·분수·첨자 표기
+  typography/         공통 글꼴·표기 배치
+  feedback/           후기 공개 계약과 입력 정책
+  feedback-firebase/  운영 게시판 어댑터
+  feedback-local/     이전 로컬 자료와 계약 검증용 어댑터
   fixtures/           기준 회로와 예상 결과
-  shared-ui/          일반 UI; 물리 지식 없음
 ```
 
-## 초기 기술 선택
+학생 권한의 기본 계약은 현재 `domain`·`editor`에 있으며 독립 활동 모듈은 단계 6의 후속 범위다.
+
+## 기술 선택
 
 | 영역 | 기준 |
 |---|---|
@@ -56,7 +61,8 @@ src/
 | 3D 전위 | Three.js 기반 어댑터 |
 | 직류 계산 | 자체 MNA 엔진 |
 | 상태 변경 | 명령 기반 문서 저장소와 별도 UI 상태 |
-| 저장 | IndexedDB 또는 동등한 로컬 저장 + JSON 파일 |
-| 배포 | 정적 웹 배포 우선 |
+| 회로 저장 | 브라우저 `localStorage` + JSON 파일 |
+| 후기 | Firebase Auth + Firestore |
+| 배포 | GitHub Pages 정적 웹 배포 |
 
-구체적인 라이브러리 선택은 관련 ADR에서 확정한다.
+모듈별 책임은 [모듈 구성](modules.md), 저장과 게시판의 실제 계약은 [저장·복구·공유](persistence-and-sharing.md)와 [게시판 구조](feedback.md)를 따른다.

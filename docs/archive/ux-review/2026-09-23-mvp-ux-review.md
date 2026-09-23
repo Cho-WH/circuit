@@ -14,7 +14,7 @@
 
 ## 2. 기준과 검토 범위
 
-기준은 [제품 원칙](../../../requirements/product-principles.yaml), [요구사항](../../../requirements/requirements.yaml), [제품 개요](../../product/brief.md), [UX 구조](../overview.md), [상호작용](../interactions.md), [사용 흐름](../workflows.md)이다. 편집·저장·측정의 의도는 [ADR-001](../../../decisions/ADR-001-svg-editor.md), [ADR-002](../../../decisions/ADR-002-state-management.md) 및 현재 구현을 대조했다.
+기준은 [제품 원칙](../../../requirements/product-principles.yaml), [요구사항](../../../requirements/requirements.yaml), [제품 개요](../../product/brief.md), [UX 구조](../../ux/overview.md), [상호작용](../../ux/interactions.md), [사용 흐름](../../ux/workflows.md)이다. 편집·저장·측정의 의도는 [ADR-001](../../../decisions/ADR-001-svg-editor.md), [ADR-002](../../../decisions/ADR-002-state-management.md) 및 현재 구현을 대조했다.
 
 - **직접 관찰:** Windows Chrome, 기본 콘텐츠 영역 1536×695 CSS px. 사용자의 기존 회로와 분리한 `127.0.0.1:5174`에서 검토했다.
 - **작은 화면:** 390×844 CSS px의 Chrome 뷰포트. 실제 스마트폰·터치·가상 키보드 시험은 아니다.
@@ -257,7 +257,7 @@ P1은 핵심 작업의 명확성·완료·신뢰에 직접 영향을 주어 다�
 | [MeasurementPanel.tsx](../../../src/app/MeasurementPanel.tsx) | 메모리 `records`, CSV, 탐침·등가저항 용어, 값 변화 실험 |
 | [measurement.css](../../../src/app/measurement.css) | 측정 전용 배치와 모바일 순서 |
 | [3D UI](../../../src/potential-3d/index.tsx) · [3D 스타일](../../../src/potential-3d/styles.css) | 카메라·선택값·축척·가독성 |
-| [빠른 시작](../quick-start.md) | 기록이 메모리에만 남는 제한, 저장·출력·조작 설명 |
+| [빠른 시작](../../ux/quick-start.md) | 기록이 메모리에만 남는 제한, 저장·출력·조작 설명 |
 
 ## 10. 화면 증거
 

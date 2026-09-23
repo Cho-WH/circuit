@@ -1,0 +1,110 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as THREE from 'three';
+import type { CircuitDocument } from '../src/domain';
+import { Potential3D } from '../src/potential-3d';
+import { compileCircuit } from '../src/connectivity';
+import { solveCircuit } from '../src/simulation';
+import { buildPotentialModel } from '../src/visualization';
+
+const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
+vi.mock('three', async importOriginal => {
+  const three = await importOriginal<typeof import('three')>();
+  return { ...three, WebGLRenderer: class {
+    domElement = document.createElement('canvas');
+    capabilities = { maxTextureSize: 4096, getMaxAnisotropy: () => 16 };
+    setPixelRatio() {} setClearColor() {} setSize() {}
+    render = observed.render; dispose = observed.dispose;
+  } };
+});
+vi.mock('three/addons/controls/OrbitControls.js', async () => {
+  const { Vector3 } = await import('three');
+  return { OrbitControls: class {
+    target = new Vector3(); enabled = true;
+    constructor() { observed.target = this.target; }
+    addEventListener(type: string, callback: () => void) { if (type === 'start') observed.start = callback; }
+    removeEventListener() {} update() {} dispose() {}
+  } };
+});
+let root: Root, host: HTMLDivElement, resolveFont: () => void, rejectFont: () => void;
+let images: Array<{ src: string; onload: (() => void) | null; onerror: (() => void) | null }>;
+let reduced = false;
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); observed.render.mockClear(); observed.dispose.mockClear(); observed.frames.clear(); reduced = false; images = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { const id = ++observed.nextFrame; observed.frames.set(id, callback); return id; });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => observed.frames.delete(id));
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  vi.stubGlobal('matchMedia', () => ({ matches: reduced }));
+  vi.stubGlobal('Image', class { src = ''; onload = null; onerror = null; constructor() { images.push(this); } });
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+  const font = new Promise<FontFace[]>((resolve, reject) => { resolveFont = () => resolve([]); rejectFont = () => reject(new Error('font')); });
+  Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => font } });
+  host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+});
+afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+async function mount() {
+  const circuit = JSON.parse(readFileSync('fixtures/FIX-02-series.json', 'utf8')).document as CircuitDocument;
+  const compiled = compileCircuit(circuit).circuit, ready = vi.fn(), entered = vi.fn(), error = vi.fn();
+  await act(async () => root.render(createElement(Potential3D, { document: circuit, potential: buildPotentialModel(circuit, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V_1 · −극 단자', sourceView: { x: 100, y: 200, width: 500, height: 400 }, onReady: ready, onEntered: entered, onError: error })));
+  return { ready, entered, error };
+}
+describe('3D prepared first frame and camera lifetime', () => {
+  it('waits for mathematics font and floor texture, then renders aligned top view before announcing ready', async () => {
+    const { ready, entered } = await mount();
+    expect(images[0].src).toBe(''); expect(ready).not.toHaveBeenCalled();
+    await act(async () => resolveFont()); expect(images[0].src).toContain('blob:'); expect(ready).not.toHaveBeenCalled();
+    await act(async () => images[0].onload!()); expect(ready).toHaveBeenCalledOnce(); expect(entered).not.toHaveBeenCalled();
+    const [scene, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
+    expect(scene.children[0].children).toHaveLength(1);
+    const floor = scene.children[0].children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+    const texture = floor.material.map!;
+    expect(texture.image.width).toBeGreaterThan(floor.geometry.parameters.width * 2);
+    expect(texture.image.width).toBeLessThanOrEqual(4096);
+    expect(texture.image.width * texture.image.height).toBeLessThanOrEqual(8_000_000);
+    expect(texture.anisotropy).toBe(16);
+    expect(camera.position.x).toBe(350); expect(camera.position.y).toBe(-400); expect(camera.top - camera.bottom).toBe(400);
+    expect(scene.children[1].children[0].scale.z).toBe(.0001);
+    expect(observed.frames.size).toBe(1);
+    await act(async () => observed.start());
+    expect(observed.frames.size).toBe(0); expect(entered).toHaveBeenCalledOnce(); expect(scene.children[1].children[0].scale.z).toBe(1);
+    // Interruption preserves the current camera instead of snapping to the preset.
+    expect(camera.position.x).toBe(350); expect(camera.position.y).toBe(-400);
+  });
+  it('skips camera motion for reduced motion and leaves no scheduled frame', async () => {
+    reduced = true; const { ready, entered } = await mount();
+    await act(async () => { resolveFont(); }); await act(async () => images[0].onload!());
+    expect(ready).toHaveBeenCalledOnce(); expect(entered).toHaveBeenCalledOnce(); expect(observed.frames.size).toBe(0);
+    expect(host.querySelector('.floor-key small sub')?.textContent).toBe('1');
+  });
+  it('preserves zoom during presets and cancels a camera flight at its current position', async () => {
+    const { entered } = await mount(); await act(async () => resolveFont()); await act(async () => images[0].onload!());
+    await act(async () => observed.start());
+    const [, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
+    camera.zoom = 2; const initial = camera.position.clone();
+    const top = [...host.querySelectorAll('button')].find(button => button.textContent === '위에서')!;
+    await act(async () => top.click());
+    expect(camera.position.equals(initial)).toBe(true); expect(camera.zoom).toBe(2);
+    const [id, frame] = [...observed.frames.entries()][0]; observed.frames.delete(id);
+    await act(async () => frame(performance.now() + 350));
+    const midway = camera.position.clone();
+    const look = camera.getWorldDirection(new (await import('three')).Vector3());
+    const targetDirection = observed.target!.clone().sub(camera.position).normalize();
+    expect(look.dot(targetDirection)).toBeCloseTo(1, 10);
+    await act(async () => observed.start()); expect(observed.frames.size).toBe(0); expect(camera.position.equals(midway)).toBe(true);
+    expect(camera.zoom).toBe(2); expect(entered).toHaveBeenCalledOnce();
+  });
+  it('reports font failure without starting texture loading or announcing readiness', async () => {
+    const { ready, error } = await mount(); await act(async () => rejectFont());
+    expect(error).toHaveBeenCalledWith('font'); expect(ready).not.toHaveBeenCalled(); expect(images[0].src).toBe('');
+  });
+  it('reports texture failure and disposes GPU resources when removed', async () => {
+    const { ready, error } = await mount(); await act(async () => resolveFont()); await act(async () => images[0].onerror!());
+    expect(error).toHaveBeenCalledWith('texture'); expect(ready).not.toHaveBeenCalled();
+    await act(async () => root.render(null)); expect(observed.dispose).toHaveBeenCalledOnce(); expect(images[0].onload).toBeNull();
+  });
+});

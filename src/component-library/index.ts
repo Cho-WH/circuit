@@ -106,12 +106,12 @@ export function componentValue(component: ComponentInstance): string {
   return fraction ? `${fraction} ${def.unit}` : def.property ? formatQuantity(Number(component.properties[def.property]), def.unit) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
-export function symbolMarkup(component: ComponentInstance): string {
+export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean } = {}): string {
   if (component.type === 'resistor' || component.type === 'resistive-load') {
     const resistor='<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
     return resistor+(component.type==='resistive-load'?'<path data-symbol="adjustment-arrow" d="M-18 20L18 -20 M8 -18L18 -20 17 -10" fill="none"/>':'');
   }
-  if (component.type === 'dc-voltage-source') return '<path d="M-44 0H-7 M7 0H44 M-7 -22V22 M7 -12V12"/><text x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>';
+  if (component.type === 'dc-voltage-source') return `<path d="M-${options.disconnectedSource?32:44} 0H-7 M7 0H${options.disconnectedSource?32:44} M-7 -22V22 M7 -12V12"/><text x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>`;
   if (component.type === 'switch') return `<path d="M-44 0H-24 M24 0H44 M-22 0L22 ${component.properties.state === 'closed' ? 0 : -20}"/><circle cx="-24" cy="0" r="3"/><circle cx="24" cy="0" r="3"/>`;
   return `<path d="M-44 0H-23 M23 0H44"/><circle r="23"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>`;
 }
