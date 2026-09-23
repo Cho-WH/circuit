@@ -23,6 +23,12 @@ describe('measurement workspace',()=>{
     expect(measured).not.toContain('aria-label="R1 값 편집"');
     expect(edited).toContain('aria-label="R1 값 편집"');
   });
+  it('points an empty measurement workspace back to editing without referring to a hidden library',()=>{
+    const empty={...document,components:[],wires:[],junctions:[],annotations:[],referenceNode:null};
+    const html=renderToStaticMarkup(createElement(CircuitCanvas,{...canvasProps,document:empty,readOnly:true}));
+    expect(html).toContain('측정할 회로가 없습니다');
+    expect(html).not.toContain('왼쪽에서 부품을 선택');
+  });
   it('keeps recording disabled until both voltage probes are connected',()=>{
     const html=panel('R1.a','');
     expect(html).toContain('연결 대기');
