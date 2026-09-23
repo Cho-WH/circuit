@@ -1,0 +1,76 @@
+{
+  "$schema": "../schemas/fixture.schema.json",
+  "id": "FIX-06",
+  "title": "전원 양단 직접 단락",
+  "purpose": "이상적 전원의 직접 단락을 수치값 없이 진단",
+  "document": {
+    "format": "edu-circuit",
+    "version": 1,
+    "documentId": "fix-06",
+    "title": "전원 단락",
+    "components": [
+      {
+        "id": "V1",
+        "type": "dc-voltage-source",
+        "label": "V1",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "rotation": 0,
+        "properties": {
+          "voltageV": 9
+        },
+        "terminals": [
+          {
+            "id": "V1.p",
+            "role": "positive"
+          },
+          {
+            "id": "V1.n",
+            "role": "negative"
+          }
+        ]
+      }
+    ],
+    "wires": [
+      {
+        "id": "W1",
+        "start": {
+          "kind": "terminal",
+          "id": "V1.p"
+        },
+        "end": {
+          "kind": "terminal",
+          "id": "V1.n"
+        },
+        "waypoints": []
+      }
+    ],
+    "junctions": [],
+    "annotations": [],
+    "referenceNode": {
+      "kind": "terminal",
+      "id": "V1.n"
+    },
+    "activity": null
+  },
+  "expected": {
+    "status": "error",
+    "tolerance": {
+      "absolute": 1e-09,
+      "relative": 1e-09
+    },
+    "probeVoltagesV": {},
+    "branchCurrentsA": {},
+    "componentVoltagesV": {},
+    "componentPowersW": {},
+    "diagnostics": [
+      "SOURCE_SHORT"
+    ],
+    "invariants": [
+      "NO_FABRICATED_SOLUTION"
+    ],
+    "numericalResultsForbidden": true
+  }
+}

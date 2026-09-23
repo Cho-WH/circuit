@@ -1,0 +1,54 @@
+{
+  "$schema": "../schemas/fixture.schema.json",
+  "id": "FIX-09",
+  "title": "균형 휘트스톤 브리지",
+  "purpose": "대칭 절점 전위와 중앙 전류 0 조건 검증",
+  "document": {
+    "format": "edu-circuit",
+    "version": 1,
+    "documentId": "fix-09",
+    "title": "균형 브리지",
+    "components": [
+      {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":0,"y":0},"rotation":0,"properties":{"voltageV":10},"terminals":[{"id":"V1.p","role":"positive"},{"id":"V1.n","role":"negative"}]},
+      {"id":"R1","type":"resistor","label":"R1","position":{"x":160,"y":-90},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R1.a","role":"a"},{"id":"R1.b","role":"b"}]},
+      {"id":"R2","type":"resistor","label":"R2","position":{"x":160,"y":10},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R2.a","role":"a"},{"id":"R2.b","role":"b"}]},
+      {"id":"R3","type":"resistor","label":"R3","position":{"x":340,"y":-90},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R3.a","role":"a"},{"id":"R3.b","role":"b"}]},
+      {"id":"R4","type":"resistor","label":"R4","position":{"x":340,"y":10},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R4.a","role":"a"},{"id":"R4.b","role":"b"}]},
+      {"id":"R5","type":"resistor","label":"R5","position":{"x":250,"y":-40},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R5.a","role":"a"},{"id":"R5.b","role":"b"}]}
+    ],
+    "wires": [
+      {"id":"W1","start":{"kind":"terminal","id":"V1.p"},"end":{"kind":"junction","id":"JT"},"waypoints":[]},
+      {"id":"W2","start":{"kind":"junction","id":"JT"},"end":{"kind":"terminal","id":"R1.a"},"waypoints":[]},
+      {"id":"W3","start":{"kind":"terminal","id":"R1.b"},"end":{"kind":"junction","id":"JL"},"waypoints":[]},
+      {"id":"W4","start":{"kind":"junction","id":"JL"},"end":{"kind":"terminal","id":"R2.a"},"waypoints":[]},
+      {"id":"W5","start":{"kind":"terminal","id":"R2.b"},"end":{"kind":"junction","id":"JB"},"waypoints":[]},
+      {"id":"W6","start":{"kind":"junction","id":"JT"},"end":{"kind":"terminal","id":"R3.a"},"waypoints":[]},
+      {"id":"W7","start":{"kind":"terminal","id":"R3.b"},"end":{"kind":"junction","id":"JR"},"waypoints":[]},
+      {"id":"W8","start":{"kind":"junction","id":"JR"},"end":{"kind":"terminal","id":"R4.a"},"waypoints":[]},
+      {"id":"W9","start":{"kind":"terminal","id":"R4.b"},"end":{"kind":"junction","id":"JB"},"waypoints":[]},
+      {"id":"W10","start":{"kind":"junction","id":"JL"},"end":{"kind":"terminal","id":"R5.a"},"waypoints":[]},
+      {"id":"W11","start":{"kind":"terminal","id":"R5.b"},"end":{"kind":"junction","id":"JR"},"waypoints":[]},
+      {"id":"W12","start":{"kind":"junction","id":"JB"},"end":{"kind":"terminal","id":"V1.n"},"waypoints":[]}
+    ],
+    "junctions":[
+      {"id":"JT","position":{"x":250,"y":-140}},
+      {"id":"JB","position":{"x":250,"y":70}},
+      {"id":"JL","position":{"x":160,"y":-40}},
+      {"id":"JR","position":{"x":340,"y":-40}}
+    ],
+    "annotations":[],
+    "referenceNode":{"kind":"terminal","id":"V1.n"},
+    "activity":null
+  },
+  "expected":{
+    "status":"solved",
+    "tolerance":{"absolute":1e-09,"relative":1e-09},
+    "probeVoltagesV":{"JT":10,"JL":5,"JR":5,"JB":0},
+    "branchCurrentsA":{"R1":0.05,"R2":0.05,"R3":0.05,"R4":0.05,"R5":0},
+    "componentVoltagesV":{"R1":5,"R2":5,"R3":5,"R4":5,"R5":0},
+    "componentPowersW":{"R1":0.25,"R2":0.25,"R3":0.25,"R4":0.25,"R5":0},
+    "diagnostics":[],
+    "invariants":["KCL","KVL","BRIDGE_BALANCED","PASSIVE_POWER_NONNEGATIVE"],
+    "equivalentResistance":{"port":{"first":{"kind":"terminal","id":"V1.p"},"second":{"kind":"terminal","id":"V1.n"}},"ohm":100}
+  }
+}

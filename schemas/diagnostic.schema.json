@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/edu-circuit/diagnostic.schema.json",
+  "title": "Diagnostic",
+  "type": "object",
+  "required": ["code","severity","affectedIds","parameters","suggestedActions"],
+  "properties": {
+    "code":{"type":"string","pattern":"^[A-Z][A-Z0-9_]+$"},
+    "severity":{"enum":["info","warning","error"]},
+    "affectedIds":{"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "parameters":{"type":"object","additionalProperties":{"type":["string","number","boolean","null"]}},
+    "suggestedActions":{"type":"array","items":{"type":"string"}}
+  },
+  "additionalProperties":false
+}

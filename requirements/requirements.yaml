@@ -1,0 +1,682 @@
+spec_version: 0.2.0
+project: edu-circuit
+states:
+- accepted
+- proposed
+- deferred
+- superseded
+priorities:
+- MUST
+- SHOULD
+- LATER
+requirements:
+- id: EDT-001
+  title: 기본 부품 조작
+  state: accepted
+  priority: MUST
+  phase: 2
+  statement: 사용자는 기본 부품을 캔버스에 배치·이동·회전·삭제할 수 있다.
+  acceptance:
+  - 마우스와 터치에서 같은 문서 결과가 생성된다.
+  - 각 동작을 실행 취소하고 다시 실행할 수 있다.
+  modules:
+  - editor
+  - component-library
+  physics_rules: []
+  fixtures: []
+  docs:
+  - docs/ux/interactions.md
+- id: EDT-002
+  title: 직각 도선 연결
+  state: accepted
+  priority: MUST
+  phase: 2
+  statement: 단자에서 도선을 시작해 수평·수직 경로로 연결할 수 있다.
+  acceptance:
+  - 연결 전 경로 미리보기를 표시한다.
+  - 연결 후 실제 분기점이 명확히 표시된다.
+  modules:
+  - editor
+  - connectivity
+  physics_rules: []
+  fixtures: []
+  docs:
+  - docs/ux/interactions.md
+- id: EDT-003
+  title: 교차와 연결 구분
+  state: accepted
+  priority: MUST
+  phase: 2
+  statement: 도선 교차와 실제 전기 연결을 구분한다.
+  acceptance:
+  - 분기점이 없는 교차는 같은 net으로 묶이지 않는다.
+  modules:
+  - editor
+  - connectivity
+  physics_rules: []
+  fixtures:
+  - FIX-02
+  - FIX-03
+  docs: []
+- id: EDT-004
+  title: 부품값 직접 편집
+  state: accepted
+  priority: MUST
+  phase: 2
+  statement: 부품값을 회로 위에서 직접 수정하고 단위를 표준화한다.
+  acceptance:
+  - 1k와 1000 Ω은 같은 내부값으로 저장된다.
+  - 파싱 실패 시 이전 값을 유지한다.
+  modules:
+  - editor
+  - domain
+  - component-library
+  physics_rules: []
+  fixtures: []
+  docs:
+  - docs/physics/measurement-and-display.md
+- id: EDT-005
+  title: 선택과 편집 도구
+  state: accepted
+  priority: MUST
+  phase: 2
+  statement: 복수 선택, 복사·붙여넣기, 정렬, 확대·이동을 지원한다.
+  acceptance:
+  - 복사된 요소는 새 ID를 가진다.
+  - 배선 연결이 우연히 원본과 공유되지 않는다.
+  modules:
+  - editor
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: EDT-006
+  title: 배선 자동 정리
+  state: accepted
+  priority: SHOULD
+  phase: 2
+  statement: 자동 배선 정리는 적용 전 변경될 경로를 미리 보여 준다.
+  acceptance:
+  - 적용 결과를 한 번의 실행 취소로 되돌릴 수 있다.
+  modules:
+  - editor
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: EDT-007
+  title: 기호 세트 교체 경계
+  state: accepted
+  priority: LATER
+  phase: later
+  statement: 부품 논리와 회로 기호 정의를 분리한다.
+  acceptance:
+  - 기호 세트를 바꿔도 회로 연결과 계산 모델이 바뀌지 않는다.
+  modules:
+  - component-library
+  - export
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: SIM-001
+  title: 연결망 컴파일
+  state: accepted
+  priority: MUST
+  phase: 1
+  statement: 회로 문서에서 전기적으로 같은 단자와 도선을 절점(net)으로 묶는다.
+  acceptance:
+  - 좌표가 같아도 명시적 연결이 없으면 같은 net이 아니다.
+  - 분기점 없는 교차선은 연결되지 않는다.
+  modules:
+  - connectivity
+  - domain
+  physics_rules: []
+  fixtures:
+  - FIX-01
+  - FIX-02
+  - FIX-03
+  docs: []
+- id: SIM-002
+  title: 직류 전위와 전류 계산
+  state: accepted
+  priority: MUST
+  phase: 1
+  statement: 직류 저항 회로의 절점 전위와 가지 전류를 계산한다.
+  acceptance:
+  - FIX-01~FIX-05, FIX-09, FIX-10의 기대값과 허용 오차 내에서 일치한다.
+  modules:
+  - simulation
+  - connectivity
+  physics_rules: []
+  fixtures:
+  - FIX-01
+  - FIX-02
+  - FIX-03
+  - FIX-04
+  - FIX-05
+  - FIX-09
+  - FIX-10
+  docs: []
+- id: SIM-003
+  title: 부품 전압과 전력
+  state: accepted
+  priority: MUST
+  phase: 1
+  statement: 부품 양단 전압과 전력을 계산한다.
+  acceptance:
+  - 전력 부호 규칙이 모든 화면과 출력에서 일관된다.
+  - 저항의 소비 전력은 수동 부호 규약에서 음수가 아니다.
+  modules:
+  - simulation
+  physics_rules: []
+  fixtures:
+  - FIX-01
+  - FIX-02
+  - FIX-03
+  - FIX-04
+  - FIX-09
+  docs: []
+- id: SIM-004
+  title: 회로 진단
+  state: accepted
+  priority: MUST
+  phase: 4
+  statement: 부유 회로, 전원 단락, 충돌 전원, 미연결 단자를 진단한다.
+  acceptance:
+  - 앱이 멈추지 않는다.
+  - 진단 코드, 영향 요소, 수정 행동을 반환한다.
+  - 해가 정의되지 않은 경우 수치값을 꾸며내지 않는다.
+  modules:
+  - diagnostics
+  - simulation
+  - connectivity
+  physics_rules: []
+  fixtures:
+  - FIX-06
+  - FIX-07
+  - FIX-08
+  docs: []
+- id: SIM-005
+  title: 등가저항
+  state: accepted
+  priority: SHOULD
+  phase: 4
+  statement: 선택한 두 점 사이 등가저항을 계산한다.
+  acceptance:
+  - 독립원 처리와 1 V 시험 전원 방식을 테스트한다.
+  - 연결 없음과 0 Ω 조건을 진단한다.
+  modules:
+  - simulation
+  - measurement
+  physics_rules: []
+  fixtures:
+  - FIX-01
+  - FIX-02
+  - FIX-03
+  - FIX-04
+  - FIX-09
+  docs: []
+- id: SIM-006
+  title: KCL·KVL 확인
+  state: accepted
+  priority: SHOULD
+  phase: 4
+  statement: 분기점 KCL과 선택 경로 KVL을 계산해 표시한다.
+  acceptance:
+  - 허용 오차 이하일 때 성립으로 표시한다.
+  - 회로 요소와 식의 항을 대응시킨다.
+  modules:
+  - simulation
+  - visualization
+  physics_rules: []
+  fixtures:
+  - FIX-02
+  - FIX-03
+  - FIX-04
+  - FIX-09
+  docs: []
+- id: SIM-007
+  title: 계산 엔진 교체 경계
+  state: accepted
+  priority: LATER
+  phase: later
+  statement: 다른 계산 엔진을 같은 공개 계약으로 추가할 수 있다.
+  acceptance:
+  - UI는 SimulationEngine 인터페이스만 사용한다.
+  modules:
+  - simulation
+  - app
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: VIS-001
+  title: 절점 전위 숫자
+  state: accepted
+  priority: MUST
+  phase: 3
+  statement: 각 주요 절점의 전위를 숫자로 표시한다.
+  acceptance:
+  - 기준점과 단위를 함께 표시한다.
+  - 같은 net은 같은 수치 객체를 참조한다.
+  modules:
+  - visualization
+  physics_rules:
+  - PV-01
+  - PV-02
+  - PV-08
+  fixtures:
+  - FIX-01
+  - FIX-02
+  - FIX-03
+  - FIX-10
+  docs: []
+- id: VIS-002
+  title: 전위 색상
+  state: accepted
+  priority: MUST
+  phase: 3
+  statement: 전위를 색으로 표시하고 범례를 제공한다.
+  acceptance:
+  - 같은 net은 같은 색이다.
+  - 색만으로 의미를 전달하지 않는다.
+  - 부유 영역에는 임의 색을 주지 않는다.
+  modules:
+  - visualization
+  physics_rules:
+  - PV-02
+  - PV-05
+  - PV-07
+  - PV-08
+  fixtures:
+  - FIX-02
+  - FIX-03
+  - FIX-05
+  - FIX-07
+  docs: []
+- id: VIS-003
+  title: 등전위 영역 강조
+  state: accepted
+  priority: MUST
+  phase: 3
+  statement: 선택한 절점과 같은 등전위 영역 전체를 강조한다.
+  acceptance:
+  - 해당 net의 모든 도선·단자·분기점을 함께 강조한다.
+  modules:
+  - visualization
+  - connectivity
+  physics_rules:
+  - PV-02
+  - PV-08
+  fixtures:
+  - FIX-02
+  - FIX-03
+  docs: []
+- id: VIS-004
+  title: 전위 높이 지도
+  state: accepted
+  priority: MUST
+  phase: 3
+  statement: 2D 회로를 전위 높이 지도로 전환한다.
+  acceptance:
+  - 2D와 3D의 x-y 위치 대응을 유지한다.
+  - 기준 전위와 높이 축척을 표시한다.
+  - 열린 스위치의 단자를 연결하지 않는다.
+  modules:
+  - potential-3d
+  - visualization
+  physics_rules:
+  - PV-01
+  - PV-02
+  - PV-03
+  - PV-04
+  - PV-07
+  - PV-08
+  fixtures:
+  - FIX-02
+  - FIX-03
+  - FIX-05
+  docs: []
+- id: VIS-005
+  title: 경로 전위 그래프
+  state: accepted
+  priority: MUST
+  phase: 3
+  statement: 선택한 경로의 전위 변화를 그래프로 표시한다.
+  acceptance:
+  - 그래프 구간과 회로 요소를 양방향으로 강조한다.
+  - 이상적 도선은 수평 구간으로 표시한다.
+  modules:
+  - visualization
+  physics_rules:
+  - PV-02
+  - PV-03
+  - PV-04
+  fixtures:
+  - FIX-02
+  - FIX-04
+  - FIX-05
+  docs: []
+- id: VIS-006
+  title: 전류 방향과 크기
+  state: accepted
+  priority: SHOULD
+  phase: 3
+  statement: 전류 방향과 크기를 화살표로 표시한다.
+  acceptance:
+  - 전위 표현과 시각적으로 구분된다.
+  - 애니메이션의 의미를 설명한다.
+  modules:
+  - visualization
+  physics_rules: []
+  fixtures:
+  - FIX-02
+  - FIX-03
+  - FIX-04
+  docs: []
+- id: VIS-007
+  title: 색상 범위 전환
+  state: accepted
+  priority: SHOULD
+  phase: 3
+  statement: 전위 색상 범위를 자동 또는 고정으로 설정한다.
+  acceptance:
+  - 비교 시 여러 회로에 같은 범위를 적용할 수 있다.
+  modules:
+  - visualization
+  physics_rules:
+  - PV-05
+  - PV-06
+  fixtures: []
+  docs: []
+- id: MEA-001
+  title: 두 탐침 전압 측정
+  state: accepted
+  priority: MUST
+  phase: 4
+  statement: 두 탐침으로 전위차를 측정하고 방향에 따른 부호를 표시한다.
+  acceptance:
+  - 탐침 순서를 바꾸면 크기는 같고 부호만 반전된다.
+  - 미연결 탐침에는 확정 수치를 표시하지 않는다.
+  modules:
+  - measurement
+  - simulation
+  physics_rules: []
+  fixtures:
+  - FIX-02
+  - FIX-03
+  - FIX-05
+  - FIX-10
+  docs: []
+- id: MEA-002
+  title: 가지 전류 측정
+  state: accepted
+  priority: MUST
+  phase: 4
+  statement: 전류계를 선택한 가지에 삽입해 전류를 측정한다.
+  acceptance:
+  - 삽입 전후 연결을 명확히 표시한다.
+  - 전원 양단 병렬 연결을 진단한다.
+  modules:
+  - measurement
+  - simulation
+  - diagnostics
+  physics_rules: []
+  fixtures:
+  - FIX-01
+  - FIX-03
+  docs: []
+- id: MEA-003
+  title: 측정 기록과 CSV
+  state: accepted
+  priority: SHOULD
+  phase: 4
+  statement: 측정값을 표에 고정하고 CSV로 내보낸다.
+  acceptance:
+  - 회로 변경 전후의 조건과 값을 구분한다.
+  - 열 이름과 단위를 포함한다.
+  modules:
+  - measurement
+  - export
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: MEA-004
+  title: 값 변화 그래프
+  state: accepted
+  priority: SHOULD
+  phase: 4
+  statement: 부품값 변화에 따른 물리량 그래프를 작성한다.
+  acceptance:
+  - x축 변수, y축 물리량, 단위를 표시한다.
+  modules:
+  - measurement
+  - visualization
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: MEA-005
+  title: 외부 측정 데이터
+  state: accepted
+  priority: LATER
+  phase: later
+  statement: 실제 센서나 측정 데이터를 가져올 수 있는 경계를 둔다.
+  acceptance:
+  - 시뮬레이션 결과 형식과 외부 데이터 형식을 분리한다.
+  modules:
+  - measurement
+  - persistence
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: TCH-001
+  title: 문제·정답 표시 규칙
+  state: accepted
+  priority: MUST
+  phase: 5
+  statement: 부품값·측정값·라벨을 표시, 숨김, ?, 빈칸, 문자로 바꾼다.
+  acceptance:
+  - 문제지와 정답지가 같은 CircuitDocument를 공유한다.
+  modules:
+  - editor
+  - export
+  - domain
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: TCH-002
+  title: 문제용 주석
+  state: accepted
+  priority: MUST
+  phase: 5
+  statement: 점 이름, 전류 화살표, 미지수, 설명 주석을 회로에서 직접 추가한다.
+  acceptance:
+  - 주석은 전기 연결망과 계산 결과에 영향을 주지 않는다.
+  modules:
+  - editor
+  - export
+  - domain
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: TCH-003
+  title: 벡터와 이미지 출력
+  state: accepted
+  priority: MUST
+  phase: 5
+  statement: SVG와 고해상도 PNG를 내보내고 PNG를 클립보드에 복사한다.
+  acceptance:
+  - 투명 배경·흑백·여백 옵션을 반영한다.
+  - 편집 선택 표시와 화면 배율이 출력에 섞이지 않는다.
+  modules:
+  - export
+  - component-library
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: TCH-004
+  title: 활동별 조작 제한
+  state: accepted
+  priority: MUST
+  phase: 6
+  statement: 학생이 할 수 있는 조작을 활동별로 제한한다.
+  acceptance:
+  - UI 숨김뿐 아니라 명령 실행 단계에서도 검사한다.
+  - 단축키나 내부 명령 경로로 우회할 수 없다.
+  modules:
+  - activity
+  - editor
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: TCH-005
+  title: 예측 후 단계 공개
+  state: accepted
+  priority: SHOULD
+  phase: 6
+  statement: 예측 제출 후 결과를 단계적으로 공개한다.
+  acceptance:
+  - 교사가 정한 공개 순서를 학생이 건너뛸 수 없도록 설정할 수 있다.
+  modules:
+  - activity
+  - visualization
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: TCH-006
+  title: 활동 초기화
+  state: accepted
+  priority: SHOULD
+  phase: 6
+  statement: 학생 작업을 활동 시작 상태로 초기화한다.
+  acceptance:
+  - 현재 작업본과 교사 원본을 별도로 보존한다.
+  modules:
+  - activity
+  - persistence
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: TCH-007
+  title: 수업 화면
+  state: accepted
+  priority: SHOULD
+  phase: 6
+  statement: 수업 화면에서 편집 패널을 숨기고 단계별 공개를 실행한다.
+  acceptance:
+  - 프로젝터에서 주요 글자와 조작 대상이 충분히 크다.
+  modules:
+  - app
+  - shared-ui
+  - activity
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: DAT-001
+  title: 자동 저장과 복구
+  state: accepted
+  priority: MUST
+  phase: 2
+  statement: 회로 문서를 브라우저에 자동 저장한다.
+  acceptance:
+  - 비정상 종료 후 마지막 안정 상태를 복원할 수 있다.
+  - 검증을 통과한 문서만 정상 저장본으로 승격한다.
+  modules:
+  - persistence
+  - domain
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: DAT-002
+  title: 버전 JSON 저장·열기
+  state: accepted
+  priority: MUST
+  phase: 2
+  statement: 버전이 포함된 JSON 파일로 저장하고 연다.
+  acceptance:
+  - 잘못된 파일은 현재 문서를 손상시키지 않고 거부한다.
+  - 오류 원인과 복구 방법을 설명한다.
+  modules:
+  - persistence
+  - domain
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: DAT-003
+  title: 스키마 마이그레이션
+  state: accepted
+  priority: MUST
+  phase: 0
+  statement: 문서 스키마 버전 간 순차 변환을 제공한다.
+  acceptance:
+  - v1 파일을 후속 버전에서 열 수 있다.
+  - 변환은 원본을 직접 수정하지 않는다.
+  modules:
+  - persistence
+  - domain
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: DAT-004
+  title: 공유 코드
+  state: accepted
+  priority: SHOULD
+  phase: 6
+  statement: 작은 활동을 URL 또는 압축된 공유 코드로 전달한다.
+  acceptance:
+  - 개인정보와 비밀 키를 URL에 포함하지 않는다.
+  - 권한을 명시한다.
+  modules:
+  - persistence
+  - activity
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: QLT-001
+  title: 접근성
+  state: accepted
+  priority: MUST
+  phase: 7
+  statement: 키보드·터치·색각·움직임 감소 요구를 충족한다.
+  acceptance:
+  - 접근성 점검표와 대표 기기 수동 테스트를 통과한다.
+  - 200% 확대에서 주요 기능이 잘리지 않는다.
+  modules:
+  - app
+  - editor
+  - visualization
+  - shared-ui
+  physics_rules:
+  - PV-08
+  fixtures: []
+  docs: []
+- id: QLT-002
+  title: 성능 예산
+  state: accepted
+  priority: MUST
+  phase: 7
+  statement: 일반 수업 회로에서 편집과 계산이 즉각 반응한다.
+  acceptance:
+  - 정한 성능 예산을 자동 측정한다.
+  - 예산 초과를 회귀로 처리한다.
+  modules:
+  - app
+  - editor
+  - simulation
+  - visualization
+  physics_rules: []
+  fixtures: []
+  docs: []
+- id: QLT-003
+  title: 결정론적 핵심
+  state: accepted
+  priority: MUST
+  phase: all
+  statement: 핵심 계산 모듈은 같은 입력과 옵션에서 같은 결과와 진단을 반환한다.
+  acceptance:
+  - 시간·네트워크·브라우저 전역 상태에 의존하지 않는다.
+  modules:
+  - domain
+  - connectivity
+  - simulation
+  - diagnostics
+  physics_rules: []
+  fixtures: []
+  docs: []
