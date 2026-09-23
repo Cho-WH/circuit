@@ -240,7 +240,7 @@ describe("canonical specification fixtures", () => {
   });
 
   it.each(canonicalFixtures)("$fixture.id satisfies fixture and CircuitDocument schemas", ({ fixture }) => {
-    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture({...fixture,document:documentMigrator.migrate(fixture.document)}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
   });
 
   it("uses unique fixture IDs that agree with their filenames", () => {
@@ -328,7 +328,7 @@ describe("requirement and rule references", () => {
 describe("public CircuitDocument contract", () => {
   it.each(canonicalFixtures)("accepts $fixture.id through the public domain validator", ({ fixture }) => {
     const result = validateDocument(fixture.document);
-    expect(result).toEqual({ ok: true, document: fixture.document });
+    expect(result).toEqual({ ok: true, document: {...fixture.document,version:2} });
   });
 
   it.each(canonicalFixtures)("clones $fixture.id without changing its JSON meaning", ({ fixture }) => {
@@ -352,7 +352,7 @@ describe("public CircuitDocument contract", () => {
     const document: PublicCircuitDocument = {
       $schema: "https://example.invalid/edu-circuit/circuit-document.schema.json",
       format: "edu-circuit",
-      version: 1,
+      version: 2,
       documentId: "contract-parity",
       title: "계약 일치",
       components: [
@@ -377,7 +377,7 @@ describe("public CircuitDocument contract", () => {
           kind: "note",
           anchor: { kind: "junction", id: "J1" },
           content: "메모",
-          visibility: "problem",
+          visibility: "always",
         },
       ],
       referenceNode: { kind: "terminal", id: "R1.b" },
@@ -405,9 +405,10 @@ describe("public CircuitDocument contract", () => {
     const source = fixture.document as PublicCircuitDocument;
 
     expect(documentMigrator.canMigrate(1)).toBe(true);
-    expect(documentMigrator.canMigrate(2)).toBe(false);
+    expect(documentMigrator.canMigrate(2)).toBe(true);
+    expect(documentMigrator.canMigrate(3)).toBe(false);
     const migrated = documentMigrator.migrate(source);
-    expect(migrated).toStrictEqual(source);
+    expect(migrated).toStrictEqual({...source,version:2});
     expect(migrated).not.toBe(source);
   });
 
@@ -494,7 +495,7 @@ describe("invalid specification fixtures", () => {
   it("rejects IDs duplicated across document element kinds", () => {
     const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "duplicate-document-id.json"));
 
-    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture({...fixture,document:{...fixture.document,version:2}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
     expect(documentIntegrityErrors(fixture.document)).toContain(
       "duplicate id shared-id (component, junction)",
     );
@@ -503,7 +504,7 @@ describe("invalid specification fixtures", () => {
   it("rejects a wire endpoint that refers to a missing terminal", () => {
     const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "dangling-endpoint.json"));
 
-    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture({...fixture,document:{...fixture.document,version:2}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
     expect(documentIntegrityErrors(fixture.document)).toContain(
       "wire W1 end references unknown terminal missing-terminal",
     );

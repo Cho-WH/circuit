@@ -1,3 +1,4 @@
+import { parseQuantity } from '../notation';
 import {
   cloneDocument,
   diagnostic,
@@ -32,8 +33,9 @@ export type Command =
   | { type: 'SetLabel'; id: string; label: string }
   | { type: 'SetReference'; endpoint: EndpointRef | null }
   | { type: 'AddJunction'; junction: Junction; wireId?: string; newWireId?: string }
+  | { type: 'SetOutputScale'; scale: number }
   | { type: 'AddAnnotation'; annotation: Annotation }
-  | { type: 'UpdateAnnotation'; id: string; changes: Partial<Pick<Annotation, 'kind' | 'anchor' | 'content' | 'visibility'>> }
+  | { type: 'UpdateAnnotation'; id: string; changes: Partial<Pick<Annotation, 'kind' | 'anchor' | 'content' | 'visibility' | 'position' | 'end'>> }
   | { type: 'ReplaceDocument'; document: CircuitDocument }
   | ({ type: 'Paste' } & PastePayload);
 
@@ -105,7 +107,7 @@ function applyDelete(document: CircuitDocument, ids: Set<string>): void {
       !removedEndpointIds.has(wire.end.id),
   );
   document.annotations = document.annotations.filter(
-    (annotation) => !ids.has(annotation.id) && !removedEndpointIds.has(annotation.anchor.id),
+    (annotation) => !ids.has(annotation.id) && (!annotation.anchor || !removedEndpointIds.has(annotation.anchor.id)),
   );
   if (document.referenceNode && removedEndpointIds.has(document.referenceNode.id)) {
     document.referenceNode = null;
@@ -239,6 +241,9 @@ function applyCommand(
       if (!component) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.id])];
       const diagnostics = invalidProperties(component, command.properties);
       if (diagnostics.length) return diagnostics;
+      for (const key of ['resistanceOhm','voltageV']) {
+        if (key in command.properties && !(key+'Fraction' in command.properties)) delete component.properties[key+'Fraction'];
+      }
       component.properties = { ...component.properties, ...command.properties };
       break;
     }
@@ -269,6 +274,9 @@ function applyCommand(
       break;
     }
 
+    case 'SetOutputScale':
+      document.output = {...document.output, fontScale: command.scale};
+      break;
     case 'AddAnnotation':
       document.annotations.push(command.annotation);
       break;
@@ -383,7 +391,7 @@ export function copySelection(
     (wire) => includedEndpointIds.has(wire.start.id) && includedEndpointIds.has(wire.end.id),
   );
   const selectedAnnotations = document.annotations.filter((annotation) =>
-    includedEndpointIds.has(annotation.anchor.id),
+    (annotation.anchor ? includedEndpointIds.has(annotation.anchor.id) : selectedIds.has(annotation.id)),
   );
 
   const idMap = new Map<string, string>();
@@ -434,31 +442,13 @@ export function copySelection(
     annotations: selectedAnnotations.map((annotation) => ({
       ...cloneValue(annotation),
       id: idMap.get(annotation.id) as string,
-      anchor: remapEndpoint(annotation.anchor),
+      anchor: annotation.anchor ? remapEndpoint(annotation.anchor) : null,
+      ...(annotation.position ? {position: {x: annotation.position.x + offset.x, y: annotation.position.y + offset.y}} : {}),
+      ...(annotation.end ? {end: {x: annotation.end.x + offset.x, y: annotation.end.y + offset.y}} : {}),
     })),
   };
 }
 
 export function parseValue(input: string, unit: 'Ω' | 'V' | 'A'): number | null {
-  const match = input.match(
-    /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*([kMmuμµ]?)\s*(Ω|ohm|V|A)?\s*$/,
-  );
-  if (!match) return null;
-
-  const writtenUnit = match[3];
-  const expectedUnits = unit === 'Ω' ? new Set(['Ω', 'ohm']) : new Set([unit]);
-  if (writtenUnit && !expectedUnits.has(writtenUnit)) return null;
-
-  const multipliers: Record<string, number> = {
-    '': 1,
-    k: 1e3,
-    M: 1e6,
-    m: 1e-3,
-    u: 1e-6,
-    μ: 1e-6,
-    µ: 1e-6,
-  };
-  const value = Number(match[1]) * multipliers[match[2]];
-  if (!Number.isFinite(value) || (unit === 'Ω' && value < 0)) return null;
-  return value;
+  return parseQuantity(input,unit)?.value ?? null;
 }

@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  componentDefinitions,
+  symbolMarkup,
   annotationPlacements,
   annotationPresentation,
   componentPresentation,
@@ -15,8 +17,13 @@ import {
   type CircuitDocument,
 } from '../src/domain';
 import { createHistory, executeCommand, redo, undo } from '../src/editor';
-import { copyPng, exportPng, exportSvg } from '../src/export';
+import { copyPng, exportPng, exportSvg as standaloneSvg } from '../src/export';
 import { solveCircuit } from '../src/simulation';
+import { outputMoveCommand } from '../src/app/OutputCanvas';
+import { parseDocument, serializeDocument } from '../src/persistence';
+
+// Geometry assertions omit binary font payload; embedding is tested separately.
+function exportSvg(...args:Parameters<typeof standaloneSvg>){return standaloneSvg(...args).replace(/<style>[\s\S]*?<\/style>/g,'');}
 
 function fixture(name = 'FIX-02-series.json'): CircuitDocument {
   const raw = JSON.parse(
@@ -36,7 +43,7 @@ function solve(document: CircuitDocument) {
 }
 
 describe('worksheet component presentation', () => {
-  it('applies every problem rule while the answer view reveals actual values', () => {
+  it('applies output text, hidden, unknown and rectangular blank rules', () => {
     const document = fixture();
     const { result } = solve(document);
     const resistor = document.components.find((item) => item.id === 'R1')!;
@@ -51,42 +58,34 @@ describe('worksheet component presentation', () => {
       currentDisplay: 'hidden',
     };
 
-    expect(componentPresentation(resistor, 'problem', result)).toEqual({
-      label: '________',
+    expect(componentPresentation(resistor, result)).toEqual({
+      label: '□',
       value: '?',
       voltage: 'U_R',
       current: null,
     });
-    expect(componentPresentation(resistor, 'answer', result)).toEqual({
-      label: 'R1',
-      value: '3.00 Ω',
-      voltage: '3.00 V',
-      current: '1.00 A',
-    });
 
     const expected = new Map<string, string | null>([
-      ['value', '3.00 Ω'],
+      ['value', '3 Ω'],
       ['hidden', null],
       ['?', '?'],
-      ['blank', '________'],
+      ['blank', '□'],
       ['custom', 'R_x'],
     ]);
     for (const [rule, text] of expected) {
       resistor.properties.answerDisplay = rule;
       resistor.properties.answerText = 'R_x';
-      expect(componentPresentation(resistor, 'problem', result).value).toBe(text);
+      expect(componentPresentation(resistor, result).value).toBe(text);
     }
   });
 
-  it('formats raw values without changing them and honors each public number mode', () => {
-    const value = 12_345.6789;
-    expect(formatDisplayQuantity(value, 'Ω')).toBe('12.3 kΩ');
-    expect(formatDisplayQuantity(value, 'Ω', { kind: 'significant', digits: 5 })).toBe('12.346 kΩ');
-    expect(formatDisplayQuantity(value, 'Ω', { kind: 'fixed', digits: 2 })).toBe('12345.68 Ω');
-    expect(formatDisplayQuantity(value, 'Ω', { kind: 'integer' })).toBe('12346 Ω');
-    expect(formatDisplayQuantity(-0, 'A')).toBe('0 A');
-    expect(formatDisplayQuantity(undefined, 'V')).toBe('— V');
-    expect(value).toBe(12_345.6789);
+  it('rounds output numbers to at most two decimals without trailing zeroes or negative zero', () => {
+    expect(formatDisplayQuantity(12345.6789,'Ω')).toBe('12345.68 Ω');
+    expect(formatDisplayQuantity(3,'V')).toBe('3 V');
+    expect(formatDisplayQuantity(1.5,'V')).toBe('1.5 V');
+    expect(formatDisplayQuantity(1.236,'A')).toBe('1.24 A');
+    expect(formatDisplayQuantity(-0.001,'A')).toBe('0 A');
+    expect(formatDisplayQuantity(undefined,'V')).toBe('— V');
   });
 
   it('keeps connectivity and physics byte-equivalent when only worksheet metadata changes', () => {
@@ -108,16 +107,14 @@ describe('worksheet component presentation', () => {
       kind: 'question',
       anchor: { kind: 'terminal', id: decorated.components[1].terminals[0].id },
       content: '전압은?',
-      visibility: 'problem',
+      visibility: 'always',
     });
 
     const before = solve(original);
     const after = solve(decorated);
     expect(after.circuit).toEqual(before.circuit);
     expect(after.result).toEqual(before.result);
-    expect(componentPresentation(decorated.components[1], 'problem', after.result)).not.toEqual(
-      componentPresentation(decorated.components[1], 'answer', after.result),
-    );
+    expect(componentPresentation(decorated.components[1], after.result)).not.toEqual(componentPresentation(original.components[1], before.result));
     expect(original.annotations).toEqual([]);
   });
 });
@@ -136,26 +133,26 @@ describe('worksheet annotation presentation', () => {
     anchor: { kind: 'terminal', id: 'R1.a' },
   });
 
-  it('honors always/problem/answer/hidden visibility and default blank/question text', () => {
-    expect(annotationPresentation(annotation('a', 'label', 'always', 'A'), 'problem')).toBe('A');
-    expect(annotationPresentation(annotation('p', 'blank', 'problem'), 'problem')).toBe('________');
-    expect(annotationPresentation(annotation('q', 'question', 'answer'), 'answer')).toBe('?');
-    expect(annotationPresentation(annotation('p', 'note', 'problem', '설명'), 'answer')).toBeNull();
-    expect(annotationPresentation(annotation('h', 'arrow', 'hidden', 'I'), 'problem')).toBeNull();
+  it('honors visibility and default blank/question text', () => {
+    expect(annotationPresentation(annotation('a', 'label', 'always', 'A'))).toBe('A');
+    expect(annotationPresentation(annotation('p', 'blank', 'always'))).toBe('□');
+    expect(annotationPresentation(annotation('q', 'question', 'always'))).toBe('?');
+    expect(annotationPresentation(annotation('p', 'note', 'hidden', '설명'))).toBeNull();
+    expect(annotationPresentation(annotation('h', 'arrow', 'hidden', 'I'))).toBeNull();
   });
 
   it('places multiple visible annotation kinds deterministically without changing anchors', () => {
     const document = fixture();
     document.annotations = [
       annotation('point', 'label', 'always', 'A'),
-      annotation('arrow', 'arrow', 'problem', 'I'),
-      annotation('unknown', 'question', 'problem'),
-      annotation('explanation', 'note', 'problem', '전류 방향'),
-      annotation('answer-only', 'blank', 'answer'),
+      annotation('arrow', 'arrow', 'always', 'I'),
+      annotation('unknown', 'question', 'always'),
+      annotation('explanation', 'note', 'always', '전류 방향'),
+      annotation('hidden-blank', 'blank', 'hidden'),
     ];
     const snapshot = cloneDocument(document);
 
-    const placements = annotationPlacements(document, 'problem');
+    const placements = annotationPlacements(document);
     expect(placements.map((item) => [item.annotation.kind, item.text])).toEqual([
       ['label', 'A'],
       ['arrow', 'I'],
@@ -168,7 +165,7 @@ describe('worksheet annotation presentation', () => {
       placements[0].y - 56,
       placements[0].y - 84,
     ]);
-    expect(annotationPlacements(document, 'problem')).toEqual(placements);
+    expect(annotationPlacements(document)).toEqual(placements);
     expect(document).toEqual(snapshot);
   });
 });
@@ -181,7 +178,7 @@ describe('annotation editor command', () => {
       kind: 'note',
       anchor: { kind: 'terminal', id: 'R1.a' },
       content: 'before',
-      visibility: 'problem',
+      visibility: 'always',
     }];
     const frozen = cloneDocument(document);
     const updated = executeCommand(createHistory(document), {
@@ -241,20 +238,20 @@ describe('independent worksheet SVG export', () => {
     const documentBefore = cloneDocument(document);
     const resultBefore = structuredClone(result);
 
-    const first = exportSvg(document, { mode: 'answer' }, result);
-    const second = exportSvg(document, { mode: 'answer' }, result);
+    const first = exportSvg(document, {}, result);
+    const second = exportSvg(document, {}, result);
     expect(second).toBe(first);
     expect(first.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true);
     expect(first.endsWith('</svg>')).toBe(true);
     expect(first).toContain('<path d=');
     expect(first).toContain('R1');
-    expect(first).toContain('3.00 Ω');
-    expect(first).not.toMatch(/selection|selected|toolbar|zoom|pan/i);
+    expect(first).toContain('3 Ω');
+    expect(first.replace(/<style>[\s\S]*?<\/style>/g,'')).not.toMatch(/selection|selected|toolbar|zoom|pan/i);
     expect(document).toEqual(documentBefore);
     expect(result).toEqual(resultBefore);
   });
 
-  it('renders problem and answer variants from one document without storing calculated answers', () => {
+  it('renders output notation without storing calculated answers', () => {
     const document = fixture();
     const { result } = solve(document);
     const resistor = document.components.find((item) => item.id === 'R1')!;
@@ -270,16 +267,11 @@ describe('independent worksheet SVG export', () => {
     };
     const snapshot = cloneDocument(document);
 
-    const problem = exportSvg(document, { mode: 'problem' }, result);
-    const answer = exportSvg(document, { mode: 'answer' }, result);
+    const problem = exportSvg(document, {}, result);
     expect(problem).toContain('>?</text>');
     expect(problem).toContain('>가</text>');
-    expect(problem).toContain('>U = ________</text>');
+    expect(problem).toContain('width="84" height="36"');
     expect(problem).not.toContain('>I = 1.00 A</text>');
-    expect(answer).toContain('>R1</text>');
-    expect(answer).toContain('>3.00 Ω</text>');
-    expect(answer).toContain('>U = 3.00 V</text>');
-    expect(answer).toContain('>I = 1.00 A</text>');
     expect(document).toEqual(snapshot);
     expect(Object.keys(resistor.properties)).not.toContain('calculatedVoltage');
   });
@@ -298,13 +290,13 @@ describe('independent worksheet SVG export', () => {
       visibility: 'always',
     }];
 
-    const svg = exportSvg(document, { mode: 'problem' });
+    const svg = exportSvg(document, {});
     expect(svg).not.toContain('<script>');
     expect(svg).not.toContain('<img');
     expect(svg).not.toContain('<b>');
     expect(svg).not.toContain('\u0000');
     expect(svg).toContain('&lt;script&gt;alert(&quot;title&quot;)&lt;/script&gt;&amp;');
-    expect(svg).toContain('&lt;b&gt;custom&lt;/b&gt;�');
+    expect(svg).toContain('&lt;𝑏&gt;𝑐𝑢𝑠𝑡𝑜𝑚&lt;/𝑏&gt;�');
     expect(svg).toContain('&lt;script&gt;alert(&quot;note&quot;)&lt;/script&gt;&amp;&apos;');
   });
 
@@ -312,30 +304,24 @@ describe('independent worksheet SVG export', () => {
     const document = fixture();
     document.annotations = [
       { id: 'point', kind: 'label', anchor: { kind: 'terminal', id: 'R1.a' }, content: 'A', visibility: 'always' },
-      { id: 'arrow', kind: 'arrow', anchor: { kind: 'terminal', id: 'R1.a' }, content: 'I', visibility: 'problem' },
-      { id: 'question', kind: 'question', anchor: { kind: 'terminal', id: 'R1.a' }, content: '', visibility: 'problem' },
-      { id: 'blank', kind: 'blank', anchor: { kind: 'terminal', id: 'R1.a' }, content: '', visibility: 'answer' },
-      { id: 'note', kind: 'note', anchor: { kind: 'terminal', id: 'R1.a' }, content: '해설', visibility: 'answer' },
+      { id: 'arrow', kind: 'arrow', anchor: { kind: 'terminal', id: 'R1.a' }, content: 'I', visibility: 'always' },
+      { id: 'question', kind: 'question', anchor: { kind: 'terminal', id: 'R1.a' }, content: '', visibility: 'always' },
+      { id: 'blank', kind: 'blank', anchor: { kind: 'terminal', id: 'R1.a' }, content: '', visibility: 'hidden' },
+      { id: 'note', kind: 'note', anchor: { kind: 'terminal', id: 'R1.a' }, content: '해설', visibility: 'hidden' },
       { id: 'hidden', kind: 'note', anchor: { kind: 'terminal', id: 'R1.a' }, content: 'SECRET', visibility: 'hidden' },
     ];
 
-    const problem = exportSvg(document, { mode: 'problem' });
+    const problem = exportSvg(document, {});
     expect(problem).toContain('>A</text>');
-    expect(problem).toContain('>I</text>');
+    expect(problem).toContain('>𝐼</text>');
     expect(problem).toContain('>?</text>');
-    expect(problem).toMatch(/<path d="M[^>]+H[^>]+ M[^>]+L/);
+    expect(problem).toMatch(/<path d="M[^>]+L[^>]+ M[^>]+L/);
     expect(problem).not.toContain('>해설</text>');
     expect(problem).not.toContain('SECRET');
 
-    const answer = exportSvg(document, { mode: 'answer' });
-    expect(answer).toContain('>A</text>');
-    expect(answer).toContain('>________</text>');
-    expect(answer).toContain('>해설</text>');
-    expect(answer).not.toContain('>I</text>');
-    expect(answer).not.toContain('SECRET');
   });
 
-  it('applies monochrome, background, margin, and number-format options independently', () => {
+  it('applies monochrome, background, margin, options independently', () => {
     const document = fixture();
     const { result } = solve(document);
     document.components[1].properties.showVoltage = true;
@@ -345,12 +331,11 @@ describe('independent worksheet SVG export', () => {
       monochrome: true,
       background: 'transparent',
       margin: 10,
-      numberFormat: { kind: 'fixed', digits: 1 },
     }, result);
     expect(transparent).not.toContain('fill="#ffffff"/>');
     expect(new Set(transparent.match(/#[0-9a-fA-F]{6}/g))).toEqual(new Set(['#111111']));
-    expect(transparent).toContain('>3.0 Ω</text>');
-    expect(transparent).toContain('>U = 3.0 V</text>');
+    expect(transparent).toContain('>3 Ω</text>');
+    expect(transparent).toContain('>𝑈 = 3 V</text>');
 
     const white = exportSvg(document, { background: 'white', margin: 50 }, result);
     expect(white).toMatch(/<rect [^>]*fill="#ffffff"\/>/);
@@ -394,8 +379,6 @@ describe('independent worksheet SVG export', () => {
     invalid.wires[0].start.id = 'missing';
     expect(() => exportSvg(invalid)).toThrow();
     expect(() => exportSvg(document, { margin: -1 })).toThrow(/margin/);
-    expect(() => exportSvg(document, { pngScale: 0 })).toThrow(/pngScale/);
-    expect(() => exportSvg(document, { numberFormat: { kind: 'fixed', digits: 11 } })).toThrow(/digits/);
   });
 });
 
@@ -424,17 +407,17 @@ describe('PNG rasterization and clipboard fallback', () => {
     return { canvases, drawImage };
   }
 
-  it('rasterizes at the requested integer pixel dimensions and returns a PNG blob', async () => {
+  it.each([false,true])('rasterizes at 1x or exactly 2x when highResolution=%s', async highResolution => {
     const document = fixture();
     const { canvases, drawImage } = installRasterMocks();
     const svg = svgDimensions(exportSvg(document, { margin: 24 }));
-    const blob = await exportPng(document, { margin: 24, pngScale: 3 });
+    const blob = await exportPng(document, { margin: 24, highResolution });
 
     expect(blob.type).toBe('image/png');
     expect(canvases).toHaveLength(1);
     expect(canvases[0]).toMatchObject({
-      width: Math.ceil(svg.width * 3),
-      height: Math.ceil(svg.height * 3),
+      width: Math.ceil(svg.width) * (highResolution?2:1),
+      height: Math.ceil(svg.height) * (highResolution?2:1),
     });
     expect(drawImage).toHaveBeenCalledTimes(1);
   });
@@ -445,7 +428,7 @@ describe('PNG rasterization and clipboard fallback', () => {
     vi.stubGlobal('navigator', {});
     vi.stubGlobal('ClipboardItem', class ClipboardItem {});
 
-    const copied = await copyPng(document, { pngScale: 1 });
+    const copied = await copyPng(document, {});
     expect(copied.copied).toBe(false);
     expect(copied.blob.type).toBe('image/png');
     expect(await copied.blob.text()).toBe('png');
@@ -460,10 +443,100 @@ describe('PNG rasterization and clipboard fallback', () => {
       constructor(readonly items: Record<string, Blob>) {}
     });
 
-    const copied = await copyPng(document, { pngScale: 1 });
+    const copied = await copyPng(document, {});
     expect(write).toHaveBeenCalledTimes(1);
     expect(copied.copied).toBe(false);
     expect(copied.blob.type).toBe('image/png');
     expect(await copied.blob.text()).toBe('png');
+  });
+});
+
+describe('free output layout', () => {
+  it('moves independent text and arrow endpoints, round trips and undoes without changing physics', () => {
+    const original=fixture();
+    const before=solve(original);
+    let history=createHistory(original);
+    const apply=(command: Parameters<typeof executeCommand>[1])=>{const next=executeCommand(history,command);expect(next.ok).toBe(true);if(next.ok)history=next.history;};
+    apply({type:'AddAnnotation',annotation:{id:'free-arrow',kind:'arrow',anchor:null,position:{x:150,y:100},end:{x:230,y:100},content:'I₁',visibility:'always'}});
+    apply(outputMoveCommand(history.present,{id:'free-arrow',part:'end'},{x:-80,y:100})!);
+    expect(history.present.annotations[0].end).toEqual({x:150,y:200});
+    expect(undo(history).present.annotations[0].end).toEqual({x:230,y:100});
+    expect(redo(undo(history)).present).toEqual(history.present);
+    apply(outputMoveCommand(history.present,{id:'R1',part:'label'},{x:80,y:-120})!);
+    apply(outputMoveCommand(history.present,{id:'R1',part:'value'},{x:-50,y:90})!);
+    apply({type:'SetProperties',id:'R1',properties:{labelText:'Rₓ',labelDisplay:'custom',answerBlank:true}});
+    apply({type:'SetOutputScale',scale:1.5});
+    const doc=history.present;
+    expect(solve(doc)).toEqual(before);
+    expect(parseDocument(serializeDocument(doc))).toEqual({ok:true,document:doc});
+    const svg=exportSvg(doc);
+    expect(svg).toContain('font-size="33.75"');
+    expect(svg).toContain('width="126" height="54"');
+    expect(svg).toContain('M150 100L150 200');
+    expect(svg).toContain('>𝑅ₓ</text>');
+    expect(svg).not.toContain('<circle');
+    apply({type:'SetProperties',id:'R1',properties:{answerVisible:false}});
+    expect(componentPresentation(history.present.components.find(c=>c.id==='R1')!).value).toBeNull();
+    apply({type:'SetOutputScale',scale:0.5});
+    expect(exportSvg(history.present,{circuitOnly:true})).not.toContain('I₁');
+  });
+
+  it('migrates old annotations without mutating the v1 source and preserves its problem appearance', () => {
+    const raw=JSON.parse(readFileSync(resolve(process.cwd(),'fixtures','FIX-02-series.json'),'utf8')).document;
+    raw.annotations=[{id:'old',kind:'note',anchor:{kind:'terminal',id:'R1.a'},content:'문제',visibility:'problem'},{id:'teacher',kind:'note',anchor:{kind:'terminal',id:'R1.a'},content:'정답',visibility:'answer'}];
+    const snapshot=JSON.stringify(raw), parsed=parseDocument(snapshot);
+    expect(parsed.ok).toBe(true);if(!parsed.ok)return;
+    expect(parsed.document.version).toBe(2);
+    expect(parsed.document.annotations.map(a=>a.visibility)).toEqual(['always','hidden']);
+    expect(JSON.stringify(raw)).toBe(snapshot);
+    expect(parseDocument(serializeDocument(parsed.document))).toEqual(parsed);
+    expect(exportSvg(parsed.document)).toContain('>문제</text>');
+    expect(exportSvg(parsed.document)).not.toContain('>정답</text>');
+  });
+
+  it('rejects a free decoration without a position and invalid scale without adding history', () => {
+    const history=createHistory(fixture());
+    expect(executeCommand(history,{type:'AddAnnotation',annotation:{id:'bad',kind:'point',anchor:null,content:'A',visibility:'always'}}).ok).toBe(false);
+    expect(executeCommand(history,{type:'SetOutputScale',scale:Infinity}).ok).toBe(false);
+    expect(history.past).toEqual([]);
+  });
+});
+
+
+describe('output ground and embedded math font',()=>{
+  it('hides ground by default, shows only its symbol on request, and preserves the 3D reference',()=>{
+    const doc=fixture();
+    expect(doc.referenceNode).not.toBeNull();
+    expect(exportSvg(doc)).not.toContain('data-output-ground');
+    const shown=exportSvg(doc,{showGround:true});
+    expect(shown).toContain('data-output-ground="true"');
+    expect(shown).not.toContain('>0 V</text>');
+    expect(exportSvg(doc,{showGround:false})).not.toContain('data-output-ground');
+    expect(exportSvg(doc,{circuitOnly:true})).toContain('>0 V</text>');
+  });
+  it('embeds a standalone WOFF2 font for SVG and PNG notation',()=>{
+    const svg=standaloneSvg(fixture());
+    expect(svg).toContain("font-family:'Libertinus Math'");
+    expect(svg).toMatch(/data:font\/woff2;base64,d09GMg/);
+    expect(svg).toContain('font-synthesis:none');
+    expect(svg).not.toContain('fonts.googleapis.com');
+  });
+});
+
+
+describe('variable resistor presentation and compatibility', () => {
+  it('uses an adjustment arrow while preserving resistance, terminals and saved type', () => {
+    const document=fixture();
+    const resistor=document.components.find(item=>item.id==='R1')!;
+    const before=solve(document).result;
+    const terminals=structuredClone(resistor.terminals);
+    expect(symbolMarkup(resistor)).not.toContain('adjustment-arrow');
+    resistor.type='resistive-load';
+    expect(componentDefinitions[resistor.type].name).toBe('가변저항');
+    expect(symbolMarkup(resistor)).toContain('adjustment-arrow');
+    expect(exportSvg(document)).toContain('adjustment-arrow');
+    expect(resistor.terminals).toEqual(terminals);
+    expect(solve(document).result).toEqual(before);
+    expect(parseDocument(serializeDocument(document))).toEqual({ok:true,document});
   });
 });

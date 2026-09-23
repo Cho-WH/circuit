@@ -9,7 +9,7 @@ export function PotentialGraph({ path, result, hovered, onHover }: { path: Circu
   const y = (v: number) => 80 - (v - min) / (max - min || 1) * 60; const width = 680; const segment = 570 / steps.length;
   return <svg className="potential-graph" viewBox={`0 0 ${width} 110`} role="img" aria-label="경로 전위 그래프: 도선은 수평, 부품은 전위 변화">
     <path d="M50 13V85H650" fill="none" stroke="#d8e1ec"/><text x="12" y="14" fill="#62748c" fontSize="12">V</text>
-    {[min, max].map((v, i) => <g key={i}><path d={`M50 ${y(v)}H650`} stroke="#e9edf3" strokeDasharray="4 4"/><text x="40" y={y(v) + 4} textAnchor="end" fill="#62748c" fontSize="12">{Number(v.toPrecision(3))}</text></g>)}
+    {[min, max].map((v, i) => <g key={i}><path d={`M50 ${y(v)}H650`} stroke="#e9edf3" strokeDasharray="4 4"/><text x="40" y={y(v) + 4} textAnchor="end" fill="#62748c" fontSize="12">{Number(v.toFixed(2))}</text></g>)}
     {steps.map((step, i) => { const x = 65 + i * segment; return <g key={i} tabIndex={0} role="button" aria-label={`${step.elementId} 전위 변화`} onMouseEnter={() => onHover(step.elementId)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(step.elementId)} onBlur={() => onHover(null)}>
       <path d={`M${x} ${y(step.fromVoltage)}h${segment * .3}L${x + segment * .9} ${y(step.toVoltage)}H${x + segment}`} fill="none" stroke={hovered === step.elementId ? '#efa638' : '#547fc0'} strokeWidth={hovered === step.elementId ? 4 : 2.5}/>
       <rect x={x} y="13" width={segment} height="72" fill="transparent"/>

@@ -61,7 +61,7 @@ function setup(overrides: Partial<CanvasProps> = {}) {
       svg.dispatchEvent(new PointerEvent('lostpointercapture', { bubbles: true, pointerId: id }));
     },
   });
-  const component = (id: string) => host.querySelector(`[aria-label^="${id} "].component`)!;
+  const component = (id: string) => host.querySelector(`[data-component-id="${id}"] .component`)!;
   const paths = () => [...host.querySelectorAll('polyline[aria-label^="도선 "]')].map(el => el.getAttribute('points'));
   function pointer(target: Element, type: string, x: number, y: number, pointerId = 1, pointerType = 'mouse') {
     act(() => { target.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId, pointerType, button: 0 })); });
@@ -70,19 +70,46 @@ function setup(overrides: Partial<CanvasProps> = {}) {
 }
 
 describe('live canvas drag geometry', () => {
+  it('previews and submits name and value together, and cancels both with Escape',()=>{
+    const commit=vi.fn(()=>true);setup({onCommitComponent:commit});
+    act(()=>host.querySelector('[aria-label="R_1 값 편집"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+    const name=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 이름"]')!,value=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 값"]')!;
+    const change=(input:HTMLInputElement,text:string)=>act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));});
+    change(name,'R_1');change(value,'3/4');
+    expect(host.querySelector('.inline-name-preview sub')!.textContent).toBe('1');
+    change(name,' ');act(()=>name.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));expect(commit).not.toHaveBeenCalled();
+    change(name,'R_1');act(()=>name.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value:.75,fraction:'3/4'});
+    act(()=>host.querySelector('[aria-label="R_1 값 편집"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+    const again=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 이름"]')!;change(again,'R_{eq}');
+    act(()=>again.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
+    expect(commit).toHaveBeenCalledTimes(1);expect(host.querySelector('.inline-value-editor')).toBeNull();
+  });
+  it('reopens an explicit fraction and rejects a zero denominator without changing it',()=>{
+    const commit=vi.fn(()=>true),c=setup({onCommitComponent:commit});
+    const doc=structuredClone(c.original),r=doc.components.find(c=>c.id==='R1')!;
+    r.properties.resistanceOhm=.75;r.properties.resistanceOhmFraction='3/4';c.render({document:doc});
+    act(()=>host.querySelector('[aria-label="R_1 값 편집"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+    const input=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 값"]')!;
+    expect(input.value).toBe('3/4');
+    const submit=(value:string)=>{act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));};
+    submit('3/0');expect(commit).not.toHaveBeenCalled();expect(input.getAttribute('aria-invalid')).toBe('true');
+    submit('2/3');expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value:2/3,fraction:'2/3'});
+  });
+
   it('edits a value next to the circuit, keeps invalid input open and cancels with Escape',()=>{
-    const commit=vi.fn(()=>true),c=setup({onCommitValue:commit});
-    const value=host.querySelector('[aria-label="R1 값 편집"]')!;
+    const commit=vi.fn(()=>true),c=setup({onCommitComponent:commit});
+    const value=host.querySelector('[aria-label="R_1 값 편집"]')!;
     act(()=>value.dispatchEvent(new MouseEvent('click',{bubbles:true})));
-    let input=host.querySelector<HTMLInputElement>('[aria-label="R1 회로 위 값"]')!;
+    let input=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 값"]')!;
     expect(input).not.toBeNull();expect(document.activeElement).toBe(input);
     const change=(text:string)=>act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));});
     change('wrong');act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
     expect(commit).not.toHaveBeenCalled();expect(input.getAttribute('aria-invalid')).toBe('true');
     change('1k');act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',1000);expect(host.querySelector('.inline-value-editor')).toBeNull();
+    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value:1000});expect(host.querySelector('.inline-value-editor')).toBeNull();
     act(()=>value.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
-    input=host.querySelector<HTMLInputElement>('[aria-label="R1 회로 위 값"]')!;
+    input=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 값"]')!;
     act(()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
     expect(host.querySelector('.inline-value-editor')).toBeNull();expect(commit).toHaveBeenCalledTimes(1);
     expect(c.onMove).not.toHaveBeenCalled();

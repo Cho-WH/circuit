@@ -71,7 +71,7 @@ interface DocumentMigrator {
 | `ConnectWire`, `AddJunction`, `ConnectToWire` | ID 연결·분기·배선 경로 |
 | `InsertComponentOnWire`, `ConnectCrossing`, `DisconnectCrossing` | 직렬 삽입·교차 연결/분리 |
 | `SetProperties`, `SetLabel`, `SetReference` | 전기 속성·문제 표기·이름·기준점 |
-| `AddAnnotation`, `UpdateAnnotation`, `ReplaceDocument` | 주석·문서 교체 |
+| `AddAnnotation`, `UpdateAnnotation`, `SetOutputScale`, `ReplaceDocument` | 출력 주석·글자 배율·문서 교체 |
 
 `History`는 과거·현재·미래 문서 스냅샷을 보존한다. `previewCommand`와 `executeCommand`는 같은 권한·변환·검증 경로를 사용한다. `executeCommands`는 복수 명령을 모두 검증한 뒤 한 번의 실행 취소 단위로 확정하며 실패 시 부분 변경을 남기지 않는다.
 
@@ -79,7 +79,7 @@ interface DocumentMigrator {
 
 ## 측정과 출력의 공개 계약
 
-관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v1을 유지한다.
+관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v2이며 v1 호환 변환은 ADR-012를 따른다.
 
 `measurement`는 `probeVoltage(compilation, result, red, black)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
 
@@ -95,3 +95,7 @@ interface DocumentMigrator {
 - `app`만 여러 모듈을 조합한다.
 - 모듈 내부 파일이 아니라 공개 `index`를 사용한다.
 - 순환 의존성이 생기면 책임을 다시 나누고 공통 타입을 최소 범위로 이동한다.
+
+## 분수 표기
+
+`notation`은 브라우저에 의존하지 않는 입력 파싱·명시적 분수 복원·문구 토큰화를 제공한다. editor와 UI가 같은 parseQuantity를 사용하고 component-library는 componentValueInput·notationWidth·svgNotation을 공개한다. 수치 해석기는 원래 SI 숫자만 받는다. 입력 표기 저장 규칙은 ADR-012를 따른다.

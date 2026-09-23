@@ -18,7 +18,7 @@
 | `Wire` | 두 단자 또는 분기점을 잇는 경로 |
 | `Junction` | 여러 도선이 명시적으로 만나는 점 |
 | `Net` | 연결망 컴파일 결과로 얻는 등전위 절점 |
-| `Annotation` | 라벨, 화살표, 문제용 빈칸 |
+| `Annotation` | 출력 전용 점·글자·화살표. position/end로 자유 배치하고 이전 anchor 주석도 지원 |
 | `ActivityDefinition` | 학생 권한과 단계별 공개 조건 |
 | `SimulationResult` | 절점 전위, 가지 전류, 전력, 진단 |
 
@@ -38,6 +38,7 @@ interface CircuitDocument {
   wires: Wire[];
   junctions: Junction[];
   annotations: Annotation[];
+  output?: { fontScale?: number };
   referenceNode: EndpointRef | null;
   activity: ActivityDefinition | null;
 }
@@ -93,3 +94,5 @@ interface SimulationResult {
 - 모든 도선 시작점과 끝점은 존재하는 단자 또는 분기점을 참조한다.
 - 삭제된 요소를 참조하는 도선은 유효하지 않다.
 - 기준점은 존재하는 단자 또는 분기점을 참조하거나 `null`이다.
+
+가변저항의 저장 타입은 호환성을 위해 `resistive-load`를 사용한다. 두 단자와 `resistanceOhm` 속성은 일반 저항과 같으며, UI 이름·기호만 구분한다. 기존 파일의 ID·이름·값은 변경하지 않는다.

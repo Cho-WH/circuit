@@ -1,3 +1,4 @@
+import { storedFraction, notationTokens, symbolGlyphs } from '../notation';
 import type { Annotation, CircuitDocument, ComponentInstance, ComponentType, EndpointRef, Point, Wire, SimulationResult } from '../domain';
 
 export const componentDefinitions: Record<ComponentType, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | ''; property?: string }> = {
@@ -6,7 +7,7 @@ export const componentDefinitions: Record<ComponentType, { name: string; short: 
   switch: { name: '스위치', short: 'S', unit: '' },
   ammeter: { name: '전류계', short: 'A', unit: 'A' },
   voltmeter: { name: '전압계', short: 'M', unit: 'V' },
-  'resistive-load': { name: '저항성 부하', short: 'L', unit: 'Ω', property: 'resistanceOhm' },
+  'resistive-load': { name: '가변저항', short: 'VR', unit: 'Ω', property: 'resistanceOhm' },
 };
 export function createComponent(type: ComponentType, id: string, position: Point): ComponentInstance {
   const source = type === 'dc-voltage-source';
@@ -95,16 +96,20 @@ export function formatQuantity(value: number | undefined, unit: string): string 
   if (Object.is(value, -0)) value = 0;
   const abs = Math.abs(value);
   const [scale, prefix] = abs >= 1e6 ? [1e6, 'M'] : abs >= 1e3 ? [1e3, 'k'] : abs > 0 && abs < 1e-9 ? [1e-12, 'p'] : abs > 0 && abs < 1e-6 ? [1e-9, 'n'] : abs > 0 && abs < 1e-3 ? [1e-6, 'μ'] : abs > 0 && abs < 1 ? [1e-3, 'm'] : [1, ''];
-  return `${value === 0 ? '0' : (value / Number(scale)).toPrecision(3)} ${prefix}${unit}`;
+  return `${value === 0 ? '0' : Number((value / Number(scale)).toFixed(2))} ${prefix}${unit}`;
 }
 export function componentValue(component: ComponentInstance): string {
   const def = componentDefinitions[component.type];
   if (component.type === 'switch') return component.properties.state === 'closed' ? '닫힘' : '열림';
-  return def.property ? formatQuantity(Number(component.properties[def.property]), def.unit) : def.name;
+  const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
+  return fraction ? `${fraction} ${def.unit}` : def.property ? formatQuantity(Number(component.properties[def.property]), def.unit) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
 export function symbolMarkup(component: ComponentInstance): string {
-  if (component.type === 'resistor' || component.type === 'resistive-load') return '<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
+  if (component.type === 'resistor' || component.type === 'resistive-load') {
+    const resistor='<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
+    return resistor+(component.type==='resistive-load'?'<path data-symbol="adjustment-arrow" d="M-18 20L18 -20 M8 -18L18 -20 17 -10" fill="none"/>':'');
+  }
   if (component.type === 'dc-voltage-source') return '<path d="M-44 0H-7 M7 0H44 M-7 -22V22 M7 -12V12"/><text x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>';
   if (component.type === 'switch') return `<path d="M-44 0H-24 M24 0H44 M-22 0L22 ${component.properties.state === 'closed' ? 0 : -20}"/><circle cx="-24" cy="0" r="3"/><circle cx="24" cy="0" r="3"/>`;
   return `<path d="M-44 0H-23 M23 0H44"/><circle r="23"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>`;
@@ -116,42 +121,96 @@ export function documentBounds(document: CircuitDocument, margin = 80) {
   return { x: minX - margin, y: minY - margin, width: Math.max(200, Math.max(...points.map(p => p.x)) - minX + 2 * margin), height: Math.max(200, Math.max(...points.map(p => p.y)) - minY + 2 * margin) };
 }
 
-export type WorksheetMode = 'problem' | 'answer';
-export type NumberFormat = { kind: 'significant'; digits: number } | { kind: 'fixed'; digits: number } | { kind: 'integer' };
-export function formatDisplayQuantity(value: number | undefined, unit: string, format: NumberFormat = { kind: 'significant', digits: 3 }): string {
+/** Output numbers use base units, at most two decimal places, and no trailing zeroes. */
+export function formatDisplayQuantity(value: number | undefined, unit: string): string {
   if (value === undefined || !Number.isFinite(value)) return `— ${unit}`;
-  if (Object.is(value, -0)) value = 0;
-  if (format.kind === 'integer') return `${Math.round(value)} ${unit}`;
-  const digits = Math.max(format.kind === 'fixed' ? 0 : 1, Math.min(10, Math.trunc(Number.isFinite(format.digits) ? format.digits : 3)));
-  if (format.kind === 'fixed') return `${value.toFixed(digits)} ${unit}`;
-  const abs = Math.abs(value);
-  const [scale, prefix] = abs >= 1e6 ? [1e6, 'M'] : abs >= 1e3 ? [1e3, 'k'] : abs > 0 && abs < 1e-9 ? [1e-12, 'p'] : abs > 0 && abs < 1e-6 ? [1e-9, 'n'] : abs > 0 && abs < 1e-3 ? [1e-6, 'μ'] : abs > 0 && abs < 1 ? [1e-3, 'm'] : [1, ''];
-  return `${value === 0 ? '0' : (value / Number(scale)).toPrecision(digits)} ${prefix}${unit}`;
+  return `${Number(value.toFixed(2))} ${unit}`;
 }
-export function componentPresentation(component: ComponentInstance, mode: WorksheetMode, result?: SimulationResult, numberFormat?: NumberFormat): { label: string | null; value: string | null; voltage: string | null; current: string | null } {
+export function componentPresentation(component: ComponentInstance, result?: SimulationResult): { label: string | null; value: string | null; voltage: string | null; current: string | null } {
   const def = componentDefinitions[component.type];
-  const value = def.property ? formatDisplayQuantity(Number(component.properties[def.property]), def.unit, numberFormat) : componentValue(component);
+  const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
+  const value = fraction ? `${fraction} ${def.unit}` : def.property ? formatDisplayQuantity(Number(component.properties[def.property]), def.unit) : componentValue(component);
   const rule = (actual: string, prefix: string): string | null => {
-    if (mode === 'answer') return actual;
     const display = component.properties[`${prefix}Display`] ?? 'value';
-    return display === 'hidden' ? null : display === '?' ? '?' : display === 'blank' ? '________' : display === 'custom' ? String(component.properties[`${prefix}Text`] ?? 'x') : actual;
+    if (component.properties[`${prefix}Visible`] === false || display === 'hidden') return null;
+    if (component.properties[`${prefix}Blank`] === true) return '□';
+    return display === 'hidden' ? null : display === '?' ? '?' : display === 'blank' ? '□' : display === 'custom' ? String(component.properties[`${prefix}Text`] ?? 'x') : actual;
   };
   return {
     label: rule(component.label, 'label'), value: rule(value, 'answer'),
-    voltage: component.properties.showVoltage === true ? rule(formatDisplayQuantity(result?.componentVoltages[component.id], 'V', numberFormat), 'voltage') : null,
-    current: component.properties.showCurrent === true ? rule(formatDisplayQuantity(result?.branchCurrents[component.id], 'A', numberFormat), 'current') : null,
+    voltage: component.properties.showVoltage === true ? rule(formatDisplayQuantity(result?.componentVoltages[component.id], 'V'), 'voltage') : null,
+    current: component.properties.showCurrent === true ? rule(formatDisplayQuantity(result?.branchCurrents[component.id], 'A'), 'current') : null,
   };
 }
-export function annotationPresentation(annotation: Annotation, mode: WorksheetMode): string | null {
-  if (annotation.visibility === 'hidden' || (annotation.visibility !== 'always' && annotation.visibility !== mode)) return null;
-  return annotation.content || (annotation.kind === 'blank' ? '________' : annotation.kind === 'question' ? '?' : '');
+export function annotationPresentation(annotation: Annotation): string | null {
+  if (annotation.visibility === 'hidden') return null;
+  return annotation.content || (annotation.kind === 'blank' ? '□' : annotation.kind === 'question' ? '?' : '');
 }
-export function annotationPlacements(document: CircuitDocument, mode: WorksheetMode): { annotation: Annotation; text: string; x: number; y: number }[] {
+export function annotationPlacements(document: CircuitDocument): { annotation: Annotation; text: string; x: number; y: number }[] {
   const counts = new Map<string, number>();
   return document.annotations.flatMap(annotation => {
-    const text = annotationPresentation(annotation, mode); if (text === null) return [];
+    const text = annotationPresentation(annotation); if (text === null) return [];
+    if (annotation.position) return [{annotation, text, ...annotation.position}];
+    if (!annotation.anchor) return [];
     const index = counts.get(annotation.anchor.id) ?? 0; counts.set(annotation.anchor.id, index + 1);
     const p = endpointPosition(document, annotation.anchor);
     return [{ annotation, text, x: p.x + 12, y: p.y - 64 - index * 28 }];
   });
+}
+
+/** Raw edit string retains intentional fractions; generated calculation values do not acquire them. */
+export function componentValueInput(component: ComponentInstance): string {
+  const def=componentDefinitions[component.type];
+  return def.property ? storedFraction(component.properties,def.property,def.unit) ?? String(component.properties[def.property]) : '';
+}
+
+export function notationWidth(text:string,fontSize:number):number {
+  return notationTokens(text).reduce((sum,token)=>sum+(token.kind==='subscript'?notationWidth(token.text,fontSize*.7)/fontSize:token.kind==='fraction'?Math.max(token.numerator.length,token.denominator.length)*.64+.4:[...token.text].reduce((n,c)=>n+(c===' '?.3:c.codePointAt(0)!>255?1.05:/[MW@]/.test(c)?.9:.58),0))*fontSize,0);
+}
+export function svgNotation(text:string,options:{x:number;y:number;fontSize:number;anchor?:'start'|'middle';fill?:string;weight?:string;symbol?:boolean}):string {
+  const {x,y,fontSize,anchor='start',fill='currentColor',weight='400'}=options;
+  const clean=(value:string)=>escapeXml(value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g,'�'));
+  const tokens=notationTokens(text);
+  const written=(value:string)=>clean(options.symbol||/^[A-Za-zΑ-Ωα-ω][A-Za-zΑ-Ωα-ω0-9_]*\s*[=≈]/.test(value)?symbolGlyphs(value):value);
+  if(tokens.every(t=>t.kind==='text'))return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-weight="${weight}" fill="${fill}">${written(text)}</text>`;
+  let cursor=x-(anchor==='middle'?notationWidth(text,fontSize)/2:0);
+  const parts:string[]=[];
+  for(const token of tokens){
+    if(token.kind==='text'){
+      parts.push(`<text x="${cursor}" y="${y}" font-size="${fontSize}" font-weight="${weight}" fill="${fill}" xml:space="preserve">${written(token.text)}</text>`);
+      cursor+=notationWidth(token.text,fontSize);
+    }else if(token.kind==='subscript'){
+      parts.push(`<text data-notation="subscript" x="${cursor}" y="${y+.28*fontSize}" font-size="${fontSize*.7}" font-weight="${weight}" fill="${fill}">${written(token.text)}</text>`);
+      cursor+=notationWidth(token.text,fontSize*.7);
+    }else{
+      const width=(Math.max(token.numerator.length,token.denominator.length)*.64+.4)*fontSize, center=cursor+width/2;
+      parts.push(`<g aria-label="${clean(token.numerator+'/'+token.denominator)}"><text x="${center}" y="${y-.65*fontSize}" text-anchor="middle" font-size="${fontSize}" font-weight="${weight}" fill="${fill}">${clean(token.numerator)}</text><path d="M${cursor+.05*fontSize} ${y-.35*fontSize}H${cursor+width-.05*fontSize}" stroke="${fill}" stroke-width="${Math.max(.8,fontSize*.055)}"/><text x="${center}" y="${y+.75*fontSize}" text-anchor="middle" font-size="${fontSize}" font-weight="${weight}" fill="${fill}">${clean(token.denominator)}</text></g>`);
+      cursor+=width;
+    }
+  }
+  return parts.join('');
+}
+
+/** Safe HTML counterpart for notation outside SVG, including projected 3D labels. */
+export function htmlNotation(text:string,symbol=false):string {
+  const written=(value:string)=>escapeXml(symbol?symbolGlyphs(value):value);
+  return notationTokens(text).map(t=>t.kind==='text'?written(t.text):t.kind==='subscript'?`<sub>${written(t.text)}</sub>`:`<span class="notation-fraction" aria-hidden="true"><span>${escapeXml(t.numerator)}</span><span>${escapeXml(t.denominator)}</span></span>`).join('');
+}
+
+export const circuitTextScale = 1.5;
+export function notationMetrics(text:string|null,fontSize:number) {
+  const fraction=notationTokens(text??'').some(t=>t.kind==='fraction');
+  return {width:notationWidth(text??'',fontSize),ascent:fontSize*(fraction?1.65:1),descent:fontSize*(fraction?.8:.35)};
+}
+/** Font-aware default positions shared by live circuit labels and independent output. */
+export function componentNotationLayout(component:ComponentInstance,label:string|null,value:string|null,fontSize:number) {
+  const vertical=component.rotation%180!==0,gap=Math.max(9,fontSize*.45);
+  const name=notationMetrics(label,fontSize),quantity=notationMetrics(value,fontSize);
+  const x=component.position.x+(vertical?28+gap:0),anchor=vertical?'start' as const:'middle' as const;
+  const total=name.ascent+name.descent+gap+quantity.ascent+quantity.descent;
+  const horizontalGap=Math.max(6,fontSize*.3),symbolHeight=component.type==='resistor'?14:24;
+  const labelY=vertical?component.position.y-total/2+name.ascent:component.position.y-symbolHeight-horizontalGap-name.descent;
+  const valueY=vertical?labelY+name.descent+gap+quantity.ascent:component.position.y+symbolHeight+horizontalGap+quantity.ascent;
+  const voltageY=valueY+quantity.descent+gap+fontSize;
+  return {label:{x,y:labelY,anchor},value:{x,y:valueY,anchor},voltage:{x,y:voltageY,anchor},current:{x,y:voltageY+fontSize*1.35+gap,anchor}};
 }

@@ -36,7 +36,7 @@ describe('measurement workspace',()=>{
     expect(html).toMatch(/<button[^>]*aria-label="측정값 기록"[^>]*disabled/);
   });
   it('shows the signed physical reading in the prominent result for either probe order',()=>{
-    expect(panel('R1.a','R1.b')).toMatch(/<output[^>]*>3.00 V<\/output>/);
-    expect(panel('R1.b','R1.a')).toMatch(/<output[^>]*>-3.00 V<\/output>/);
+    expect(panel('R1.a','R1.b')).toMatch(/<output[^>]*>3 V<\/output>/);
+    expect(panel('R1.b','R1.a')).toMatch(/<output[^>]*>-3 V<\/output>/);
   });
 });

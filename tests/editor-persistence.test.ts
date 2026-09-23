@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   cloneDocument,
+  documentMigrator,
   validateDocument,
   type Annotation,
   type CircuitDocument,
@@ -40,7 +41,7 @@ function fixture(id: string): CircuitDocument {
   const parsed = JSON.parse(readFileSync(join(root, "fixtures", filename), "utf8")) as {
     document: CircuitDocument;
   };
-  return parsed.document;
+  return documentMigrator.migrate(parsed.document);
 }
 
 function mustExecute(history: History, command: Command): History {
@@ -264,7 +265,7 @@ describe("structural editor invariants", () => {
       expect(copiedEndpointIds.has(wire.start.id)).toBe(true);
       expect(copiedEndpointIds.has(wire.end.id)).toBe(true);
     }
-    expect(copied.annotations.every(({ anchor }) => copiedEndpointIds.has(anchor.id))).toBe(true);
+    expect(copied.annotations.every(({ anchor }) => anchor !== null && copiedEndpointIds.has(anchor.id))).toBe(true);
     expect(copied.components.find(({ label }) => label === "R1")!.position).toEqual({ x: 180, y: 50 });
     expect(copied.junctions[0].position).toEqual({ x: 270, y: 50 });
 
@@ -454,7 +455,7 @@ describe("value parsing and activity policy", () => {
 });
 
 describe("versioned JSON persistence", () => {
-  it("serializes and parses a valid v1 document without changing its meaning", () => {
+  it("serializes and parses a migrated document without changing its meaning", () => {
     const document = fixture("FIX-03");
     const serialized = serializeDocument(document);
     const parsed = parseDocument(serialized);
@@ -465,7 +466,7 @@ describe("versioned JSON persistence", () => {
 
   it.each([
     ["malformed JSON", "{", "INVALID_JSON"],
-    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 2 }), "INVALID_DOCUMENT"],
+    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 3 }), "INVALID_DOCUMENT"],
     [
       "dangling semantic reference",
       JSON.stringify({
@@ -489,7 +490,7 @@ describe("versioned JSON persistence", () => {
   });
 
   it.each([
-    ["future version", { ...fixture("FIX-02"), version: 2 }],
+    ["future version", { ...fixture("FIX-02"), version: 3 }],
     [
       "dangling reference",
       {
@@ -511,7 +512,7 @@ describe("versioned JSON persistence", () => {
 
   it("does not write anything when asked to save an invalid document", () => {
     const storage = new MemoryStorage();
-    const invalid = { ...fixture("FIX-01"), version: 2 } as unknown as CircuitDocument;
+    const invalid = { ...fixture("FIX-01"), version: 3 } as unknown as CircuitDocument;
 
     const result = saveLocal(invalid, "auto", storage);
     expect(result.ok).toBe(false);

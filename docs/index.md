@@ -36,7 +36,7 @@
 - [`architecture/persistence-and-sharing.md`](architecture/persistence-and-sharing.md): 자동 저장, 파일, 마이그레이션, 공유
 
 - [`architecture/feedback.md`](architecture/feedback.md): 후기 로컬 미리보기와 원격 전환 조건
-- [ADR-012](../decisions/ADR-012-worksheet-presentation.md): 문제·정답 표기 속성과 출력 계약
+- [ADR-012](../decisions/ADR-012-worksheet-presentation.md): 출력 표기 속성과 출력 계약
 - [ADR-013](../decisions/ADR-013-wire-editing-ux.md): 삽입·분기·교차와 문맥 배선
 - [ADR-014](../decisions/ADR-014-feedback-board.md): 후기 저장·공개·삭제 정책
 

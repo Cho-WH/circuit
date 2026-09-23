@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { layoutExample } from '../src/app/examples';
 import { examples } from '../src/fixtures';
 import { cloneDocument } from '../src/domain';
-import { compactWirePoints, wireCrossings, wirePoints } from '../src/component-library';
+import { componentNotationLayout, componentValue, notationMetrics, compactWirePoints, wireCrossings, wirePoints } from '../src/component-library';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 
 describe('curated learning circuit layouts', () => {
+  it('uses subscript notation for numbered names while preserving connection IDs',()=>{
+    for(const example of examples)for(const component of example.document.components){
+      expect(component.label).toBe(component.id.replace(/^([A-Za-z]+)(\d+)$/, '$1_$2'));
+      expect(component.id).not.toContain('_');
+    }
+  });
   it('offers seven learning examples without diagnostic or connection exercises', () => {
     expect(examples.map(example => example.id)).toEqual(['FIX-01', 'FIX-02', 'FIX-03', 'FIX-04', 'FIX-05', 'FIX-09', 'FIX-10']);
   });
@@ -52,6 +58,20 @@ describe('curated learning circuit layouts', () => {
       const overlap = Math.min(Math.max(first.a[axis], first.b[axis]), Math.max(other.a[axis], other.b[axis]))
         - Math.max(Math.min(first.a[axis], first.b[axis]), Math.min(other.a[axis], other.b[axis]));
       expect(overlap, first.wire + ' overlapping ' + other.wire).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it.each(examples)('$id keeps enlarged labels clear of wires, symbols and other labels',example=>{
+    const doc=layoutExample(example.document);
+    const boxes=doc.components.flatMap(c=>{
+      const text={label:c.label,value:componentValue(c)},layout=componentNotationLayout(c,text.label,text.value,22.5);
+      return (['label','value'] as const).map(part=>{const p=layout[part],m=notationMetrics(text[part],22.5);return {id:c.id+':'+part,x:p.x-(p.anchor==='middle'?m.width/2:0),y:p.y-m.ascent,w:m.width,h:m.ascent+m.descent};});
+    });
+    const overlap=(a:{x:number;y:number;w:number;h:number},b:{x:number;y:number;w:number;h:number})=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+    for(const [i,box] of boxes.entries()){
+      for(const other of boxes.slice(i+1))expect(overlap(box,other),box.id+' / '+other.id).toBe(false);
+      for(const c of doc.components){const vertical=c.rotation%180!==0,bodyHeight=c.type==='resistor'||c.type==='resistive-load'?10:24;expect(overlap(box,{x:c.position.x-(vertical?bodyHeight:44),y:c.position.y-(vertical?44:bodyHeight),w:vertical?bodyHeight*2:88,h:vertical?88:bodyHeight*2}),box.id+' / '+c.id).toBe(false);}
+      for(const wire of doc.wires){const points=wirePoints(doc,wire);for(let j=1;j<points.length;j++){const a=points[j-1],b=points[j];expect(overlap(box,{x:Math.min(a.x,b.x)-1,y:Math.min(a.y,b.y)-1,w:Math.abs(a.x-b.x)+2,h:Math.abs(a.y-b.y)+2}),box.id+' / '+wire.id).toBe(false);}}
     }
   });
 

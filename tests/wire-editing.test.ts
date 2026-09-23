@@ -31,7 +31,7 @@ describe('wire insertion and explicit crossing edits',()=>{
     expect(previewCommand(doc,command)).toEqual({ok:true,document:history.present});
     expect(history.past).toHaveLength(1);expect(undo(history).present).toEqual(doc);expect(redo(undo(history)).present).toEqual(history.present);
     expect(parseDocument(serializeDocument(history.present))).toMatchObject({ok:true,document:history.present});
-    expect(doc).toEqual(source);
+    expect(doc).toEqual({...source,version:2});
   });
   it('keeps the unrelated route and the bends outside an inserted vertical component',()=>{
     const doc=fixture(),r=createComponent('dc-voltage-source','V2',{x:800,y:220});
@@ -96,7 +96,8 @@ describe('wire insertion and explicit crossing edits',()=>{
     expect(path.match(/ A/g)).toHaveLength(2);
     const svg=exportSvg(doc,{monochrome:true,background:'transparent'});expect(svg).toContain(`d="${path}"`);expect(svg).not.toContain('<mask');
     const joined=apply(doc,join).present;
-    expect(exportSvg(joined,{monochrome:true})).toContain('cx="200" cy="200"');
+    expect(exportSvg(joined,{monochrome:true})).not.toContain('cx="200" cy="200"');
+    expect(exportSvg(joined,{monochrome:true}).match(/ A7/g)).toHaveLength(1);
     expect(wirePath(joined,joined.wires[0])).not.toContain(' A');
     const split=apply(joined,{type:'DisconnectCrossing',junctionId:'J'}).present;expect(wirePath(split,split.wires[0])).toBe(path);
   });

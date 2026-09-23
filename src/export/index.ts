@@ -1,5 +1,9 @@
 import {
   annotationPlacements,
+  circuitTextScale,
+  componentNotationLayout,
+  svgNotation,
+  notationWidth,
   componentPresentation,
   endpointPosition,
   escapeXml,
@@ -8,9 +12,9 @@ import {
   symbolMarkup,
   terminalPosition,
   wirePoints,
-  type NumberFormat,
-  type WorksheetMode,
 } from '../component-library';
+import { mathFontFace, mathFontFamily } from '../typography';
+import { notationTokens } from '../notation';
 import {
   DocumentError,
   validateDocument,
@@ -19,26 +23,25 @@ import {
   type SimulationResult,
 } from '../domain';
 
-export type { NumberFormat, WorksheetMode } from '../component-library';
 
 export type ExportBackground = 'transparent' | 'white';
 
 export interface ExportOptions {
-  mode?: WorksheetMode;
+  circuitOnly?: boolean;
   monochrome?: boolean;
   background?: ExportBackground;
   margin?: number;
-  pngScale?: number;
-  numberFormat?: NumberFormat;
+  highResolution?: boolean;
+  showGround?: boolean;
 }
 
 interface NormalizedExportOptions {
-  mode: WorksheetMode;
+  circuitOnly: boolean;
   monochrome: boolean;
   background: ExportBackground;
   margin: number;
   pngScale: number;
-  numberFormat: NumberFormat;
+  showGround: boolean;
 }
 
 interface Bounds {
@@ -53,41 +56,26 @@ interface TextPlacement {
   x: number;
   y: number;
   anchor: 'start' | 'middle';
+  blank?: boolean;
   tone: 'label' | 'value' | 'voltage' | 'current';
 }
 
-const DEFAULT_NUMBER_FORMAT: NumberFormat = { kind: 'significant', digits: 3 };
 const MAX_LOGICAL_DIMENSION = 1_000_000;
 const MAX_PIXEL_DIMENSION = 16_384;
 const MAX_PIXEL_COUNT = 67_108_864;
 const MIN_CONTENT_SIZE = 200;
 
 function normalizeOptions(options: ExportOptions = {}): NormalizedExportOptions {
-  const mode = options.mode ?? 'answer';
+  const circuitOnly = options.circuitOnly ?? false;
   const background = options.background ?? 'white';
-  const monochrome = options.monochrome ?? false;
-  const margin = options.margin ?? 48;
-  const pngScale = options.pngScale ?? 2;
-  const numberFormat = options.numberFormat ?? DEFAULT_NUMBER_FORMAT;
+  const monochrome = options.monochrome ?? true;
+  const margin = options.margin ?? 16;
+  const pngScale = options.highResolution ? 2 : 1;
 
-  if (mode !== 'problem' && mode !== 'answer') throw new TypeError('mode must be problem or answer');
   if (background !== 'transparent' && background !== 'white') throw new TypeError('background must be transparent or white');
   if (typeof monochrome !== 'boolean') throw new TypeError('monochrome must be a boolean');
   if (!Number.isFinite(margin) || margin < 0) throw new RangeError('margin must be a finite non-negative number');
-  if (!Number.isFinite(pngScale) || pngScale <= 0) throw new RangeError('pngScale must be a finite positive number');
-  if (numberFormat.kind === 'fixed') {
-    if (!Number.isInteger(numberFormat.digits) || numberFormat.digits < 0 || numberFormat.digits > 10) {
-      throw new RangeError('fixed digits must be an integer from 0 to 10');
-    }
-  } else if (numberFormat.kind === 'significant') {
-    if (!Number.isInteger(numberFormat.digits) || numberFormat.digits < 1 || numberFormat.digits > 10) {
-      throw new RangeError('significant digits must be an integer from 1 to 10');
-    }
-  } else if (numberFormat.kind !== 'integer') {
-    throw new TypeError('numberFormat kind is invalid');
-  }
-
-  return { mode, monochrome, background, margin, pngScale, numberFormat };
+  return { circuitOnly, monochrome, background, margin, pngScale, showGround: circuitOnly || (options.showGround ?? false) };
 }
 
 function xmlText(value: string): string {
@@ -111,6 +99,7 @@ function numberAttribute(value: number): string {
 }
 
 function estimatedTextWidth(text: string): number {
+  if (notationTokens(text).some(t => t.kind === 'fraction')) return notationWidth(text,16) + 5;
   let width = 0;
   for (const character of text) {
     if (/\s/u.test(character)) width += 4.5;
@@ -121,31 +110,34 @@ function estimatedTextWidth(text: string): number {
 
 function componentTextPlacements(
   component: ComponentInstance,
-  mode: WorksheetMode,
+  circuitOnly: boolean,
   result: SimulationResult | undefined,
-  numberFormat: NumberFormat,
+  scale: number,
 ): TextPlacement[] {
-  const presentation = componentPresentation(component, mode, result, numberFormat);
-  const vertical = component.rotation % 180 !== 0;
-  const x = component.position.x + (vertical ? 34 : 0);
-  const anchor = vertical ? 'start' : 'middle';
+  const presentation = componentPresentation(circuitOnly ? {...component, properties: Object.fromEntries(Object.entries(component.properties).filter(([key]) => !/^(?:(?:label|answer|voltage|current)(?:Display|Text|Visible|Blank|OffsetX|OffsetY)|showVoltage|showCurrent)$/.test(key)))} : component, result);
+  const layout=componentNotationLayout(component,presentation.label,presentation.value,15*scale);
   const placements: TextPlacement[] = [];
-  const add = (text: string | null, y: number, tone: TextPlacement['tone']) => {
-    if (text !== null) placements.push({ text, x, y, anchor, tone });
+  const add = (text: string | null, tone: TextPlacement['tone']) => {
+    const prefix = tone === 'value' ? 'answer' : tone;
+    const dx = circuitOnly ? 0 : Number(component.properties[prefix+'OffsetX'] ?? 0);
+    const dy = circuitOnly ? 0 : Number(component.properties[prefix+'OffsetY'] ?? 0);
+    if (text !== null) placements.push({ text, x: layout[tone].x + dx, y: layout[tone].y + dy, anchor:layout[tone].anchor, tone, blank: text.includes('□') });
   };
 
-  if (vertical) {
-    add(presentation.label, component.position.y - 18, 'label');
-    add(presentation.value, component.position.y + 4, 'value');
-    add(presentation.voltage === null ? null : `U = ${presentation.voltage}`, component.position.y + 26, 'voltage');
-    add(presentation.current === null ? null : `I = ${presentation.current}`, component.position.y + 48, 'current');
-  } else {
-    add(presentation.label, component.position.y - 32, 'label');
-    add(presentation.value, component.position.y + 42, 'value');
-    add(presentation.voltage === null ? null : `U = ${presentation.voltage}`, component.position.y + 64, 'voltage');
-    add(presentation.current === null ? null : `I = ${presentation.current}`, component.position.y + 86, 'current');
-  }
+  add(presentation.label,'label');
+  add(presentation.value,'value');
+  add(presentation.voltage === null ? null : `U = ${presentation.voltage}`,'voltage');
+  add(presentation.current === null ? null : `I = ${presentation.current}`,'current');
   return placements;
+}
+
+function annotationTextPosition(placement: ReturnType<typeof annotationPlacements>[number], scale: number) {
+  const {annotation:a,x,y,text}=placement;
+  if(a.kind==='arrow') {
+    const end=a.end??{x:x+64,y},length=Math.hypot(end.x-x,end.y-y)||1;
+    return {x:(x+end.x)/2+(end.y-y)/length*(estimatedTextWidth(text)*scale/2+10),y:(y+end.y)/2-(end.x-x)/length*(10*scale+6),anchor:'middle' as const};
+  }
+  return {x:a.kind==='point'?x+10:x,y:a.kind==='point'?y-10:y,anchor:'start' as const};
 }
 
 function calculateBounds(
@@ -167,9 +159,10 @@ function calculateBounds(
     maxX = Math.max(maxX, x + width);
     maxY = Math.max(maxY, y + height);
   };
+  const scale = circuitTextScale*(options.circuitOnly ? 1 : document.output?.fontScale ?? 1);
   const addText = (placement: TextPlacement) => {
-    const width = estimatedTextWidth(placement.text);
-    addRect(placement.anchor === 'middle' ? placement.x - width / 2 : placement.x - 2, placement.y - 18, width + 4, 24);
+    const width = (placement.blank ? 56 : estimatedTextWidth(placement.text)) * scale;
+    addRect(placement.anchor === 'middle' ? placement.x - width / 2 : placement.x - 2, placement.y - 28*scale, width + 4, 46*scale);
   };
 
   for (const wire of document.wires) {
@@ -182,22 +175,21 @@ function calculateBounds(
       const terminal = terminalPosition(component, index);
       addRect(terminal.x - 5, terminal.y - 5, 10, 10);
     }
-    for (const placement of componentTextPlacements(component, options.mode, result, options.numberFormat)) addText(placement);
+    for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale)) addText(placement);
   }
   for (const junction of document.junctions) addRect(junction.position.x - 6, junction.position.y - 6, 12, 12);
 
-  if (document.referenceNode) {
+  if (document.referenceNode && options.showGround) {
     const point = endpointPosition(document, document.referenceNode);
-    addRect(point.x - 11, point.y + 8, 55, 31);
+    addRect(point.x - 11, point.y + 8, options.circuitOnly ? 30 + 32*scale : 22, options.circuitOnly ? 22 + 16*scale : 22);
   }
 
-  for (const placement of annotationPlacements(document, options.mode)) {
-    const width = estimatedTextWidth(placement.text);
-    if (placement.annotation.kind === 'arrow') {
-      addRect(placement.x - 2, placement.y - 14, 52 + width, 22);
-    } else {
-      addRect(placement.x - 2, placement.y - 18, width + 4, 24);
-    }
+  for (const placement of (options.circuitOnly ? [] : annotationPlacements(document))) {
+    const end = placement.annotation.end ?? {x: placement.x + 64, y: placement.y};
+    if (placement.annotation.kind === 'arrow') addRect(Math.min(placement.x,end.x)-12, Math.min(placement.y,end.y)-12, Math.abs(end.x-placement.x)+24, Math.abs(end.y-placement.y)+24);
+    if (placement.annotation.kind === 'point') addRect(placement.x-5,placement.y-5,10,10);
+    const label=annotationTextPosition(placement,scale);
+    addText({...label,text:placement.text,tone:'label',blank:placement.text==='□'});
   }
 
   if (!Number.isFinite(minX)) {
@@ -227,10 +219,13 @@ function ensureLogicalBounds(bounds: Bounds): void {
   }
 }
 
-function renderText(placement: TextPlacement, colors: ReturnType<typeof exportColors>): string {
+function renderText(placement: TextPlacement, colors: ReturnType<typeof exportColors>, scale: number): string {
   const color = colors[placement.tone];
-  const weight = placement.tone === 'label' ? '650' : '400';
-  return `<text x="${numberAttribute(placement.x)}" y="${numberAttribute(placement.y)}" text-anchor="${placement.anchor}" font-size="15" font-weight="${weight}" fill="${color}">${xmlText(placement.text)}</text>`;
+  if (placement.blank) return blankMarkup(placement.x, placement.y, placement.anchor, scale, color);
+  return svgNotation(placement.text,{x:placement.x,y:placement.y,anchor:placement.anchor,fontSize:15*scale,weight:placement.tone==='label'?'650':'400',fill:color,symbol:placement.tone==='label'});
+}
+function blankMarkup(x: number, y: number, anchor: string, scale: number, color: string): string {
+  return `<rect x="${numberAttribute(x-(anchor==='middle'?28*scale:0))}" y="${numberAttribute(y-18*scale)}" width="${56*scale}" height="${24*scale}" fill="none" stroke="${color}" stroke-width="1.5"/>`;
 }
 
 function exportColors(monochrome: boolean) {
@@ -238,11 +233,11 @@ function exportColors(monochrome: boolean) {
   return { ink: '#263548', label: '#344358', value: '#64758b', voltage: '#8d3d80', current: '#236f62', annotation: '#1d6288', reference: '#6a7c92' } as const;
 }
 
-function createSvgExport(
+export function createSvgExport(
   input: CircuitDocument,
   requestedOptions: ExportOptions = {},
   result?: SimulationResult,
-): { svg: string; bounds: Bounds; options: NormalizedExportOptions } {
+): { svg: string; content: string; bounds: Bounds; options: NormalizedExportOptions } {
   const checked = validateDocument(input);
   if (!checked.ok) throw new DocumentError(checked.diagnostics);
   const document = checked.document;
@@ -251,13 +246,15 @@ function createSvgExport(
   const colors = exportColors(options.monochrome);
   const symbolFill = options.background === 'white' ? '#ffffff' : 'none';
   const chunks: string[] = [];
+  const fontDefinition = `<defs><style>${mathFontFace}</style></defs>`;
+  const scale = circuitTextScale*(options.circuitOnly ? 1 : document.output?.fontScale ?? 1);
 
   chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${numberAttribute(bounds.width)}" height="${numberAttribute(bounds.height)}" viewBox="${numberAttribute(bounds.x)} ${numberAttribute(bounds.y)} ${numberAttribute(bounds.width)} ${numberAttribute(bounds.height)}" role="img">`);
   chunks.push(`<title>${xmlText(document.title || '회로도')}</title>`);
   if (options.background === 'white') {
     chunks.push(`<rect x="${numberAttribute(bounds.x)}" y="${numberAttribute(bounds.y)}" width="${numberAttribute(bounds.width)}" height="${numberAttribute(bounds.height)}" fill="#ffffff"/>`);
   }
-  chunks.push('<g font-family="Arial, sans-serif">');
+  chunks.push(`${fontDefinition}<g font-family="${mathFontFamily}" style="font-synthesis:none">`);
 
   const crossings=wireCrossings(document);
   for (const wire of document.wires) {
@@ -265,38 +262,35 @@ function createSvgExport(
   }
 
   for (const component of document.components) {
-    chunks.push(`<g transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component)}</g>`);
-    for (let index = 0; index < component.terminals.length; index += 1) {
-      const point = terminalPosition(component, index);
-      chunks.push(`<circle cx="${numberAttribute(point.x)}" cy="${numberAttribute(point.y)}" r="3.5" fill="${colors.ink}"/>`);
-    }
-    for (const placement of componentTextPlacements(component, options.mode, result, options.numberFormat)) {
-      chunks.push(renderText(placement, colors));
+    chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="body" transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component)}</g>`);
+    for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale)) {
+      chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="${placement.tone}">${renderText(placement, colors, scale)}</g>`);
     }
   }
 
-  for (const junction of document.junctions) {
-    chunks.push(`<circle cx="${numberAttribute(junction.position.x)}" cy="${numberAttribute(junction.position.y)}" r="5" fill="${colors.ink}"/>`);
-  }
-
-  if (document.referenceNode) {
+  if (document.referenceNode && options.showGround) {
     const point = endpointPosition(document, document.referenceNode);
-    chunks.push(`<g transform="translate(${numberAttribute(point.x)} ${numberAttribute(point.y + 9)})" stroke="${colors.reference}" stroke-width="1.5" fill="none"><path d="M0 0V10 M-10 10H10 M-6 14H6 M-2 18H2"/><text x="16" y="16" fill="${colors.reference}" stroke="none" font-size="11">0 V</text></g>`);
+    chunks.push(`<g data-output-ground="true" transform="translate(${numberAttribute(point.x)} ${numberAttribute(point.y + 9)})" stroke="${colors.reference}" stroke-width="1.5" fill="none"><path d="M0 0V10 M-10 10H10 M-6 14H6 M-2 18H2"/>${options.circuitOnly?`<text x="16" y="16" fill="${colors.reference}" stroke="none" font-size="${11*scale}">0 V</text>`:''}</g>`);
   }
 
-  for (const placement of annotationPlacements(document, options.mode)) {
-    const x = numberAttribute(placement.x);
-    const y = numberAttribute(placement.y);
-    if (placement.annotation.kind === 'arrow') {
-      chunks.push(`<g stroke="${colors.annotation}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M${x} ${numberAttribute(placement.y - 5)}H${numberAttribute(placement.x + 40)} M${numberAttribute(placement.x + 32)} ${numberAttribute(placement.y - 11)}L${numberAttribute(placement.x + 40)} ${numberAttribute(placement.y - 5)} ${numberAttribute(placement.x + 32)} ${numberAttribute(placement.y + 1)}"/></g>`);
-      if (placement.text) chunks.push(`<text x="${numberAttribute(placement.x + 48)}" y="${y}" font-size="16" fill="${colors.annotation}">${xmlText(placement.text)}</text>`);
-    } else if (placement.text) {
-      chunks.push(`<text x="${x}" y="${y}" font-size="16" fill="${colors.annotation}">${xmlText(placement.text)}</text>`);
+  for (const placement of (options.circuitOnly ? [] : annotationPlacements(document))) {
+    const {annotation:a,x,y,text}=placement;
+    const end=a.end??{x:x+64,y};
+    chunks.push(`<g data-output-id="${xmlText(a.id)}" data-output-part="annotation">`);
+    if(a.kind==='point') chunks.push(`<circle cx="${numberAttribute(x)}" cy="${numberAttribute(y)}" r="4" fill="${colors.annotation}"/>`);
+    if(a.kind==='arrow') {
+      const angle=Math.atan2(end.y-y,end.x-x), ux=Math.cos(angle),uy=Math.sin(angle);
+      chunks.push(`<path d="M${numberAttribute(x)} ${numberAttribute(y)}L${numberAttribute(end.x)} ${numberAttribute(end.y)} M${numberAttribute(end.x-10*ux+5*uy)} ${numberAttribute(end.y-10*uy-5*ux)}L${numberAttribute(end.x)} ${numberAttribute(end.y)} ${numberAttribute(end.x-10*ux-5*uy)} ${numberAttribute(end.y-10*uy+5*ux)}" stroke="${colors.annotation}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
     }
+    const {x:tx,y:ty,anchor}=annotationTextPosition(placement,scale);
+    if(text==='□') chunks.push(blankMarkup(tx,ty,'start',scale,colors.annotation));
+    else if(text) chunks.push(svgNotation(text,{x:tx,y:ty,anchor,fontSize:16*scale,fill:colors.annotation,symbol:a.kind==='point'||a.kind==='arrow'}));
+    chunks.push('</g>');
   }
 
   chunks.push('</g></svg>');
-  return { svg: chunks.join(''), bounds, options };
+  const svg = chunks.join('');
+  return { svg, content: svg.slice(svg.indexOf('>')+1, -6).replace(fontDefinition, ''), bounds, options };
 }
 
 export function exportSvg(document: CircuitDocument, options: ExportOptions = {}, result?: SimulationResult): string {
@@ -337,8 +331,8 @@ function canvasPng(canvas: HTMLCanvasElement): Promise<Blob> {
 
 export async function exportPng(document: CircuitDocument, options: ExportOptions = {}, result?: SimulationResult): Promise<Blob> {
   const generated = createSvgExport(document, options, result);
-  const width = Math.max(1, Math.ceil(generated.bounds.width * generated.options.pngScale));
-  const height = Math.max(1, Math.ceil(generated.bounds.height * generated.options.pngScale));
+  const width = Math.max(1, Math.ceil(generated.bounds.width) * generated.options.pngScale);
+  const height = Math.max(1, Math.ceil(generated.bounds.height) * generated.options.pngScale);
   if (width > MAX_PIXEL_DIMENSION || height > MAX_PIXEL_DIMENSION || width * height > MAX_PIXEL_COUNT) {
     throw new RangeError('PNG dimensions are outside the supported range');
   }

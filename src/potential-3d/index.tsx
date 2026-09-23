@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
 import type { PotentialModel } from '../visualization';
-import { formatQuantity, terminalPosition } from '../component-library';
+import { htmlNotation, formatQuantity, terminalPosition } from '../component-library';
 import { exportSvg } from '../export';
 import { sceneAnchors, sceneExtent, selectedVoltage } from './model';
 import './styles.css';
@@ -170,7 +170,7 @@ export function Potential3D(props: Potential3DProps) {
     const r = runtime.current; if (!r) return;
     let cancelled = false;
     const schematic = { ...circuit, components: circuit.components.map(c => ({ ...c, properties: { ...c.properties, showVoltage: false, showCurrent: false } })) };
-    const svg = exportSvg(schematic, { background: 'transparent', monochrome: true, mode: 'answer', margin: 55 });
+    const svg = exportSvg(schematic, { background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 });
     const root = new DOMParser().parseFromString(svg,'image/svg+xml').documentElement;
     const [x,y,width,height] = root.getAttribute('viewBox')!.split(' ').map(Number);
     const url = URL.createObjectURL(new Blob([svg], { type:'image/svg+xml' }));
@@ -203,7 +203,8 @@ export function Potential3D(props: Potential3DProps) {
     const radius = Math.max(.9, Math.max(f.width,f.height)*.0035);
     const addLabel = (text: string, p: THREE.Vector3, className: string, lifted = false, priority = 1, id?: string) => {
       const element = window.document.createElement(id ? 'button' : 'span');
-      element.className = `potential-tag ${className}`; element.textContent = text;
+      element.className = `potential-tag ${className}`;
+      if(className==='component-tag'){element.classList.add('notation');element.setAttribute('aria-label',text);element.innerHTML=htmlNotation(text,true);}else element.textContent=text;
       if (id) { element.setAttribute('type','button'); element.setAttribute('aria-label',`${text} 선택`); element.onclick = () => latest.current.onSelect?.(id); }
       labelHost.appendChild(element); r.labels.push({element,point:p,lifted,priority});
     };
@@ -290,8 +291,8 @@ export function Potential3D(props: Potential3DProps) {
     <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="potential-labels" ref={overlay}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
-    <footer className="scene-footer"><span className="floor-key"><i/>기준면 <b>0 V</b><small>{referenceLabel}</small></span><span className="height-key">높이 강조 <b>{(potential.scale/18).toFixed(1)}배</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
-    {selection&&<div className="scene-selection" aria-live="polite"><strong>{selection.component.label}</strong><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatQuantity(selection.difference,'V')}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
+    <footer className="scene-footer"><span className="floor-key"><i/>기준면 <b>0 V</b><small>{referenceLabel}</small></span><span className="height-key">높이 강조 <b>{Number((potential.scale/18).toFixed(2))}배</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
+    {selection&&<div className="scene-selection" aria-live="polite"><strong className="notation" aria-label={selection.component.label} dangerouslySetInnerHTML={{__html:htmlNotation(selection.component.label,true)}}/><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatQuantity(selection.difference,'V')}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
   </section>;
 }
 

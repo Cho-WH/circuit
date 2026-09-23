@@ -54,7 +54,7 @@ export function connectCrossing(document:CircuitDocument, point:Point, wireIds:[
 export function disconnectCrossing(document:CircuitDocument,junctionId:string):Diagnostic[]|null {
   const junction=document.junctions.find(j=>j.id===junctionId);
   if(!junction)return failure([junctionId],'target');
-  if(document.referenceNode?.id===junctionId||document.annotations.some(a=>a.anchor.id===junctionId))return failure([junctionId],'anchored');
+  if(document.referenceNode?.id===junctionId||document.annotations.some(a=>a.anchor?.id===junctionId))return failure([junctionId],'anchored');
   const attached=document.wires.filter(w=>w.start.id===junctionId||w.end.id===junctionId);
   if(attached.length!==4||attached.some(w=>w.start.id===w.end.id))return failure([junctionId],'ambiguous');
   const routes=attached.map(w=>{

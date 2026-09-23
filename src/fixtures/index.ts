@@ -9,4 +9,8 @@ import referenceShift from '../../fixtures/FIX-10-reference-shift.json';
 
 // The learning menu is curated separately from diagnostic and editing test fixtures.
 export const examples = [single, series, parallel, mixed, openSwitch, bridge, referenceShift]
-  .map(({ id, title, document }) => ({ id, title, document: documentMigrator.migrate(document) }));
+  .map(({ id, title, document }) => {
+    const example=documentMigrator.migrate(document);
+    for(const component of example.components)component.label=component.label.replace(/^([A-Za-z]+)(\d+)$/, '$1_$2');
+    return {id,title,document:example};
+  });
