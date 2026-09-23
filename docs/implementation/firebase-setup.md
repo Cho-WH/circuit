@@ -14,9 +14,10 @@
 - 관리자 지원 이메일이 포함된 Auth 배포 설정은 `.firebase-local/auth.json`에만 두며 Git에서 제외.
 - Firebase CLI 15.30.2의 `deploy --only auth`는 공급자는 설정하지만 `authorizedDomains`를 반영하지 않았다. 실제 로그인에서 이를 발견해 공식 CLI의 `getAuthDomains`/`updateAuthDomains`로 기존 도메인을 보존하며 세 주소를 추가했고 원격 목록을 재확인했다. 해당 보완 도구도 Git 제외 경로에 있다.
 
-## 남은 설정
+## GitHub Pages 배포
 
-1. GitHub Pages는 같은 공개 SDK 설정으로 빌드된다. 사용자가 기존 미배포 회로 개선 커밋 두 개까지 포함한 배포를 승인했다. CI와 공개 주소 확인 결과는 작업 추적에 기록한다.
+- 사용자 승인에 따라 기존 회로 개선 두 커밋과 Firebase 연결 `b77c0a5`를 함께 배포했다. [GitHub Actions 실행](https://github.com/Cho-WH/circuit/actions/runs/35870762335)의 검사·빌드·배포가 모두 성공했다.
+- 실제 브라우저에서 [공개 앱](https://cho-wh.github.io/circuit/)의 Firebase 게시판 로딩과 [관리자 경로](https://cho-wh.github.io/circuit/admin/feedback/)의 로그인 화면을 확인했다. 관리자 계정은 로컬에서 등록·인증했으며 배포 주소에서는 같은 계정으로 로그인하면 된다.
 
 ## 관리자 등록
 
