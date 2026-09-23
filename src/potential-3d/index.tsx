@@ -1,3 +1,5 @@
+// @refresh reset
+// The imperative WebGL runtime must not retain old render closures across code updates.
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -27,7 +29,7 @@ export interface Potential3DProps {
   onError?: (reason: 'webgl' | 'font' | 'texture' | 'context-lost') => void;
 }
 type Preset = 'oblique' | 'front' | 'top';
-type Label = { element: HTMLElement; point: THREE.Vector3; lifted: boolean; priority: number };
+type Label = { key: string; text: string; element: HTMLElement; point: THREE.Vector3; lifted: boolean; priority: number };
 interface Runtime {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
@@ -150,7 +152,10 @@ export function Potential3D(props: Potential3DProps) {
 
   useEffect(() => {
     const element = host.current;
+    const labelHost = overlay.current;
     if (!element) return;
+    // A runtime owns this entire overlay, including any nodes left by an older runtime.
+    labelHost?.replaceChildren();
     let renderer: THREE.WebGLRenderer;
     try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
     catch { setFallback(true); latest.current.onError?.('webgl'); return; }
@@ -188,7 +193,8 @@ export function Potential3D(props: Potential3DProps) {
         const nearAxis = !label.element.classList.contains('axis-tag') && axisGutter && rect.x < axisGutter.right && rect.x + w > axisGutter.left && rect.y < axisGutter.bottom && rect.y + h > axisGutter.top;
         const hidden = nearAxis || p.z < -1 || p.z > 1 || rect.x < 3 || rect.x + w > r.width - 3 || rect.y < 2 || rect.y + h > r.height - 2 || occupied.some(b => rect.x < b.x+b.w+5 && rect.x+w+5 > b.x && rect.y < b.y+b.h+4 && rect.y+h+4 > b.y);
         label.element.style.visibility = hidden ? 'hidden' : 'visible';
-        label.element.style.transform = `translate(${rect.x}px,${rect.y}px)`;
+        // Projection owns position. Do not feed coordinates into button transform transitions.
+        label.element.style.translate = `${rect.x}px ${rect.y}px`;
         if (!hidden) occupied.push(rect);
       }
     };
@@ -245,7 +251,8 @@ export function Potential3D(props: Potential3DProps) {
     return () => {
       cancelAnimationFrame(r.frame); observer.disconnect(); controls.removeEventListener('change',r.render); controls.removeEventListener('start',interrupt); controls.dispose();
       renderer.domElement.removeEventListener('pointerdown',down); renderer.domElement.removeEventListener('pointerup',up); renderer.domElement.removeEventListener('webglcontextlost',lost);
-      dispose(r.floor); dispose(r.content); renderer.dispose(); renderer.domElement.remove(); runtime.current = null;
+      dispose(r.floor); dispose(r.content); renderer.dispose(); renderer.domElement.remove();
+      labelHost?.replaceChildren(); r.labels = []; runtime.current = null;
     };
   }, []);
 
@@ -293,16 +300,32 @@ export function Potential3D(props: Potential3DProps) {
     const r = runtime.current, labelHost = overlay.current; if (!r || !labelHost) return;
     r.stop(); r.scene.remove(r.content); dispose(r.content);
     r.content = new THREE.Group(); r.raised = new THREE.Group(); r.content.add(r.raised); r.scene.add(r.content);
-    labelHost.replaceChildren(); r.labels = [];
+    // Preserve DOM identity (including keyboard focus) across scale and display changes.
+    // Recreating buttons makes the browser animate their first position from the origin.
+    const existingLabels = new Map(r.labels.map(label => [label.key, label]));
+    const nextLabels: Label[] = [];
     const extent = sceneExtent(circuit,potential), f = extent.floor;
     r.bounds.set(new THREE.Vector3(f.x-45,-f.y-f.height,extent.minZ-15),new THREE.Vector3(f.x+f.width,-f.y,extent.maxZ+30));
     const radius = Math.max(.9, Math.max(f.width,f.height)*.0035);
-    const addLabel = (text: string, p: THREE.Vector3, className: string, lifted = false, priority = 1, id?: string) => {
-      const element = window.document.createElement(id ? 'button' : 'span');
-      element.className = `potential-tag ${className}`;
-      if(className==='component-tag'){element.classList.add('notation');element.setAttribute('aria-label',text);element.innerHTML=htmlNotation(text,true);}else element.textContent=text;
+    const addLabel = (key: string, text: string, p: THREE.Vector3, className: string, lifted = false, priority = 1, id?: string) => {
+      const previous = existingLabels.get(key);
+      const tag = id ? 'button' : 'span';
+      const reusable = previous?.element.localName === tag ? previous : undefined;
+      const element = reusable?.element ?? window.document.createElement(tag);
+      if (!reusable) {
+        previous?.element.remove();
+        element.className = `potential-tag ${className}`;
+        element.dataset.labelKey = key;
+        element.style.visibility = 'hidden'; // Only reveal after its first projection.
+        if(className==='component-tag') element.classList.add('notation');
+        labelHost.appendChild(element);
+      }
+      if (!reusable || reusable.text !== text) {
+        if(className==='component-tag'){element.setAttribute('aria-label',text);element.innerHTML=htmlNotation(text,true);}else element.textContent=text;
+      }
       if (id) { element.setAttribute('type','button'); element.setAttribute('aria-label',`${text} 선택`); element.onclick = () => latest.current.onSelect?.(id); }
-      labelHost.appendChild(element); r.labels.push({element,point:p,lifted,priority});
+      existingLabels.delete(key);
+      nextLabels.push({key,text,element,point:p,lifted,priority});
     };
     // A sparse, transparent reference grid leaves negative voltages visible below it.
     const gridStep = Math.max(f.width,f.height)/12;
@@ -316,7 +339,7 @@ export function Potential3D(props: Potential3DProps) {
     for (const v of extent.ticks) {
       const z=v*potential.scale;
       line(r.content,[new THREE.Vector3(axisX-5,axisY,z),new THREE.Vector3(axisX+7,axisY,z)],v===0?'#53694b':'#a0a99b');
-      addLabel(formatQuantity(v,'V'),new THREE.Vector3(axisX-20,axisY,z),'axis-tag',false,v===0?6:5);
+      addLabel(`axis:${v}`,formatQuantity(v,'V'),new THREE.Vector3(axisX-20,axisY,z),'axis-tag',false,v===0?6:5);
       if(guides && v!==0) line(r.content,[new THREE.Vector3(axisX+7,axisY,z),new THREE.Vector3(f.x+f.width,axisY,z)],'#c3c9be',true,.34);
     }
     for (const segment of potential.segments) {
@@ -331,7 +354,7 @@ export function Potential3D(props: Potential3DProps) {
       if (guides && anchor.z!==0) line(r.raised,[new THREE.Vector3(pos.x,pos.y,0),pos],'#929d88',true,.65);
       const dot = new THREE.Mesh(new THREE.SphereGeometry(radius*2,12,8),new THREE.MeshBasicMaterial({color:showColors?anchor.color:'#667060'}));
       dot.position.copy(pos); if(owner) dot.userData.id=owner; r.raised.add(dot);
-      if(showNumbers) addLabel(formatQuantity(anchor.voltage,'V'),pos,'net-tag',true,3,owner);
+      if(showNumbers) addLabel(`net:${anchor.id}`,formatQuantity(anchor.voltage,'V'),pos,'net-tag',true,3,owner);
     }
     // All terminals remain visible, including the two disconnected ends of an open switch.
     for (const c of circuit.components) for (let i=0;i<c.terminals.length;i++) {
@@ -343,7 +366,7 @@ export function Potential3D(props: Potential3DProps) {
     for (const c of circuit.components) {
       const ends = c.terminals.slice(0,2).map(t=>potential.endpoints[t.id]?.height);
       const z = ends.length===2 && ends.every(v=>v!==undefined) ? (ends[0]!+ends[1]!)/2 : 0;
-      addLabel(c.label,point({...c.position,z}),'component-tag',true,2,c.id);
+      addLabel(`component:${c.id}`,c.label,point({...c.position,z}),'component-tag',true,2,c.id);
     }
     const selected = selectedVoltage(circuit,potential,selectedIds[0]);
     if(selected) {
@@ -352,8 +375,10 @@ export function Potential3D(props: Potential3DProps) {
       const x=(a.x+b.x)/2+20,y=(a.y+b.y)/2+20;
       line(r.raised,[new THREE.Vector3(x,y,a.z),new THREE.Vector3(x,y,b.z)],'#53694b');
       for(const z of [a.z,b.z]) line(r.raised,[new THREE.Vector3(x-5,y,z),new THREE.Vector3(x+5,y,z)],'#53694b');
-      if(showNumbers) addLabel(`ΔV ${formatQuantity(selected.difference,'V')}`,new THREE.Vector3(x,y,(a.z+b.z)/2),'delta-tag',true,8);
+      if(showNumbers) addLabel(`delta:${selected.component.id}`,`ΔV ${formatQuantity(selected.difference,'V')}`,new THREE.Vector3(x,y,(a.z+b.z)/2),'delta-tag',true,8);
     }
+    for (const label of existingLabels.values()) label.element.remove();
+    r.labels = nextLabels;
     r.modelReady = true;
     if (!r.ready) r.begin(); else r.render();
   }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides]);

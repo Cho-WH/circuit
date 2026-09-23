@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react';
+import { act, createElement, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as THREE from 'three';
 import type { CircuitDocument } from '../src/domain';
-import { Potential3D } from '../src/potential-3d';
+import { Potential3D, type Potential3DProps } from '../src/potential-3d';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { buildPotentialModel } from '../src/visualization';
@@ -47,13 +47,68 @@ beforeEach(() => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-async function mount() {
+async function mount(strict = false) {
   const circuit = JSON.parse(readFileSync('fixtures/FIX-02-series.json', 'utf8')).document as CircuitDocument;
   const compiled = compileCircuit(circuit).circuit, ready = vi.fn(), entered = vi.fn(), error = vi.fn();
-  await act(async () => root.render(createElement(Potential3D, { document: circuit, potential: buildPotentialModel(circuit, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V_1 · −극 단자', sourceView: { x: 100, y: 200, width: 500, height: 400 }, onReady: ready, onEntered: entered, onError: error })));
-  return { ready, entered, error };
+  let props: Potential3DProps = { document: circuit, potential: buildPotentialModel(circuit, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V_1 · −극 단자', sourceView: { x: 100, y: 200, width: 500, height: 400 }, onReady: ready, onEntered: entered, onError: error };
+  const update = async (next: Partial<Potential3DProps>) => { props = {...props,...next}; await act(async () => { const scene=createElement(Potential3D, props); root.render(strict?createElement(StrictMode,null,scene):scene); }); };
+  await update({});
+  return { ready, entered, error, circuit, compiled, update };
 }
 describe('3D prepared first frame and camera lifetime', () => {
+  it('cleans imperative labels on effect teardown, including StrictMode remounts',async()=>{
+    reduced=true;
+    const {update}=await mount(true);await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());
+    const labels=[...host.querySelectorAll<HTMLElement>('[data-label-key]')];
+    expect(labels.length).toBeGreaterThan(0);
+    expect(new Set(labels.map(e=>e.dataset.labelKey)).size).toBe(labels.length);
+    expect(labels.every(e=>e.style.translate.includes('px'))).toBe(true);
+    await update({showColors:false});
+    expect(host.querySelectorAll('[data-label-key]')).toHaveLength(labels.length);
+    await act(async()=>root.render(null));expect(labels.every(e=>!e.isConnected)).toBe(true);
+  });
+  it('keeps labels and focus while each height change projects directly onto the current scene', async () => {
+    reduced=true;
+    const {circuit,compiled,update}=await mount();
+    await act(async()=>resolveFont());await act(async()=>images[0].onload!());
+    const nodes=[...host.querySelectorAll<HTMLElement>('[data-label-key]')];
+    const label=host.querySelector<HTMLElement>('[data-label-key="component:R1"]')!;
+    label.focus();
+    const [,camera]=observed.render.mock.lastCall as [THREE.Scene,THREE.OrthographicCamera];
+    const cameraPosition=camera.position.clone(),rotation=camera.quaternion.clone(),zero=host.querySelector<HTMLElement>('[data-label-key="axis:0"]')!,zeroPosition=zero.style.translate;
+    for(const scale of [19,20,4,40,18]) {
+      const potential=buildPotentialModel(circuit,compiled,solveCircuit(compiled),{scale});
+      await update({potential});
+      expect([...host.querySelectorAll('[data-label-key]')]).toEqual(nodes);
+      expect(document.activeElement).toBe(label);
+      expect(camera.position.equals(cameraPosition)).toBe(true);expect(camera.quaternion.equals(rotation)).toBe(true);
+      const component=circuit.components.find(c=>c.id==='R1')!;
+      const height=component.terminals.reduce((n,t)=>n+potential.endpoints[t.id].height!,0)/2;
+      const {Vector3}=await import('three');
+      const projected=new Vector3(component.position.x,-component.position.y,height).project(camera);
+      const [x,y]=label.style.translate.split(' ').map(parseFloat);
+      expect(x).toBeCloseTo((projected.x+1)*1000/2-26,8);
+      expect(y).toBeCloseTo((1-projected.y)*600/2-25-9,8);
+      expect(label.style.transform).toBe('');
+      expect(zero.style.translate).toBe(zeroPosition);
+      expect(observed.frames.size).toBe(0);
+    }
+  });
+  it('updates surviving labels and removes obsolete ones without replacing unrelated nodes',async()=>{
+    reduced=true;
+    const {circuit,update}=await mount();await act(async()=>resolveFont());await act(async()=>images[0].onload!());
+    const component=host.querySelector<HTMLElement>('[data-label-key="component:R1"]')!,nets=[...host.querySelectorAll('.net-tag')];
+    await update({selectedIds:['R1'],showColors:false});
+    expect(host.querySelector('[data-label-key="component:R1"]')).toBe(component);
+    const delta=host.querySelector('[data-label-key="delta:R1"]')!;expect(delta).not.toBeNull();
+    await update({selectedIds:['R2'],showNumbers:false});
+    expect(delta.isConnected).toBe(false);expect(nets.every(n=>!n.isConnected)).toBe(true);
+    expect(host.querySelector('[data-label-key="component:R1"]')).toBe(component);
+    const renamed={...circuit,components:circuit.components.map(c=>c.id==='R1'?{...c,label:'R_9'}:c)};
+    await update({document:renamed});
+    expect(host.querySelector('[data-label-key="component:R1"]')).toBe(component);
+    expect(component.querySelector('sub')?.textContent).toBe('9');expect(component.getAttribute('aria-label')).toBe('R_9 선택');
+  });
   it('waits for mathematics font and floor texture, then renders aligned top view before announcing ready', async () => {
     const { ready, entered } = await mount();
     expect(images[0].src).toBe(''); expect(ready).not.toHaveBeenCalled();
