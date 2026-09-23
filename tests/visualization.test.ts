@@ -131,10 +131,20 @@ describe("potential model invariants", () => {
   });
 
   it("uses a stable midpoint color for a single potential and clamps fixed-range overflow", () => {
-    expect(potentialColor(0, 0, 0)).toBe("rgb(148,137,133)");
+    expect(potentialColor(0, 0, 0)).toBe("rgb(190,38,100)");
     expect(potentialColor(-20, -10, 10)).toBe(potentialColor(-10, -10, 10));
     expect(potentialColor(20, -10, 10)).toBe(potentialColor(10, -10, 10));
     expect(potentialColor(Number.NaN, -10, 10)).toBe("#9aa5b3");
+  });
+});
+
+describe("thermal palette", () => {
+  it("distinguishes low, middle and high voltages and interpolates continuously", () => {
+    expect(potentialColor(0, 0, 12)).toBe("rgb(35,20,90)");
+    expect(potentialColor(6, 0, 12)).toBe("rgb(190,38,100)");
+    expect(potentialColor(12, 0, 12)).toBe("rgb(235,188,38)");
+    expect(potentialColor(1, 0, 12)).toBe("rgb(52,30,120)");
+    expect(potentialColor(6 - 1e-8, 0, 12)).toBe(potentialColor(6 + 1e-8, 0, 12));
   });
 });
 

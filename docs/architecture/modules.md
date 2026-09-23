@@ -16,7 +16,7 @@
 | `export` | 공통 기호 자원에서 인쇄용 SVG·PNG 생성 | 화면 캡처에 의존 |
 | `persistence` | 자동 저장, 파일 입출력, 버전 변환 | 계산 결과를 정답으로 저장 |
 | `feedback` | 후기 타입, 입력 정책, 일반·관리자 게이트웨이 계약 | React, 브라우저, Firebase SDK, 회로 문서 결합 |
-| `feedback-local` | 후기 로컬 미리보기, 익명 ID, 비밀번호 검증, 작성 제한·소프트 삭제 | 물리·편집 모듈 접근, 운영 백엔드로 사용 |
+| `feedback-local` | 후기 로컬 미리보기, 익명 ID 소유권 확인, 작성 제한·수정·소프트 삭제 | 물리·편집 모듈 접근, 운영 백엔드로 사용 |
 
 활동의 허용 명령은 현재 `domain.ActivityDefinition`과 `editor`의 실행 단계에서 검사한다. 독립 `activity` 모듈과 활동 제작·배포 UI는 단계 6의 후속 범위다. 후기 게시판의 운영 전환 조건은 [게시판 구조](feedback.md)를 따른다.
 
@@ -68,7 +68,7 @@ interface DocumentMigrator {
 | 실제 명령 | 변경 대상 |
 |---|---|
 | `AddComponent`, `MoveComponents`, `RotateComponents`, `DeleteElements`, `Paste` | 부품과 관련 요소의 구조·위치 |
-| `ConnectWire`, `AddJunction`, `ConnectToWire`, `SetWireWaypoints` | ID 연결·분기·배선 경로 |
+| `ConnectWire`, `AddJunction`, `ConnectToWire` | ID 연결·분기·배선 경로 |
 | `InsertComponentOnWire`, `ConnectCrossing`, `DisconnectCrossing` | 직렬 삽입·교차 연결/분리 |
 | `SetProperties`, `SetLabel`, `SetReference` | 전기 속성·문제 표기·이름·기준점 |
 | `AddAnnotation`, `UpdateAnnotation`, `ReplaceDocument` | 주석·문서 교체 |

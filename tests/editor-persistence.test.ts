@@ -327,7 +327,6 @@ describe("command previews and wire route stability (EDT-001/002/005/006)", () =
     ["group move", { type: "MoveComponents", positions: { R1: { x: 500, y: 200 }, R2: { x: 700, y: 200 } } }],
     ["rotation", { type: "RotateComponents", ids: ["R2"] }],
     ["placement", { type: "AddComponent", component: createComponent("resistor", "R4", { x: 400, y: 400 }) }],
-    ["explicit route cleanup", { type: "SetWireWaypoints", paths: { W4: [] } }],
   ] as const)("shows exactly the committed geometry for %s without changing input", (_name, command) => {
     const history = deepFreeze(createHistory(routedSeries()));
     const before = JSON.stringify(history);

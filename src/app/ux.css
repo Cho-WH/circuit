@@ -40,8 +40,8 @@
 .record-retention{color:#4c6079;font-size:12px;line-height:1.7;padding:10px 12px;background:#edf3fa;border-radius:7px}
 .sweep-entry{font-size:12px;border:1px solid #bacde8;color:#2f5890}
 .mode-worksheet .inspector-panel>.selected-component{margin-top:10px}
-.canvas-status{color:#52647a;font-size:12px;min-height:38px;height:auto;flex-wrap:wrap;padding:8px 16px;gap:8px 18px}
-.calc-status{color:#267058}.calc-status.warning{color:#86571c}
+
+
 .modebar button:focus-visible{outline:3px solid #245ebc;outline-offset:3px}
 /* Emphasis follows the symbol contours, never a filled selection rectangle. */
 .component-lift{transform-box:fill-box;transform-origin:center;transition:transform 260ms cubic-bezier(.2,1.5,.4,1)}
@@ -103,11 +103,11 @@
   .inspector-panel{position:static;width:100%;box-shadow:none}
   .editor-toolbar{overflow-x:auto;gap:4px;min-height:50px}
   .tool-group button{min-width:34px;min-height:36px}
-  .toolbar-separator{display:none}.tidy-button{white-space:nowrap}
+  .toolbar-separator{display:none}
   .canvas-selection-tools{top:36px;left:10px;right:auto}
   .canvas-caption{top:12px;left:12px;font-size:12px}
-  .canvas-status{font-size:12px;gap:6px;padding:8px 10px}
-  .reference-label{margin-left:auto}
+  
+  
   .worksheet-topbar{padding:8px;gap:6px}
   .worksheet-topbar button{padding:7px 9px;font-size:12px}
   .worksheet-topbar .worksheet-modes{margin-right:0}

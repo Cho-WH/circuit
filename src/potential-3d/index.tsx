@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Layers3, RotateCcw, MoveUpRight, ScanLine, ArrowUpRight, Eye, EyeOff } from 'lucide-react';
+import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
 import type { PotentialModel } from '../visualization';
 import { formatQuantity, terminalPosition } from '../component-library';
@@ -284,13 +284,13 @@ export function Potential3D(props: Potential3DProps) {
 
   const choose = (value: Preset) => { const r=runtime.current; if(r) {r.stop();cameraPose(r,value);setPreset(value);} };
   return <section className="potential-scene" aria-label="3D 전위 높이 보기">
-    <header className="potential-scene-header"><div className="scene-heading"><span className="scene-icon"><Layers3 size={17}/></span><div><strong>전위의 높이를 읽다</strong><span>같은 회로, 새로운 시선</span></div></div><div className="scene-toolbar" aria-label="3D 카메라 보기">
+    <header className="potential-scene-header"><div className="scene-toolbar" aria-label="3D 카메라 보기">
       <button aria-pressed={preset==='oblique'} onClick={()=>choose('oblique')}><MoveUpRight size={14}/>사선</button><button aria-pressed={preset==='front'} onClick={()=>choose('front')}><ScanLine size={14}/>정면</button><button aria-pressed={preset==='top'} onClick={()=>choose('top')}><Layers3 size={14}/>위에서</button><span className="scene-divider"/><button aria-label="높이 안내선" aria-pressed={guides} onClick={()=>setGuides(!guides)}>{guides?<Eye size={15}/>:<EyeOff size={15}/>}</button><button aria-label="보기 초기화" onClick={()=>choose('oblique')}><RotateCcw size={14}/></button>
     </div></header>
-    <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="potential-labels" ref={overlay}/><span className="scene-axis-caption">전위 <b>V</b><ArrowUpRight size={12}/></span><span className="scene-gesture">드래그하여 회전 · 스크롤하여 확대</span>
+    <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="potential-labels" ref={overlay}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
-    <footer className="scene-footer"><span className="floor-key"><i/>기준면 <b>0 V</b><small>{referenceLabel}</small></span><span className="scene-model-note">높이는 전위의 도식입니다</span><span className="height-key">높이 강조 <b>{(potential.scale/18).toFixed(1)}배</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
+    <footer className="scene-footer"><span className="floor-key"><i/>기준면 <b>0 V</b><small>{referenceLabel}</small></span><span className="height-key">높이 강조 <b>{(potential.scale/18).toFixed(1)}배</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
     {selection&&<div className="scene-selection" aria-live="polite"><strong>{selection.component.label}</strong><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatQuantity(selection.difference,'V')}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
   </section>;
 }

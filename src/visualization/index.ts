@@ -5,11 +5,19 @@ export interface PotentialValue { netId: string; voltage?: number; color: string
 export interface PotentialSegment { id: string; points: { x: number; y: number; z: number }[]; color: string; kind: 'wire' | 'component' }
 export interface PotentialOptions { scale?: number; range?: { min: number; max: number } }
 export interface PotentialModel { nets: Record<string, PotentialValue>; endpoints: Record<string, PotentialValue>; segments: PotentialSegment[]; min: number; max: number; scale: number; referenceVoltage: number; undefinedCount: number }
+// Shared thermal stops for the voltage map and its legend, from low to high.
+export const potentialColorStops = [
+  [35, 20, 90], [69, 40, 150], [126, 35, 145], [190, 38, 100],
+  [231, 65, 49], [245, 125, 21], [235, 188, 38],
+] as const;
 export function potentialColor(value: number | undefined, min: number, max: number): string {
   if (value === undefined || !Number.isFinite(value)) return '#9aa5b3';
   const t = max === min ? .5 : Math.max(0, Math.min(1, (value - min) / (max - min)));
-  const low = [72, 131, 196], high = [224, 142, 70];
-  return `rgb(${low.map((a, i) => Math.round(a + (high[i] - a) * t)).join(',')})`;
+  const position = t * (potentialColorStops.length - 1);
+  const index = Math.min(Math.floor(position), potentialColorStops.length - 2);
+  const low = potentialColorStops[index], high = potentialColorStops[index + 1];
+  const blend = position - index;
+  return `rgb(${low.map((a, i) => Math.round(a + (high[i] - a) * blend)).join(',')})`;
 }
 export function buildPotentialModel(document: CircuitDocument, circuit: CompiledCircuit, result: SimulationResult, options: PotentialOptions = {}): PotentialModel {
   const values = Object.values(result.nodeVoltages).filter(Number.isFinite);

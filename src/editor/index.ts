@@ -35,8 +35,7 @@ export type Command =
   | { type: 'AddAnnotation'; annotation: Annotation }
   | { type: 'UpdateAnnotation'; id: string; changes: Partial<Pick<Annotation, 'kind' | 'anchor' | 'content' | 'visibility'>> }
   | { type: 'ReplaceDocument'; document: CircuitDocument }
-  | ({ type: 'Paste' } & PastePayload)
-  | { type: 'SetWireWaypoints'; paths: Record<string, Point[]> };
+  | ({ type: 'Paste' } & PastePayload);
 
 export interface PastePayload {
   components: ComponentInstance[];
@@ -288,16 +287,6 @@ function applyCommand(
       document.annotations.push(...command.annotations);
       break;
 
-    case 'SetWireWaypoints': {
-      const ids = Object.keys(command.paths);
-      const missing = missingTargets(ids, wireIds);
-      if (missing.length) return [diagnostic('COMMAND_TARGET_NOT_FOUND', missing)];
-      for (const wire of document.wires) {
-        const waypoints = command.paths[wire.id];
-        if (waypoints) wire.waypoints = waypoints.map((point) => ({ ...point }));
-      }
-      break;
-    }
   }
   return document;
 }
