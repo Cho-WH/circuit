@@ -1,9 +1,12 @@
 import {
   annotationPlacements,
+  arrowGeometry,
   circuitTextScale,
   componentNotationLayout,
   svgNotation,
   notationWidth,
+  notationMetrics,
+  presentationText,
   componentPresentation,
   endpointPosition,
   escapeXml,
@@ -131,13 +134,27 @@ function componentTextPlacements(
   return placements;
 }
 
-function annotationTextPosition(placement: ReturnType<typeof annotationPlacements>[number], scale: number) {
+function annotationTextPosition(placement: ReturnType<typeof annotationPlacements>[number], scale: number, side=1) {
   const {annotation:a,x,y,text}=placement;
   if(a.kind==='arrow') {
-    const end=a.end??{x:x+64,y},length=Math.hypot(end.x-x,end.y-y)||1;
-    return {x:(x+end.x)/2+(end.y-y)/length*(estimatedTextWidth(text)*scale/2+10),y:(y+end.y)/2-(end.x-x)/length*(10*scale+6),anchor:'middle' as const};
+    const end=arrowGeometry(a,{x,y}).points[1],length=Math.hypot(end.x-x,end.y-y)||1;
+    const metrics=notationMetrics(text,16*scale),nx=side*(end.y-y)/length,ny=-side*(end.x-x)/length;
+    const gap=10*scale;
+    // Position the text box, then convert its center to the SVG text baseline.
+    return {x:(x+end.x)/2+nx*(metrics.width/2+gap),y:(y+end.y)/2+ny*((metrics.ascent+metrics.descent)/2+gap)+(metrics.ascent-metrics.descent)/2,anchor:'middle' as const};
   }
   return {x:a.kind==='point'?x+10:x,y:a.kind==='point'?y-10:y,anchor:'start' as const};
+}
+
+function annotationTextPlacements(placement:ReturnType<typeof annotationPlacements>[number],scale:number) {
+  const a=placement.annotation;
+  if(a.kind!=='arrow')return [{...annotationTextPosition(placement,scale),text:placement.text,part:'annotation',symbol:a.kind==='point'}];
+  const properties=a.presentation??{};
+  return [{part:'label',prefix:'label',actual:a.content,side:1},{part:'value',prefix:'answer',actual:'',side:-1}].flatMap(({part,prefix,actual,side})=>{
+    const text=presentationText(properties,actual,prefix);if(!text)return [];
+    const p=annotationTextPosition({...placement,text},scale,side);
+    return [{...p,x:p.x+Number(properties[prefix+'OffsetX']??0),y:p.y+Number(properties[prefix+'OffsetY']??0),text,part,symbol:part==='label'}];
+  });
 }
 
 function calculateBounds(
@@ -185,11 +202,9 @@ function calculateBounds(
   }
 
   for (const placement of (options.circuitOnly ? [] : annotationPlacements(document))) {
-    const end = placement.annotation.end ?? {x: placement.x + 64, y: placement.y};
-    if (placement.annotation.kind === 'arrow') addRect(Math.min(placement.x,end.x)-12, Math.min(placement.y,end.y)-12, Math.abs(end.x-placement.x)+24, Math.abs(end.y-placement.y)+24);
+    if (placement.annotation.kind === 'arrow') for(const p of arrowGeometry(placement.annotation,placement).points) addRect(p.x-12,p.y-12,24,24);
     if (placement.annotation.kind === 'point') addRect(placement.x-5,placement.y-5,10,10);
-    const label=annotationTextPosition(placement,scale);
-    addText({...label,text:placement.text,tone:'label',blank:placement.text==='□'});
+    for(const label of annotationTextPlacements(placement,scale)) addText({...label,tone:'label',blank:label.text==='□'});
   }
 
   if (!Number.isFinite(minX)) {
@@ -275,16 +290,19 @@ export function createSvgExport(
 
   for (const placement of (options.circuitOnly ? [] : annotationPlacements(document))) {
     const {annotation:a,x,y,text}=placement;
-    const end=a.end??{x:x+64,y};
     chunks.push(`<g data-output-id="${xmlText(a.id)}" data-output-part="annotation">`);
     if(a.kind==='point') chunks.push(`<circle cx="${numberAttribute(x)}" cy="${numberAttribute(y)}" r="4" fill="${colors.annotation}"/>`);
     if(a.kind==='arrow') {
-      const angle=Math.atan2(end.y-y,end.x-x), ux=Math.cos(angle),uy=Math.sin(angle);
-      chunks.push(`<path d="M${numberAttribute(x)} ${numberAttribute(y)}L${numberAttribute(end.x)} ${numberAttribute(end.y)} M${numberAttribute(end.x-10*ux+5*uy)} ${numberAttribute(end.y-10*uy-5*ux)}L${numberAttribute(end.x)} ${numberAttribute(end.y)} ${numberAttribute(end.x-10*ux-5*uy)} ${numberAttribute(end.y-10*uy+5*ux)}" stroke="${colors.annotation}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+      const geometry=arrowGeometry(a,{x,y});
+      chunks.push(`<path d="${geometry.path}" stroke="${colors.annotation}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${geometry.head}" fill="${colors.annotation}" stroke="${colors.annotation}" stroke-width="0.5" stroke-linejoin="round"/>`);
     }
-    const {x:tx,y:ty,anchor}=annotationTextPosition(placement,scale);
-    if(text==='□') chunks.push(blankMarkup(tx,ty,'start',scale,colors.annotation));
-    else if(text) chunks.push(svgNotation(text,{x:tx,y:ty,anchor,fontSize:16*scale,fill:colors.annotation,symbol:a.kind==='point'||a.kind==='arrow'}));
+    for(const label of annotationTextPlacements(placement,scale)) {
+      const {x:tx,y:ty,anchor,text,part,symbol}=label;
+      if(a.kind==='arrow')chunks.push(`<g data-output-id="${xmlText(a.id)}" data-output-part="${part}">`);
+      if(text==='□') chunks.push(blankMarkup(tx,ty,anchor,scale,colors.annotation));
+      else chunks.push(svgNotation(text,{x:tx,y:ty,anchor,fontSize:16*scale,fill:colors.annotation,symbol}));
+      if(a.kind==='arrow')chunks.push('</g>');
+    }
     chunks.push('</g>');
   }
 

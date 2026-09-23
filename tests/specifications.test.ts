@@ -328,7 +328,7 @@ describe("requirement and rule references", () => {
 describe("public CircuitDocument contract", () => {
   it.each(canonicalFixtures)("accepts $fixture.id through the public domain validator", ({ fixture }) => {
     const result = validateDocument(fixture.document);
-    expect(result).toEqual({ ok: true, document: {...fixture.document,version:2} });
+    expect(result).toEqual({ ok: true, document: {...fixture.document,version: 4} });
   });
 
   it.each(canonicalFixtures)("clones $fixture.id without changing its JSON meaning", ({ fixture }) => {
@@ -352,7 +352,7 @@ describe("public CircuitDocument contract", () => {
     const document: PublicCircuitDocument = {
       $schema: "https://example.invalid/edu-circuit/circuit-document.schema.json",
       format: "edu-circuit",
-      version: 2,
+      version: 4,
       documentId: "contract-parity",
       title: "계약 일치",
       components: [
@@ -406,9 +406,10 @@ describe("public CircuitDocument contract", () => {
 
     expect(documentMigrator.canMigrate(1)).toBe(true);
     expect(documentMigrator.canMigrate(2)).toBe(true);
-    expect(documentMigrator.canMigrate(3)).toBe(false);
+    expect(documentMigrator.canMigrate(3)).toBe(true);
+    expect(documentMigrator.canMigrate(5)).toBe(false);
     const migrated = documentMigrator.migrate(source);
-    expect(migrated).toStrictEqual({...source,version:2});
+    expect(migrated).toStrictEqual({...source,version: 4});
     expect(migrated).not.toBe(source);
   });
 
@@ -495,7 +496,7 @@ describe("invalid specification fixtures", () => {
   it("rejects IDs duplicated across document element kinds", () => {
     const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "duplicate-document-id.json"));
 
-    expect(validateFixture({...fixture,document:{...fixture.document,version:2}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture({...fixture,document:{...fixture.document,version: 4}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
     expect(documentIntegrityErrors(fixture.document)).toContain(
       "duplicate id shared-id (component, junction)",
     );
@@ -504,7 +505,7 @@ describe("invalid specification fixtures", () => {
   it("rejects a wire endpoint that refers to a missing terminal", () => {
     const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "dangling-endpoint.json"));
 
-    expect(validateFixture({...fixture,document:{...fixture.document,version:2}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture({...fixture,document:{...fixture.document,version: 4}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
     expect(documentIntegrityErrors(fixture.document)).toContain(
       "wire W1 end references unknown terminal missing-terminal",
     );

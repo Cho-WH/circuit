@@ -31,7 +31,7 @@ describe('wire insertion and explicit crossing edits',()=>{
     expect(previewCommand(doc,command)).toEqual({ok:true,document:history.present});
     expect(history.past).toHaveLength(1);expect(undo(history).present).toEqual(doc);expect(redo(undo(history)).present).toEqual(history.present);
     expect(parseDocument(serializeDocument(history.present))).toMatchObject({ok:true,document:history.present});
-    expect(doc).toEqual({...source,version:2});
+    expect(doc).toEqual({...source,version: 4});
   });
   it('keeps the unrelated route and the bends outside an inserted vertical component',()=>{
     const doc=fixture(),r=createComponent('dc-voltage-source','V2',{x:800,y:220});

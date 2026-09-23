@@ -153,3 +153,5 @@
 .inline-name-row{margin-bottom:10px}
 .inline-name-preview{min-width:48px;max-width:90px;overflow:hidden;text-align:center}
 .inline-value-editor .inline-edit-actions{justify-content:flex-end;margin-top:10px}
+
+.arrow-controls{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:3px 6px;border-radius:10px;background:#eef3fa}.arrow-controls label{display:flex;align-items:center;gap:3px}.arrow-controls input{width:64px;min-height:34px;padding:4px;border:1px solid #d3dce9;border-radius:6px;background:white}.arrow-controls button{min-width:36px;min-height:36px}

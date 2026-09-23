@@ -1,3 +1,4 @@
+export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
 import { storedFraction, notationTokens, symbolGlyphs } from '../notation';
 import type { Annotation, CircuitDocument, ComponentInstance, ComponentType, EndpointRef, Point, Wire, SimulationResult } from '../domain';
 
@@ -126,16 +127,17 @@ export function formatDisplayQuantity(value: number | undefined, unit: string): 
   if (value === undefined || !Number.isFinite(value)) return `— ${unit}`;
   return `${Number(value.toFixed(2))} ${unit}`;
 }
+export function presentationText(properties:Record<string,string|number|boolean>,actual:string,prefix:string):string|null {
+    const display = properties[`${prefix}Display`] ?? 'value';
+    if (properties[`${prefix}Visible`] === false || display === 'hidden') return null;
+    if (properties[`${prefix}Blank`] === true) return '□';
+    return display === 'hidden' ? null : display === '?' ? '?' : display === 'blank' ? '□' : display === 'custom' ? String(properties[`${prefix}Text`] ?? 'x') : actual;
+}
 export function componentPresentation(component: ComponentInstance, result?: SimulationResult): { label: string | null; value: string | null; voltage: string | null; current: string | null } {
   const def = componentDefinitions[component.type];
   const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
   const value = fraction ? `${fraction} ${def.unit}` : def.property ? formatDisplayQuantity(Number(component.properties[def.property]), def.unit) : componentValue(component);
-  const rule = (actual: string, prefix: string): string | null => {
-    const display = component.properties[`${prefix}Display`] ?? 'value';
-    if (component.properties[`${prefix}Visible`] === false || display === 'hidden') return null;
-    if (component.properties[`${prefix}Blank`] === true) return '□';
-    return display === 'hidden' ? null : display === '?' ? '?' : display === 'blank' ? '□' : display === 'custom' ? String(component.properties[`${prefix}Text`] ?? 'x') : actual;
-  };
+  const rule=(actual:string,prefix:string)=>presentationText(component.properties,actual,prefix);
   return {
     label: rule(component.label, 'label'), value: rule(value, 'answer'),
     voltage: component.properties.showVoltage === true ? rule(formatDisplayQuantity(result?.componentVoltages[component.id], 'V'), 'voltage') : null,

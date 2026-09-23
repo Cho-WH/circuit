@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Maximize, Minus, Plus } from 'lucide-react';
 import type { CircuitDocument, Point, SimulationResult } from '../domain';
-import { annotationPlacements, wirePoints } from '../component-library';
+import { annotationPlacements, arrowGeometry, arrowStyle, resizeArrow, wirePoints } from '../component-library';
 import { createSvgExport, type ExportOptions } from '../export';
 import { previewCommand, type Command } from '../editor';
 
-export type OutputTool = 'select' | 'point' | 'arrow' | 'note';
+export type OutputTool = 'select' | 'point' | 'arrow' | 'corner-arrow' | 'note';
 interface Props {
   document: CircuitDocument; result: SimulationResult;
   options: ExportOptions; selected: string[]; tool: OutputTool;
@@ -22,11 +22,20 @@ export function outputMoveCommand(doc: CircuitDocument, target: Target, delta: P
   const annotation = annotationPlacements(doc).find(a => a.annotation.id === target.id);
   if (annotation) {
     const { x, y } = annotation;
+    if(annotation.annotation.kind==='arrow'&&(target.part==='label'||target.part==='value')) {
+      const prefix=target.part==='label'?'label':'answer',presentation=annotation.annotation.presentation??{};
+      return {type:'UpdateAnnotation',id:target.id,changes:{presentation:{...presentation,[prefix+'OffsetX']:Number(presentation[prefix+'OffsetX']??0)+delta.x,[prefix+'OffsetY']:Number(presentation[prefix+'OffsetY']??0)+delta.y}}};
+    }
+    if(annotation.annotation.kind==='arrow'&&(target.part==='start'||target.part==='end')) {
+      const changes=resizeArrow(annotation.annotation,{x,y},target.part,delta);
+      const current=arrowStyle(annotation.annotation,{x,y});
+      if(changes.arrow.length===current.length&&changes.arrow.legLength===current.legLength)return null;
+      return {type:'UpdateAnnotation',id:target.id,changes};
+    }
     const end = annotation.annotation.end ?? { x: x + 64, y };
-    if (target.part === 'end') return { type: 'UpdateAnnotation', id: target.id, changes: { end: { x: end.x + delta.x, y: end.y + delta.y } } };
     const position = { x: x + delta.x, y: y + delta.y };
     return { type: 'UpdateAnnotation', id: target.id, changes: { anchor: null, position,
-      ...(annotation.annotation.kind === 'arrow' ? { end: target.part === 'start' ? end : { x: end.x + delta.x, y: end.y + delta.y } } : {}) } };
+      ...(annotation.annotation.kind === 'arrow' ? { arrow: arrowStyle(annotation.annotation,{x,y}), end: { x: end.x + delta.x, y: end.y + delta.y } } : {}) } };
   }
   const component = doc.components.find(c => c.id === target.id);
   if (!component) return null;
@@ -80,8 +89,9 @@ export function OutputCanvas(props: Props) {
       element.setAttribute('data-selected',String(props.selected.includes(id)));
       element.setAttribute('tabindex','0');
       element.setAttribute('role','button');
-      const parts:Record<string,string>={body:'기호',label:'이름',value:'값',annotation:'장식',start:'시작점',end:'끝점',voltage:'전압',current:'전류'};
-      element.setAttribute('aria-label',`${props.document.components.find(c=>c.id===id)?.label??props.document.annotations.find(a=>a.id===id)?.content??id} ${parts[element.getAttribute('data-output-part')!]??''}`);
+      const parts:Record<string,string>={body:'기호',label:'이름',value:'값',annotation:'장식',start:'시작 쪽 길이 조절',end:'끝 쪽 길이 조절',voltage:'전압',current:'전류'};
+      const annotation=props.document.annotations.find(a=>a.id===id);
+      element.setAttribute('aria-label',`${props.document.components.find(c=>c.id===id)?.label??annotation?.presentation?.labelText??annotation?.content??id} ${parts[element.getAttribute('data-output-part')!]??''}`);
     }
   }, [scene.content, props.selected, props.document]);
   useEffect(() => {setView(createSvgExport(props.document, options, props.result).bounds);}, [props.document.documentId]);
@@ -107,14 +117,13 @@ export function OutputCanvas(props: Props) {
     if(props.tool!=='select'&&!moved) {
       const position=snapToWire(props.document,p,8/(svg.current?.getScreenCTM?.()?.a||1));
       const id=props.newId('note-');
-      if(props.dispatch({type:'AddAnnotation',annotation:{id,kind:props.tool,anchor:null,position,
-        ...(props.tool==='arrow'?{end:{x:position.x+64,y:position.y}}:{}),
-        content:props.tool==='point'?'A':props.tool==='arrow'?'I':'글자',visibility:'always'}})) {
+      if(props.dispatch({type:'AddAnnotation',annotation:{id,kind:props.tool==='corner-arrow'?'arrow':props.tool,anchor:null,position,
+        ...((props.tool==='arrow'||props.tool==='corner-arrow')?{arrow:{shape:props.tool==='corner-arrow'?'corner' as const:'straight' as const,length:64,legLength:48,rotation:0,reversed:false}}:{}),
+        content:props.tool==='point'?'A':(props.tool==='arrow'||props.tool==='corner-arrow')?'I':'글자',visibility:'always'}})) {
         props.onTool('select');props.onSelect(id);setTarget({id,part:'annotation'});
       }
     } else if(moved&&Math.hypot(p.x-g.start.x,p.y-g.start.y)>.001) {const command=moveCommand(g,p);if(command)props.dispatch(command);}
   }
-  const selectedAnnotation=annotationPlacements(preview??props.document).find(a=>props.selected.includes(a.annotation.id));
   function zoom(factor:number) {setView(v=>{const width=Math.max(160,Math.min(6000,v.width*factor)),height=width*v.height/v.width;return {x:v.x+(v.width-width)/2,y:v.y+(v.height-height)/2,width,height};});}
   return <div className="output-canvas-wrap">
     <svg ref={svg} className="output-canvas" aria-label="회로도 출력 편집" tabIndex={0} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
@@ -124,8 +133,8 @@ export function OutputCanvas(props: Props) {
         const element=(e.target as Element).closest('[data-output-id]');
         const hit=element?{id:element.getAttribute('data-output-id')!,part:element.getAttribute('data-output-part')!}:null;
         if(hit&&(hit.part==='start'||hit.part==='end')) {
-          const a=annotationPlacements(props.document).find(a=>a.annotation.id===hit.id),p=point(e);
-          if(a){const end=a.annotation.end??{x:a.x+64,y:a.y};hit.part=Math.hypot(p.x-a.x,p.y-a.y)<Math.hypot(p.x-end.x,p.y-end.y)?'start':'end';}
+          const placement=annotationPlacements(props.document).find(p=>p.annotation.id===hit.id);
+          if(placement){const points=arrowGeometry(placement.annotation,placement).points,p=point(e),first=points[0],last=points.at(-1)!;hit.part=Math.hypot(p.x-first.x,p.y-first.y)<Math.hypot(p.x-last.x,p.y-last.y)?'start':'end';}
         }
         gesture.current={pointer:e.pointerId,start:point(e),client:{x:e.clientX,y:e.clientY},scale:svg.current?.getScreenCTM?.()?.a||1,view,target:props.tool==='select'?hit:null,document:props.document,moved:false};
         e.currentTarget.setPointerCapture(e.pointerId);e.currentTarget.focus();
@@ -140,14 +149,21 @@ export function OutputCanvas(props: Props) {
         if(e.key==='Escape'){cancel();props.onTool('select');return;}
         if(e.key==='Enter'&&props.tool!=='select') {
           const position={x:view.x+view.width/2,y:view.y+view.height/2},id=props.newId('note-');
-          if(props.dispatch({type:'AddAnnotation',annotation:{id,kind:props.tool,anchor:null,position,content:props.tool==='point'?'A':props.tool==='arrow'?'I':'글자',visibility:'always'}})){props.onSelect(id);setTarget({id,part:'annotation'});props.onTool('select');}
+          if(props.dispatch({type:'AddAnnotation',annotation:{id,kind:props.tool==='corner-arrow'?'arrow':props.tool,anchor:null,position,...((props.tool==='arrow'||props.tool==='corner-arrow')?{arrow:{shape:props.tool==='corner-arrow'?'corner' as const:'straight' as const,length:64,legLength:48,rotation:0,reversed:false}}:{}),content:props.tool==='point'?'A':(props.tool==='arrow'||props.tool==='corner-arrow')?'I':'글자',visibility:'always'}})){props.onSelect(id);setTarget({id,part:'annotation'});props.onTool('select');}
         }
         if(e.key.startsWith('Arrow')&&target){e.preventDefault();e.stopPropagation();svg.current?.focus();const step=e.shiftKey?10:2;const command=outputMoveCommand(props.document,target,{x:e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0,y:e.key==='ArrowDown'?step:e.key==='ArrowUp'?-step:0});if(command)props.dispatch(command);}
       }}>
+      {annotationPlacements(preview??props.document).map(({annotation:a,x,y})=>a.kind==='point'?<circle key={a.id} data-output-id={a.id} data-output-part="annotation" cx={x} cy={y} r={hitRadius} fill="transparent"/>:a.kind==='arrow'?<path key={a.id} data-output-id={a.id} data-output-part="annotation" d={arrowGeometry(a,{x,y}).path} stroke="transparent" strokeWidth={2*hitRadius} fill="none" style={{pointerEvents:'stroke'}}/>:null)}
       <g dangerouslySetInnerHTML={{__html:scene.content}}/>
       {props.document.components.map(c=><rect key={c.id} data-output-id={c.id} data-output-part="body" x={c.position.x-24} y={c.position.y-24} width={48} height={48} fill="transparent" tabIndex={0} role="button" aria-label={`${c.label} 표기 편집`} onFocus={()=>setTarget({id:c.id,part:'body'})} onKeyDown={e=>{if(e.key==='Enter')props.onSelect(c.id);}}/>)}
-      {annotationPlacements(preview??props.document).map(({annotation:a,x,y})=>a.kind==='point'?<circle key={a.id} data-output-id={a.id} data-output-part="annotation" cx={x} cy={y} r={hitRadius} fill="transparent"/>:a.kind==='arrow'?<path key={a.id} data-output-id={a.id} data-output-part="annotation" d={`M${x} ${y}L${a.end?.x??x+64} ${a.end?.y??y}`} stroke="transparent" strokeWidth={2*hitRadius} fill="none" style={{pointerEvents:'stroke'}}/>:null)}
-      {selectedAnnotation?.annotation.kind==='arrow'&&[ {part:'start',x:selectedAnnotation.x,y:selectedAnnotation.y}, {part:'end',...(selectedAnnotation.annotation.end??{x:selectedAnnotation.x+64,y:selectedAnnotation.y})} ].map(p=><g key={p.part} data-output-id={selectedAnnotation.annotation.id} data-output-part={p.part}><circle cx={p.x} cy={p.y} r={hitRadius} fill="transparent"/><circle cx={p.x} cy={p.y} r={5/screenScale} fill="white" stroke="#174895" strokeWidth={2/screenScale} pointerEvents="none"/></g>)}
+
+      {annotationPlacements(preview??props.document).filter(p=>p.annotation.kind==='arrow'&&props.selected.includes(p.annotation.id)).flatMap(p=>{
+        const points=arrowGeometry(p.annotation,p).points;
+        return [{part:'start',point:points[0]},{part:'end',point:points.at(-1)!}].map(({part,point})=><g key={p.annotation.id+part} data-output-id={p.annotation.id} data-output-part={part} style={{cursor:'grab'}}>
+          <circle cx={point.x} cy={point.y} r={hitRadius} fill="transparent"/>
+          <circle cx={point.x} cy={point.y} r={5/screenScale} fill="white" stroke="#174895" strokeWidth={1.5/screenScale} pointerEvents="none"/>
+        </g>);
+      })}
     </svg>
     <div className="output-zoom"><button aria-label="출력 확대" onClick={()=>zoom(.8)}><Plus size={16}/></button><button aria-label="출력 축소" onClick={()=>zoom(1.25)}><Minus size={16}/></button><button aria-label="출력 전체 맞춤" onClick={()=>setView(scene.bounds)}><Maximize size={16}/></button></div>
   </div>;

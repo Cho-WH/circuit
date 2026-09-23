@@ -135,7 +135,7 @@ function seriesDocument(
 ): CircuitDocument {
   return {
     format: "edu-circuit",
-    version: 2,
+    version: 4,
     documentId: `series-${middle.id}`,
     title: `직렬 ${middle.id}`,
     components: [
@@ -173,7 +173,7 @@ function seriesDocument(
 function parallelDocument(second: ComponentInstance, sourceVoltage = 9): CircuitDocument {
   return {
     format: "edu-circuit",
-    version: 2,
+    version: 4,
     documentId: `parallel-${second.id}`,
     title: `병렬 ${second.id}`,
     components: [
@@ -371,7 +371,7 @@ describe("explicit connectivity", () => {
   it("does not join wires merely because their waypoint coordinates cross", () => {
     const document: CircuitDocument = {
       format: "edu-circuit",
-      version: 2,
+      version: 4,
       documentId: "crossing-wires",
       title: "교차하지만 연결되지 않은 도선",
       components: [
@@ -477,7 +477,7 @@ describe("ideal zero-volt constraints", () => {
   it("does not invent individual currents for parallel zero-volt constraints", () => {
     const document: CircuitDocument = {
       format: "edu-circuit",
-      version: 2,
+      version: 4,
       documentId: "parallel-zero-volt-constraints",
       title: "병렬 0 V 제약",
       components: [

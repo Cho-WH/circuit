@@ -315,7 +315,7 @@ describe('independent worksheet SVG export', () => {
     expect(problem).toContain('>A</text>');
     expect(problem).toContain('>𝐼</text>');
     expect(problem).toContain('>?</text>');
-    expect(problem).toMatch(/<path d="M[^>]+L[^>]+ M[^>]+L/);
+    expect(problem).toMatch(/<path d="M[^>]+L[^>]+Z" fill="#111111"/);
     expect(problem).not.toContain('>해설</text>');
     expect(problem).not.toContain('SECRET');
 
@@ -452,14 +452,14 @@ describe('PNG rasterization and clipboard fallback', () => {
 });
 
 describe('free output layout', () => {
-  it('moves independent text and arrow endpoints, round trips and undoes without changing physics', () => {
+  it('moves independent text and adjusts arrow length and rotation, round trips and undoes without changing physics', () => {
     const original=fixture();
     const before=solve(original);
     let history=createHistory(original);
     const apply=(command: Parameters<typeof executeCommand>[1])=>{const next=executeCommand(history,command);expect(next.ok).toBe(true);if(next.ok)history=next.history;};
     apply({type:'AddAnnotation',annotation:{id:'free-arrow',kind:'arrow',anchor:null,position:{x:150,y:100},end:{x:230,y:100},content:'I₁',visibility:'always'}});
-    apply(outputMoveCommand(history.present,{id:'free-arrow',part:'end'},{x:-80,y:100})!);
-    expect(history.present.annotations[0].end).toEqual({x:150,y:200});
+    apply({type:'UpdateAnnotation',id:'free-arrow',changes:{arrow:{shape:'straight',length:100,legLength:48,rotation:90,reversed:false}}});
+    expect(history.present.annotations[0].arrow).toMatchObject({length:100,rotation:90});
     expect(undo(history).present.annotations[0].end).toEqual({x:230,y:100});
     expect(redo(undo(history)).present).toEqual(history.present);
     apply(outputMoveCommand(history.present,{id:'R1',part:'label'},{x:80,y:-120})!);
@@ -486,7 +486,7 @@ describe('free output layout', () => {
     raw.annotations=[{id:'old',kind:'note',anchor:{kind:'terminal',id:'R1.a'},content:'문제',visibility:'problem'},{id:'teacher',kind:'note',anchor:{kind:'terminal',id:'R1.a'},content:'정답',visibility:'answer'}];
     const snapshot=JSON.stringify(raw), parsed=parseDocument(snapshot);
     expect(parsed.ok).toBe(true);if(!parsed.ok)return;
-    expect(parsed.document.version).toBe(2);
+    expect(parsed.document.version).toBe(4);
     expect(parsed.document.annotations.map(a=>a.visibility)).toEqual(['always','hidden']);
     expect(JSON.stringify(raw)).toBe(snapshot);
     expect(parseDocument(serializeDocument(parsed.document))).toEqual(parsed);

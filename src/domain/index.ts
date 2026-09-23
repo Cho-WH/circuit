@@ -1,5 +1,7 @@
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../schemas/circuit-document.schema.json';
+import versionThreeSchema from '../../schemas/circuit-document-v3.schema.json';
+import versionTwoSchema from '../../schemas/circuit-document-v2.schema.json';
 import previousSchema from '../../schemas/circuit-document-v1.schema.json';
 
 export type Point = { x: number; y: number };
@@ -14,16 +16,17 @@ export interface ComponentInstance {
 }
 export interface Wire { id: string; start: EndpointRef; end: EndpointRef; waypoints: Point[] }
 export interface Junction { id: string; position: Point }
+export interface ArrowStyle { shape: 'straight' | 'corner'; length: number; legLength: number; rotation: number; reversed: boolean }
 export interface Annotation {
   id: string; kind: 'label' | 'arrow' | 'blank' | 'question' | 'note' | 'point';
-  anchor: EndpointRef | null; position?: Point; end?: Point; content: string; visibility: 'always' | 'hidden';
+  anchor: EndpointRef | null; position?: Point; end?: Point; arrow?: ArrowStyle; presentation?: Record<string,string|number|boolean>; content: string; visibility: 'always' | 'hidden';
 }
 export interface ActivityDefinition {
   allowedCommands: string[]; revealSteps: Record<string, unknown>[];
   resetSnapshotId?: string | null; [key: string]: unknown;
 }
 export interface CircuitDocument {
-  $schema?: string; format: 'edu-circuit'; version: 2; output?: { fontScale?: number }; documentId: string; title: string;
+  $schema?: string; format: 'edu-circuit'; version: 4; output?: { fontScale?: number }; documentId: string; title: string;
   components: ComponentInstance[]; wires: Wire[]; junctions: Junction[];
   annotations: Annotation[]; referenceNode: EndpointRef | null; activity: ActivityDefinition | null;
 }
@@ -56,12 +59,20 @@ export interface DocumentMigrator { canMigrate(version: number): boolean; migrat
 const validateSchema = new Ajv2020({ allErrors: true, strict: false }).compile<CircuitDocument>(schema);
 export type DocumentValidation = { ok: true; document: CircuitDocument } | { ok: false; diagnostics: Diagnostic[] };
 const validatePrevious = new Ajv2020({ allErrors: true, strict: false }).compile(previousSchema);
+const validateVersionTwo = new Ajv2020({ allErrors: true, strict: false }).compile(versionTwoSchema);
+const validateVersionThree = new Ajv2020({ allErrors: true, strict: false }).compile(versionThreeSchema);
 export function validateDocument(input: unknown): DocumentValidation {
   if (input && typeof input === 'object' && 'version' in input && input.version === 1 && validatePrevious(input)) {
     const migrated = JSON.parse(JSON.stringify(input));
     migrated.version = 2;
     for (const annotation of migrated.annotations) annotation.visibility = ['hidden', 'answer'].includes(annotation.visibility) ? 'hidden' : 'always';
     input = migrated;
+  }
+  if (input && typeof input === 'object' && 'version' in input && input.version === 2 && validateVersionTwo(input)) {
+    input = {...JSON.parse(JSON.stringify(input)), version: 3};
+  }
+  if (input && typeof input === 'object' && 'version' in input && input.version === 3 && validateVersionThree(input)) {
+    input = {...JSON.parse(JSON.stringify(input)), version: 4};
   }
   if (!validateSchema(input)) return { ok: false, diagnostics: [diagnostic('INVALID_DOCUMENT', [], 'error', { detail: (validateSchema.errors ?? []).map(e => `${e.instancePath} ${e.message}`).join('; ') })] };
   const doc = input;
@@ -84,7 +95,7 @@ export class DocumentError extends Error {
   constructor(public readonly diagnostics: Diagnostic[]) { super(diagnostics.map(d => d.code).join(', ')); this.name = 'DocumentError'; }
 }
 export const documentMigrator: DocumentMigrator = {
-  canMigrate: version => version === 1 || version === 2,
+  canMigrate: version => version === 1 || version === 2 || version === 3 || version === 4,
   migrate(input) {
     const checked = validateDocument(input);
     if (!checked.ok) throw new DocumentError(checked.diagnostics);
@@ -92,5 +103,5 @@ export const documentMigrator: DocumentMigrator = {
   },
 };
 export function emptyDocument(id = 'untitled'): CircuitDocument {
-  return { format: 'edu-circuit', version: 2, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
+  return { format: 'edu-circuit', version: 4, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
 }

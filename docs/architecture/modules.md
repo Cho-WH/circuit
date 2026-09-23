@@ -79,7 +79,7 @@ interface DocumentMigrator {
 
 ## 측정과 출력의 공개 계약
 
-관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v2이며 v1 호환 변환은 ADR-012를 따른다.
+관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v4이며 v1·v2·v3 호환 변환은 ADR-012를 따른다.
 
 `measurement`는 `probeVoltage(compilation, result, red, black)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
 

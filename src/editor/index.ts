@@ -35,7 +35,7 @@ export type Command =
   | { type: 'AddJunction'; junction: Junction; wireId?: string; newWireId?: string }
   | { type: 'SetOutputScale'; scale: number }
   | { type: 'AddAnnotation'; annotation: Annotation }
-  | { type: 'UpdateAnnotation'; id: string; changes: Partial<Pick<Annotation, 'kind' | 'anchor' | 'content' | 'visibility' | 'position' | 'end'>> }
+  | { type: 'UpdateAnnotation'; id: string; changes: Partial<Pick<Annotation, 'kind' | 'anchor' | 'content' | 'visibility' | 'position' | 'end' | 'arrow' | 'presentation'>> }
   | { type: 'ReplaceDocument'; document: CircuitDocument }
   | ({ type: 'Paste' } & PastePayload);
 

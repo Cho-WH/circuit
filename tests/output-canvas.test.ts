@@ -28,10 +28,11 @@ afterEach(() => {
 });
 
 
-function setup() {
+function setup(arrow=false) {
   let history=createHistory(layoutExample(examples[1].document));
+  if(arrow)history.present.annotations=[{id:'test-arrow',kind:'arrow',anchor:null,position:{x:100,y:100},content:'I',visibility:'always',arrow:{shape:'corner',length:80,legLength:60,rotation:90,reversed:true}}];
   const dispatch=vi.fn((command: Parameters<typeof executeCommand>[1])=>{const result=executeCommand(history,command);if(!result.ok)return false;history=result.history;render();return true;});
-  function render(){root.render(createElement(OutputCanvas,{document:history.present,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected:['R1'],tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'test-note'}));}
+  function render(){root.render(createElement(OutputCanvas,{document:history.present,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected:[arrow?'test-arrow':'R1'],tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'test-note'}));}
   act(render);
   const svg=host.querySelector('svg')!;
   Object.assign(svg,{getScreenCTM:()=>({a:1,inverse:()=>({})}),setPointerCapture:()=>{}});
@@ -63,5 +64,25 @@ describe('output canvas direct manipulation',()=>{
     const body=host.querySelector('[data-output-id="R1"][data-output-part="body"]')!;
     c.pointer(body,'pointerdown',400,220);c.pointer(c.svg,'pointermove',500,300);c.pointer(c.svg,'pointerup',500,300);
     expect(c.dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('arrow length handles',()=>{
+  it.each(['mouse','touch'])('resizes a rotated, reversed corner with one commit using %s',pointerType=>{
+    const c=setup(true),end=host.querySelector('[data-output-part="end"]')!;
+    c.pointer(end,'pointerdown',40,180,pointerType);
+    c.pointer(c.svg,'pointermove',10,200,pointerType);
+    expect(c.dispatch).not.toHaveBeenCalled();
+    c.pointer(c.svg,'pointerup',0,200,pointerType);
+    expect(c.dispatch).toHaveBeenCalledTimes(1);
+    expect(c.history().present.annotations[0]).toMatchObject({position:{x:100,y:100},arrow:{length:80,legLength:100,rotation:90,reversed:true}});
+    expect(c.history().past).toHaveLength(1);
+  });
+  it('cancels length preview and keeps the opposite corner fixed on a start drag',()=>{
+    const c=setup(true),start=()=>host.querySelector('[data-output-part="start"]')!;
+    c.pointer(start(),'pointerdown',100,100);c.pointer(c.svg,'pointermove',100,70);c.pointer(c.svg,'pointercancel',100,70);
+    expect(c.dispatch).not.toHaveBeenCalled();
+    c.pointer(start(),'pointerdown',100,100);c.pointer(c.svg,'pointerup',120,70);
+    expect(c.history().present.annotations[0]).toMatchObject({position:{x:100,y:70},arrow:{length:110,legLength:60,rotation:90}});
   });
 });

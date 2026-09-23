@@ -32,7 +32,7 @@ describe('explicit fraction notation',()=>{
     expect(htmlNotation('R_{<script>}',true)).not.toContain('<script>');
   });
   it('italicizes symbols while leaving digits and quantity units upright',()=>{
-    expect(symbolGlyphs('R1')).toBe('𝑅1');expect(symbolGlyphs('I = 3/4 A')).toBe('𝐼 = 3/4 A');expect(symbolGlyphs('3/4 Ω')).toBe('3/4 Ω');
+    expect(symbolGlyphs('R1')).toBe('𝑅1');expect(symbolGlyphs('I = 3/4 A')).toBe('𝐼 = 3/4 A');expect(symbolGlyphs('2I')).toBe('2𝐼');expect(symbolGlyphs('2I_1 + 3R')).toBe('2𝐼_1 + 3𝑅');expect(htmlNotation('2I_1',true)).toBe('2𝐼<sub>1</sub>');
     expect(svgNotation('R1',{x:0,y:0,fontSize:16,symbol:true})).toContain('𝑅1');
     expect(svgNotation('3/4 V',{x:0,y:0,fontSize:16})).toContain(' V</text>');
   });

@@ -96,3 +96,7 @@ interface SimulationResult {
 - 기준점은 존재하는 단자 또는 분기점을 참조하거나 `null`이다.
 
 가변저항의 저장 타입은 호환성을 위해 `resistive-load`를 사용한다. 두 단자와 `resistanceOhm` 속성은 일반 저항과 같으며, UI 이름·기호만 구분한다. 기존 파일의 ID·이름·값은 변경하지 않는다.
+
+출력 화살표의 v3 `Annotation.arrow`는 직선/직각 형태, 두 변 길이, 회전 각도, 방향 반전을 저장한다. 기존 v2 `end`는 호환용이며 공통 표기 모듈이 원래 선분을 복원한다. v1·v2 파일의 순차 변환은 ADR-012를 따른다.
+
+저장 v4의 선택적 `Annotation.presentation`은 출력 전용 기호·값 표시 속성이다. 기호의 기본값은 기존 content이며 이름·값 이동은 label/answerOffsetX/Y로 기록한다. v3→v4 복제 변환에서 기존 주석을 보존한다.

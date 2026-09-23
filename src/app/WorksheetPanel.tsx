@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowRight, CircleDot, MousePointer2, Type, Undo2, Redo2, Trash2 } from 'lucide-react';
+import { ArrowRight, CornerDownRight, CircleDot, MousePointer2, Type, Undo2, Redo2, Trash2 } from 'lucide-react';
+import { OutputNotationFields } from './OutputNotationFields';
+import { ArrowControls } from './ArrowControls';
 import { Notation } from './Notation';
 import { useDialogFocus } from './useDialogFocus';
 import type { CircuitDocument, SimulationResult } from '../domain';
 import type { Command } from '../editor';
-import { componentPresentation } from '../component-library';
+import { annotationPlacements, componentPresentation } from '../component-library';
 import { exportSvg, exportPng, copyPng, type ExportOptions } from '../export';
 import type { OutputTool } from './OutputCanvas';
 interface Props {
@@ -45,22 +47,15 @@ export function WorksheetPanel(props: Props) {
   const actual=component?componentPresentation({...component,properties:Object.fromEntries(Object.entries(component.properties).filter(([k])=>! /^(label|answer)/.test(k)))},props.result):null;
   return <section className="worksheet-panel"><h3>표시 설정</h3>
     {toolbar&&createPortal(<>
-      <div className="tool-group">{([{id:'select',label:'선택',Icon:MousePointer2},{id:'point',label:'점',Icon:CircleDot},{id:'arrow',label:'전류 화살표',Icon:ArrowRight},{id:'note',label:'글자',Icon:Type}] as const).map(({id,label,Icon})=><button key={id} title={label} aria-label={label} aria-pressed={props.tool===id} className={props.tool===id?'active':''} onClick={()=>props.onTool(id)}><Icon size={18}/></button>)}</div>
+      <div className="tool-group">{([{id:'select',label:'선택',Icon:MousePointer2},{id:'point',label:'점',Icon:CircleDot},{id:'arrow',label:'전류 화살표',Icon:ArrowRight},{id:'corner-arrow',label:'직각 전류 화살표',Icon:CornerDownRight},{id:'note',label:'글자',Icon:Type}] as const).map(({id,label,Icon})=><button key={id} title={label} aria-label={label} aria-pressed={props.tool===id} className={props.tool===id?'active':''} onClick={()=>props.onTool(id)}><Icon size={18}/></button>)}</div>
+      {annotation?.kind==='arrow'&&<ArrowControls key={annotation.id} annotation={annotation} position={annotationPlacements(doc).find(a=>a.annotation.id===annotation.id)??{x:0,y:0}} onChange={arrow=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{arrow}})}/>}
       <label className="output-font-scale"><Type size={17}/><input aria-label="글자 크기 배율" type="range" min="0.5" max="2" step="0.05" value={fontScale} onChange={e=>{setFontScale(e.target.valueAsNumber);props.onFontPreview(e.target.valueAsNumber);}} onPointerCancel={()=>{setFontScale(doc.output?.fontScale??1);props.onFontPreview(null);}} onPointerUp={scaleCommit} onKeyUp={scaleCommit} onBlur={scaleCommit}/><output>{Math.round(fontScale*100)}%</output></label>
       <div className="tool-group"><button aria-label="출력 실행 취소" disabled={!props.canUndo} onClick={props.undo}><Undo2 size={17}/></button><button aria-label="출력 다시 실행" disabled={!props.canRedo} onClick={props.redo}><Redo2 size={17}/></button></div>
       <button disabled={busy} onClick={()=>void output('preview')}>미리보기</button><button className="primary" disabled={busy} onClick={()=>void output('copy')}>그림 복사</button><details className="export-menu"><summary>파일 저장</summary><button disabled={busy} onClick={()=>void output('svg')}>SVG 저장</button><button disabled={busy} onClick={()=>void output('png')}>PNG 저장</button></details>
     </>,toolbar)}
-    {component&&<><h4><Notation symbol text={component.label}/></h4>{[{prefix:'label',label:'기호·이름',value:actual?.label},{prefix:'answer',label:'값',value:actual?.value}].map(({prefix,label,value})=>{
-      const visible=component.properties[prefix+'Visible']!==false&&component.properties[prefix+'Display']!=='hidden';
-      const blank=component.properties[prefix+'Blank']===true||component.properties[prefix+'Display']==='blank';
-      return <div className="output-notation" key={component.id+prefix}><div className="output-field-heading"><label htmlFor={'output-'+prefix}>{label}</label><input role="switch" aria-label={label+' 표시'} type="checkbox" checked={visible} onChange={e=>property({[prefix+'Visible']:e.target.checked,...(component.properties[prefix+'Display']==='hidden'?{[prefix+'Display']:component.properties[prefix+'Text']===undefined?'value':'custom'}:{})})}/></div>
-        <input id={'output-'+prefix} aria-label={label+' 출력 문자'} value={String(component.properties[prefix+'Text']??(component.properties[prefix+'Display']==='?'?'?':value??''))} maxLength={160} onChange={e=>property({[prefix+'Text']:e.target.value,[prefix+'Display']:'custom'})}/>
-        <label className="check-label"><input type="checkbox" checked={blank} onChange={e=>property({[prefix+'Blank']:e.target.checked,...(component.properties[prefix+'Display']==='blank'?{[prefix+'Display']:component.properties[prefix+'Text']===undefined?'value':'custom'}:{})})}/>빈칸 □</label>
-        <button className="output-reset" onClick={()=>property({[prefix+'OffsetX']:0,[prefix+'OffsetY']:0})}>위치 초기화</button>
-      </div>;
-    })}</>}
-    {annotation&&<div className="annotation-edit"><h4>{annotation.kind==='point'?'점':annotation.kind==='arrow'?'전류 화살표':'글자'}</h4><input aria-label="주석 내용 편집" value={annotation.content} maxLength={240} onChange={e=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{content:e.target.value}})}/><button aria-label="선택한 장식 삭제" onClick={()=>props.dispatch({type:'DeleteElements',ids:[annotation.id]})}><Trash2 size={16}/>삭제</button></div>}
-    <div className="annotation-list">{doc.annotations.filter(a=>a.visibility!=='hidden').map(a=><button key={a.id} className={annotation?.id===a.id?'active':''} onClick={()=>props.onSelect(a.id)}>{a.kind==='point'?'● ':a.kind==='arrow'?'→ ':''}<Notation symbol={a.kind==='point'||a.kind==='arrow'} text={a.content||'□'}/></button>)}</div>
+    {component&&<><h4><Notation symbol text={component.label}/></h4><OutputNotationFields properties={component.properties} label={actual?.label} value={actual?.value} onChange={property}/></>}
+    {annotation&&<div className="annotation-edit"><h4>{annotation.kind==='point'?'점':annotation.kind==='arrow'?'전류 화살표':'글자'}</h4>{annotation.kind==='arrow'?<OutputNotationFields key={annotation.id} properties={annotation.presentation??{}} label={annotation.content} value="" onChange={values=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{presentation:{...annotation.presentation,...values}}})}/>:<input aria-label="주석 내용 편집" value={annotation.content} maxLength={240} onChange={e=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{content:e.target.value}})}/>}<button aria-label="선택한 장식 삭제" onClick={()=>props.dispatch({type:'DeleteElements',ids:[annotation.id]})}><Trash2 size={16}/>삭제</button></div>}
+    <div className="annotation-list">{doc.annotations.filter(a=>a.visibility!=='hidden').map(a=><button key={a.id} className={annotation?.id===a.id?'active':''} onClick={()=>props.onSelect(a.id)}>{a.kind==='point'?'● ':a.kind==='arrow'?'→ ':''}<Notation symbol={a.kind==='point'||a.kind==='arrow'} text={String(a.presentation?.labelText??a.content)||'□'}/></button>)}</div>
     <div className="output-export-options">
       <label className="check-label"><input type="checkbox" role="switch" checked={options.showGround??false} onChange={e=>props.onOptions({...options,showGround:e.target.checked})}/>접지 표시</label>
       <label className="check-label"><input type="checkbox" role="switch" checked={options.background==='transparent'} onChange={e=>props.onOptions({...options,background:e.target.checked?'transparent':'white'})}/>투명 배경</label>

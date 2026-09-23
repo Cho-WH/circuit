@@ -56,7 +56,6 @@ export function notationTokens(text:string):NotationToken[] {
 export function symbolGlyphs(text:string):string {
   const separator=text.search(/[=≈:]/);
   if(separator>=0)return symbolGlyphs(text.slice(0,separator))+text.slice(separator);
-  if(/^\s*[+-]?(?:\d|\.\d)/.test(text))return text;
   return [...text].map(c=>{
     const code=c.codePointAt(0)!;
     if(c==='h')return 'ℎ';

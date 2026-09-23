@@ -466,7 +466,7 @@ describe("versioned JSON persistence", () => {
 
   it.each([
     ["malformed JSON", "{", "INVALID_JSON"],
-    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 3 }), "INVALID_DOCUMENT"],
+    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 5 }), "INVALID_DOCUMENT"],
     [
       "dangling semantic reference",
       JSON.stringify({
@@ -490,7 +490,7 @@ describe("versioned JSON persistence", () => {
   });
 
   it.each([
-    ["future version", { ...fixture("FIX-02"), version: 3 }],
+    ["future version", { ...fixture("FIX-02"), version: 5 }],
     [
       "dangling reference",
       {
@@ -512,7 +512,7 @@ describe("versioned JSON persistence", () => {
 
   it("does not write anything when asked to save an invalid document", () => {
     const storage = new MemoryStorage();
-    const invalid = { ...fixture("FIX-01"), version: 3 } as unknown as CircuitDocument;
+    const invalid = { ...fixture("FIX-01"), version: 5 } as unknown as CircuitDocument;
 
     const result = saveLocal(invalid, "auto", storage);
     expect(result.ok).toBe(false);
