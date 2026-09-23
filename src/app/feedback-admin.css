@@ -4,3 +4,8 @@
 .feedback-admin-intro{padding:36px 0 8px}.feedback-admin-intro h1{font-size:30px;letter-spacing:-1px;margin:9px 0 13px}.feedback-admin-intro>p:last-child{color:#777e6f;line-height:1.8}.feedback-admin-count{margin-top:24px;font-size:12px;color:#7b826f}
 .feedback-admin .feedback-post{padding:22px 14px}.feedback-admin .feedback-post-footer{flex-wrap:wrap;justify-content:flex-start;gap:18px}.feedback-admin-unavailable{padding:50px 18px;text-align:center;color:#6d7664;line-height:1.9}.feedback-admin-unavailable h2{font-size:18px;margin:15px 0 8px}
 @media(max-width:640px){.feedback-admin{padding:0 20px 30px}.feedback-admin-intro{padding-top:28px}.feedback-admin-intro h1{font-size:26px}.feedback-admin .feedback-post{padding:20px 8px}.feedback-admin .feedback-post-footer{gap:5px}.feedback-admin .feedback-post-footer time{width:100%}}
+.feedback-admin-auth { margin: 20px 0; padding: 18px; border: 1px solid #dfd8cb; border-radius: 12px; background: #fffdf8; }
+.feedback-admin-auth p { margin: 0 0 12px; }
+.feedback-admin-auth button + button { margin-left: 10px; }
+.feedback-admin-auth details { margin-bottom: 14px; }
+.feedback-admin-auth code { overflow-wrap: anywhere; }

@@ -1,0 +1,105 @@
+rules_version = '2';
+// feedbackPosts/{20-char ID}: nickname(1..20), content(1..2000), kind enum,
+// visibility enum, createdAt(timestamp, immutable), updatedAt/deletedAt(nullable timestamp),
+// authorUid(string, immutable), quotaDay(int, immutable), quotaSlot('1'..'3', immutable).
+// feedbackPublic/{same ID}: nickname, content, kind, visibility, createdAt, updatedAt ONLY.
+// feedbackQuotas/{uid}/days/{KST epoch day}/slots/{1|2|3}: postId + createdAt, immutable.
+// feedbackAdmins/{uid}: enabled(bool), provisioned by trusted management only.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function admin() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && exists(/databases/$(database)/documents/feedbackAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/feedbackAdmins/$(request.auth.uid)).data.enabled == true;
+    }
+    function validId(id) { return id is string && id.matches('^[A-Za-z0-9]{20}$'); }
+    function validDisplay(data) {
+      return data.keys().hasAll(['nickname', 'content', 'kind', 'visibility', 'createdAt', 'updatedAt'])
+        && data.nickname is string && data.nickname.size() > 0 && data.nickname.size() <= 20
+        && data.content is string && data.content.size() > 0 && data.content.size() <= 2000
+        && data.kind in ['review', 'idea', 'issue'] && data.visibility in ['public', 'private']
+        && data.createdAt is timestamp && (data.updatedAt == null || data.updatedAt is timestamp);
+    }
+    function validPost(data) {
+      return validDisplay(data)
+        && data.keys().hasAll(['authorUid', 'deletedAt', 'quotaDay', 'quotaSlot'])
+        && data.keys().hasOnly(['nickname', 'content', 'kind', 'visibility', 'createdAt', 'updatedAt', 'authorUid', 'deletedAt', 'quotaDay', 'quotaSlot'])
+        && data.authorUid is string && data.authorUid.size() > 0 && data.authorUid.size() <= 128
+        && (data.deletedAt == null || data.deletedAt is timestamp)
+        && data.quotaDay is int && data.quotaDay >= 0 && data.quotaDay < 1000000
+        && data.quotaSlot in ['1', '2', '3'];
+    }
+    function projection(data) {
+      return {'nickname': data.nickname, 'content': data.content, 'kind': data.kind,
+        'visibility': data.visibility, 'createdAt': data.createdAt, 'updatedAt': data.updatedAt};
+    }
+    function publicStateMatches(id, data) {
+      let path = /databases/$(database)/documents/feedbackPublic/$(id);
+      return data.visibility == 'public' && data.deletedAt == null
+        ? existsAfter(path) && getAfter(path).data == projection(data)
+        : !existsAfter(path);
+    }
+    function today() { return int((request.time.toMillis() + 32400000) / 86400000); }
+    function newSlotMatches(id, data) {
+      let path = /databases/$(database)/documents/feedbackQuotas/$(request.auth.uid)/days/$(string(data.quotaDay))/slots/$(data.quotaSlot);
+      return data.quotaDay == today() && !exists(path)
+        && getAfter(path).data.postId == id && getAfter(path).data.createdAt == request.time;
+    }
+    match /feedbackPosts/{id} {
+      allow read: if admin() || (owner(resource.data.authorUid) && resource.data.deletedAt == null);
+      allow create: if signedIn() && validId(id) && validPost(request.resource.data)
+        && owner(request.resource.data.authorUid)
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == null
+        && request.resource.data.deletedAt == null && newSlotMatches(id, request.resource.data)
+        && publicStateMatches(id, request.resource.data);
+      allow update: if owner(resource.data.authorUid) && validPost(request.resource.data)
+        && resource.data.deletedAt == null
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.quotaDay == resource.data.quotaDay
+        && request.resource.data.quotaSlot == resource.data.quotaSlot
+        && ((request.resource.data.deletedAt == null && request.resource.data.updatedAt == request.time)
+          || (request.resource.data.deletedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt'])))
+        && publicStateMatches(id, request.resource.data);
+      allow delete: if false;
+    }
+    function validPublic(data) {
+      return validDisplay(data) && data.visibility == 'public'
+        && data.keys().hasOnly(['nickname', 'content', 'kind', 'visibility', 'createdAt', 'updatedAt']);
+    }
+    function publicWriteMatches(id, data) {
+      let source = getAfter(/databases/$(database)/documents/feedbackPosts/$(id)).data;
+      return owner(source.authorUid) && source.deletedAt == null && source.visibility == 'public'
+        && data == projection(source);
+    }
+    match /feedbackPublic/{id} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && validId(id) && validPublic(request.resource.data)
+        && publicWriteMatches(id, request.resource.data);
+      allow delete: if signedIn()
+        && owner(getAfter(/databases/$(database)/documents/feedbackPosts/$(id)).data.authorUid)
+        && (getAfter(/databases/$(database)/documents/feedbackPosts/$(id)).data.deletedAt != null
+          || getAfter(/databases/$(database)/documents/feedbackPosts/$(id)).data.visibility == 'private');
+    }
+    match /feedbackQuotas/{uid}/days/{day}/slots/{slot} {
+      allow get: if owner(uid);
+      allow create: if owner(uid) && day == string(today()) && slot in ['1', '2', '3']
+        && request.resource.data.keys().hasAll(['postId', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['postId', 'createdAt'])
+        && validId(request.resource.data.postId) && request.resource.data.createdAt == request.time
+        && !exists(/databases/$(database)/documents/feedbackPosts/$(request.resource.data.postId))
+        && getAfter(/databases/$(database)/documents/feedbackPosts/$(request.resource.data.postId)).data.authorUid == uid
+        && getAfter(/databases/$(database)/documents/feedbackPosts/$(request.resource.data.postId)).data.quotaDay == today()
+        && getAfter(/databases/$(database)/documents/feedbackPosts/$(request.resource.data.postId)).data.quotaSlot == slot;
+      allow update, delete: if false;
+    }
+    match /feedbackAdmins/{uid} {
+      allow get: if owner(uid);
+      allow write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

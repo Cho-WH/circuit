@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowUpRight, Check, ChevronDown, Globe2, LockKeyhole, MessageCircle, PencilLine, Trash2, X } from 'lucide-react';
 import { feedbackLimits, type FeedbackDraft, type FeedbackError, type FeedbackGateway, type FeedbackKind, type FeedbackPost } from '../feedback';
-import { createBrowserFeedbackPreview } from '../feedback-local';
+import { createFirebaseFeedbackGateway } from '../feedback-firebase';
 import './feedback.css';
 import { FeedbackIdentityNotice } from './FeedbackIdentityNotice';
 
@@ -150,7 +150,7 @@ export function FeedbackBoard({ gateway, onClose }: { gateway: FeedbackGateway; 
         </article>)}</div>
         {loading && <p className="feedback-loading" role="status">이야기를 불러오는 중…</p>}
         {cursor && !loadError && <button type="button" className="feedback-more" disabled={loading || busy} onClick={() => void load(view, cursor)}>이야기 더 보기<ChevronDown size={16}/></button>}
-        <footer className="feedback-bottom"><span>이 브라우저에만 저장되는 미리보기입니다.</span></footer>
+        <footer className="feedback-bottom"><span>이름·학교명·연락처 등 개인정보는 글에 적지 말아 주세요.</span></footer>
       </div>
     </div>
   </dialog>;
@@ -171,6 +171,6 @@ function PostBody({ content }: { content: string }) {
 }
 
 export default function FeedbackFeature({ onClose }: { onClose: () => void }) {
-  const [ports] = useState(createBrowserFeedbackPreview);
-  return <FeedbackBoard gateway={ports.gateway} onClose={onClose}/>;
+  const [gateway] = useState(createFirebaseFeedbackGateway);
+  return <FeedbackBoard gateway={gateway} onClose={onClose}/>;
 }

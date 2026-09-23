@@ -30,6 +30,11 @@ jobs:
       - run: python tools/validate_specs.py
       - run: npm run check:boundaries
       - run: npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm run test:firestore
       - run: npm run build
         env:
           GITHUB_PAGES: 'true'

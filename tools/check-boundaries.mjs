@@ -25,8 +25,9 @@ const uiAndBrowserModules = new Set([
   "persistence",
   "shared-ui",
   "feedback-local",
+  "feedback-firebase",
 ]);
-const uiAndBrowserPackages = ["react", "react-dom", "three", "lucide-react"];
+const uiAndBrowserPackages = ["react", "react-dom", "three", "lucide-react", "firebase"];
 
 const importPattern =
   /(?:\b(?:import|export)\s+(?:type\s+)?(?:[^"']*?\s+from\s*)?|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g;

@@ -14,5 +14,8 @@ coverage/
 .DS_Store
 Thumbs.db
 *.log
+.firebase/
+.firebase-local/
+.tools/
 
 .pnpm-store/

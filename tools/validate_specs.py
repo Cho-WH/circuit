@@ -106,7 +106,10 @@ def validate_fixtures() -> list[str]:
     fixture_schema = load_json(ROOT / 'schemas/fixture.schema.json')
 
     validation_schema = deepcopy(fixture_schema)
-    validation_schema['properties']['document'] = circuit_schema
+    # Original physics fixtures remain v1; both supported formats must validate.
+    validation_schema['properties']['document'] = {
+        'oneOf': [load_json(ROOT / 'schemas/circuit-document-v1.schema.json'), circuit_schema]
+    }
     validator = Draft202012Validator(validation_schema)
 
     seen: set[str] = set()
@@ -128,7 +131,7 @@ def validate_markdown_links() -> list[str]:
     errors: list[str] = []
     link_pattern = re.compile(r'\[[^\]]+\]\(([^)]+)\)')
     for path in ROOT.rglob('*.md'):
-        if any(part in {'node_modules', '.git', 'dist', '.venv', '.npm-cli', '.pnpm-store'} for part in path.relative_to(ROOT).parts):
+        if any(part in {'node_modules', '.git', 'dist', '.venv', '.npm-cli', '.pnpm-store', '.tools', '.firebase-local'} for part in path.relative_to(ROOT).parts):
             continue
         text = path.read_text(encoding='utf-8')
         for target in link_pattern.findall(text):

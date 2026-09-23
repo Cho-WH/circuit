@@ -26,7 +26,7 @@ function setup(doc=fixture()) {
 }
 describe('context wiring commands and state',()=>{
   it('commits a branch origin with its connection in one undo step, preserving every bend',()=>{
-    const doc=fixture(),history=createHistory(doc);
+    const doc=fixture(),before=structuredClone(doc),history=createHistory(doc);
     const commands=connectionCommands(doc,{kind:'wire',wireId:'W2',point:{x:600,y:80}},endpointTarget(doc,{kind:'terminal',id:'V1.a'}));
     const result=executeCommands(history,commands);expect(result.ok).toBe(true);if(!result.ok)return;
     const next=result.history.present;
@@ -35,7 +35,7 @@ describe('context wiring commands and state',()=>{
     const joined=[...wirePoints(next,split[0]),...wirePoints(next,split[1]).slice(1)];
     expect(compactWirePoints(joined)).toEqual(compactWirePoints(wirePoints(doc,doc.wires[1])));
     expect(undo(result.history).present).toEqual(doc);expect(redo(undo(result.history)).present).toEqual(next);
-    expect(doc).toEqual(source);
+    expect(doc).toEqual(before);
   });
   it.each([100,500])('connects two points on either half of the same wire (end x=%s)',x=>{
     const doc=emptyDocument('same wire');doc.junctions=[{id:'A',position:{x:0,y:0}},{id:'B',position:{x:600,y:0}}];doc.wires=[{id:'W',start:{kind:'junction',id:'A'},end:{kind:'junction',id:'B'},waypoints:[]}];
