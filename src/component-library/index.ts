@@ -35,6 +35,60 @@ export function wirePoints(document: CircuitDocument, wire: Wire): Point[] {
   return [start, ...(wire.waypoints.length ? wire.waypoints : start.x === end.x || start.y === end.y ? [] : [{ x: start.x, y: end.y }]), end];
 }
 export const pointsAttribute = (points: Point[]) => points.map(p => `${p.x},${p.y}`).join(' ');
+export interface WireCrossing { point: Point; horizontalId: string; verticalId: string; horizontalSegment: number; verticalSegment: number }
+/** Geometry is only a hit target / drawing aid; electrical connections still use IDs. */
+export function compactWirePoints(points: Point[]): Point[] {
+  const result: Point[] = [];
+  for (const p of points) {
+    if (result.at(-1)?.x === p.x && result.at(-1)?.y === p.y) continue;
+    while (result.length >= 2) {
+      const a = result.at(-2)!, b = result.at(-1)!;
+      if ((a.x === b.x && b.x === p.x && (b.y-a.y)*(p.y-b.y)>=0) || (a.y === b.y && b.y === p.y && (b.x-a.x)*(p.x-b.x)>=0)) result.pop();
+      else break;
+    }
+    result.push(p);
+  }
+  return result;
+}
+export function wireCrossings(document: CircuitDocument): WireCrossing[] {
+  const segments = document.wires.flatMap(w => {
+    const points = compactWirePoints(wirePoints(document, w));
+    return points.slice(1).map((b, i) => ({ id: w.id, a: points[i], b, i }));
+  });
+  const crossings: WireCrossing[] = [];
+  for (const h of segments.filter(s => s.a.y === s.b.y)) for (const v of segments.filter(s => s.a.x === s.b.x)) {
+    if (h.id === v.id) continue;
+    const p = { x: v.a.x, y: h.a.y };
+    if (p.x > Math.min(h.a.x,h.b.x) && p.x < Math.max(h.a.x,h.b.x) && p.y > Math.min(v.a.y,v.b.y) && p.y < Math.max(v.a.y,v.b.y)) {
+      crossings.push({ point:p, horizontalId:h.id, verticalId:v.id, horizontalSegment:h.i, verticalSegment:v.i });
+    }
+  }
+  return crossings.sort((a,b)=>a.point.x-b.point.x || a.point.y-b.point.y || a.horizontalId.localeCompare(b.horizontalId));
+}
+/** Horizontal wires bridge vertical wires. No opaque mask, including transparent PNG/SVG. */
+export function wirePath(document: CircuitDocument, wire: Wire, crossings = wireCrossings(document)): string {
+  const points = compactWirePoints(wirePoints(document, wire));
+  let path = `M${points[0].x} ${points[0].y}`;
+  for (let i=0;i<points.length-1;i++) {
+    const a=points[i], b=points[i+1], direction=Math.sign(b.x-a.x);
+    const hits = [...new Set(crossings.filter(c=>c.horizontalId===wire.id && c.horizontalSegment===i).map(c=>c.point.x))].sort((x,y)=>direction*(x-y));
+    hits.forEach((x,j)=>{
+      const radius=Math.min(7,Math.abs(x-a.x)/2,Math.abs(x-b.x)/2,j?Math.abs(x-hits[j-1])/3:7,j<hits.length-1?Math.abs(x-hits[j+1])/3:7);
+      path+=` L${x-direction*radius} ${a.y} A${radius} ${radius} 0 0 ${direction>0?1:0} ${x+direction*radius} ${a.y}`;
+    });
+    path+=` L${b.x} ${b.y}`;
+  }
+  return path;
+}
+export function endpointName(document: CircuitDocument, id: string): string {
+  for (const c of document.components) {
+    const i=c.terminals.findIndex(t=>t.id===id);
+    if(i<0)continue;
+    const t=c.terminals[i], p=terminalPosition(c,i), other=terminalPosition(c,i===0?1:0);
+    return `${c.label} · ${t.role==='positive'?'＋극':t.role==='negative'?'−극':p.x!==other.x?(p.x<other.x?'왼쪽':'오른쪽'):(p.y<other.y?'위쪽':'아래쪽')} 단자`;
+  }
+  return document.junctions.some(j=>j.id===id) ? `분기점 ${id}` : id;
+}
 export const escapeXml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 export function formatQuantity(value: number | undefined, unit: string): string {
   if (value === undefined || !Number.isFinite(value)) return `— ${unit}`;

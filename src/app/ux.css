@@ -1,0 +1,121 @@
+/* Circuit-first workspace: supporting controls stay within reach without fixed sidebars. */
+.workspace-actions{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 18px;border-bottom:1px solid var(--border);background:#fff;font-size:12px;color:#53647a;flex-shrink:0}
+.workspace-actions>button:last-child{margin-left:auto;background:#edf3fc;color:#2858a4}
+.workspace-actions>span{overflow-wrap:anywhere}
+.library-panel{width:194px;padding:18px 14px}
+.inspector-panel{width:280px;padding:18px}
+.modebar{min-height:54px;height:auto;align-items:stretch}
+.mode-tabs button{min-height:52px;font-size:14px}
+.mode-meta,.presentation-toggle{align-self:center}
+.brand small{letter-spacing:0;font-weight:500}
+.top-actions button{font-size:12px}
+.mode-potential .canvas-column{overflow:hidden}
+.potential-controls{min-height:48px}
+.graph-panel{max-height:210px}
+.canvas-diagnostics{flex-shrink:0;background:#f5f8fc;color:#425773;border-top:1px solid #d9e2ec;max-height:145px;overflow:auto;font-size:12px;padding:9px 18px}
+.canvas-diagnostics summary{cursor:pointer;font-weight:650}
+.canvas-diagnostics>div{padding-top:9px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.canvas-diagnostics p{line-height:1.6;flex:1;min-width:220px}
+.canvas-diagnostics button{color:#2456a3;border:1px solid #bbcde8;background:white}
+.inline-value-editor{position:absolute;z-index:6;width:280px;max-width:calc(100% - 16px);padding:12px;background:white;border:1px solid #7d9fce;border-radius:10px;box-shadow:0 6px 22px #16365b26;color:#293e59}
+.inline-value-editor label{display:block;font-size:13px;font-weight:700;margin-bottom:8px}
+.inline-value-editor>div{display:flex;align-items:center;gap:6px}
+.inline-value-editor input{min-width:0;width:100%;font-size:16px;padding:8px}
+.inline-value-editor button{flex-shrink:0;padding:8px;font-size:12px;min-height:36px}
+.inline-value-editor p{font-size:12px;line-height:1.6;color:#a0292c;margin-top:8px}
+.canvas-selection-tools{position:absolute;top:12px;right:16px;display:flex;flex-wrap:wrap;gap:3px;border:1px solid #d3deeb;background:white;border-radius:8px;box-shadow:0 3px 10px #172e4810;padding:3px}
+.canvas-selection-tools button{font-size:12px;min-height:34px;color:#324d71}
+.placement-status{position:absolute;top:12px;left:12px;right:12px;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border:1px solid #aac5ef;border-radius:8px;background:#f3f7ff;color:#254e8d;font-size:12px}
+.placement-status button{background:white;border:1px solid #c5d5eb;padding:6px 10px}
+.placement-status button[aria-pressed=true]{background:#3269dd;color:white}
+.worksheet-topbar{position:relative;flex-wrap:wrap;flex-shrink:0;padding:9px 16px;gap:8px;background:#f6f8fc;min-height:58px}
+.worksheet-topbar .worksheet-modes{width:auto;margin-right:auto}
+.worksheet-topbar button{margin:0;min-height:36px;font-size:13px}
+.worksheet-topbar .primary{color:white;background:var(--blue)}
+.export-menu{position:relative;font-size:12px}
+.export-menu summary{padding:10px;cursor:pointer;color:#324f75}
+.export-menu[open]{z-index:8}
+.export-menu[open] button{position:absolute;top:38px;right:0;width:130px;background:white;border:1px solid #cbd7e6;border-radius:0;box-shadow:0 4px 12px #29426122}
+.export-menu[open] button+button{top:75px}
+.record-retention{color:#4c6079;font-size:12px;line-height:1.7;padding:10px 12px;background:#edf3fa;border-radius:7px}
+.sweep-entry{font-size:12px;border:1px solid #bacde8;color:#2f5890}
+.mode-worksheet .inspector-panel>.selected-component{margin-top:10px}
+.canvas-status{color:#52647a;font-size:12px;min-height:38px;height:auto;flex-wrap:wrap;padding:8px 16px;gap:8px 18px}
+.calc-status{color:#267058}.calc-status.warning{color:#86571c}
+.modebar button:focus-visible{outline:3px solid #245ebc;outline-offset:3px}
+/* Emphasis follows the symbol contours, never a filled selection rectangle. */
+.component-lift{transform-box:fill-box;transform-origin:center;transition:transform 260ms cubic-bezier(.2,1.5,.4,1)}
+.component-ink{transition:stroke 160ms ease,color 160ms ease,stroke-width 160ms ease,filter 200ms ease}
+.circuit-element[data-highlighted=true] .component-ink{stroke:#355580;color:#355580;stroke-width:3;filter:drop-shadow(0 2px 3px #25476f55)}
+.circuit-element[data-selected=true] .component-lift{transform:translateY(-2px) scale(1.055)}
+.circuit-element[data-selected=true] .component-ink{stroke:#174895;color:#174895;stroke-width:3.5;filter:drop-shadow(0 3px 3px #193e7866) drop-shadow(0 0 1px #17489533)}
+.circuit-element[data-selected=true]>.editable-value{fill:#174895;font-weight:650}
+.wire-ink,.annotation-element>text{transition:stroke-width 200ms ease,filter 200ms ease,fill 160ms ease}
+.annotation-element[data-selected=true]>text{fill:#174895;filter:drop-shadow(0 2px 2px #193e7855)}
+@media(hover:hover) and (pointer:fine){
+  .circuit-element:hover .component-lift{transform:translateY(-1.5px) scale(1.035)}
+  .circuit-element:hover .component-ink{stroke:#31547f;color:#31547f;stroke-width:3.1;filter:drop-shadow(0 2px 3px #25476f66)}
+  .circuit-element[data-selected=true]:hover .component-lift{transform:translateY(-2px) scale(1.055)}
+  .circuit-element[data-selected=true]:hover .component-ink{stroke:#174895;color:#174895;stroke-width:3.5;filter:drop-shadow(0 3px 3px #193e7877) drop-shadow(0 0 1px #17489533)}
+  .wire-element:hover .wire-ink{stroke-width:4;filter:drop-shadow(0 2px 2px #25476f80)}
+  .annotation-element:hover>text{fill:#31547f;filter:drop-shadow(0 2px 2px #25476f66)}
+}
+.circuit-canvas [role=button]:focus{outline:none}
+.component:focus-visible .component-ink{stroke:#245ebc;color:#245ebc;stroke-width:3.5;filter:drop-shadow(0 0 3px #245ebc70)}
+.wire-element:has(>.wire-hit:focus-visible) .wire-ink{stroke-width:4.5;filter:drop-shadow(0 0 3px #245ebc70)}
+.terminal:focus-visible circle:last-of-type{r:7px;stroke:#245ebc;stroke-width:2.5;filter:drop-shadow(0 0 3px #245ebc70)}
+.annotation-element:focus-visible>text,.editable-value:focus-visible{fill:#245ebc;text-decoration:underline;text-underline-offset:4px}
+.circuit-canvas [role=button]:focus-visible>circle{filter:drop-shadow(0 0 3px #245ebc70)}
+@media(prefers-reduced-motion:reduce){.circuit-element .component-lift{transform:none!important;transition:none}}
+.crossing-state{position:absolute;z-index:6;padding:5px 9px;background:#fff;border:1px solid #bed0e9;border-radius:9px;box-shadow:0 3px 10px #193e7820;font-size:12px;font-weight:650;color:#173f7a;pointer-events:none}
+.wiring-icons{position:absolute;z-index:7;top:12px;right:12px;display:flex;gap:6px}
+.wiring-icons button{width:44px;height:44px;padding:0;border:1px solid #bed0e9;border-radius:50%;background:white;box-shadow:0 3px 10px #193e7820;color:#174895}
+.wiring-icons button.primary{background:#174895;color:white}
+.wiring-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.smart-wiring .terminal[data-active=true] circle:last-of-type{r:7px;stroke:#174895;stroke-width:2;filter:drop-shadow(0 2px 3px #193e7866)}
+.smart-wiring .circuit-element:not([data-selected=true]):has(.terminal[data-active=true]) .component-lift{transform:none}
+.smart-wiring .circuit-element:not([data-selected=true]):has(.terminal[data-active=true]) .component-ink{stroke:#263548;color:#263548;stroke-width:2.5;filter:none}
+@media(max-width:1000px){
+  .inspector-panel{position:absolute;right:0;top:0;bottom:0;width:285px;z-index:10;box-shadow:-8px 0 28px #283e5720}
+  .workspace{position:relative}
+  .details-open .workspace-actions>button:last-child{margin-right:285px}
+  .top-actions button{font-size:0}
+  .mode-meta{display:none}
+}
+@media(max-width:640px){
+  .topbar{height:auto;min-height:68px;padding:10px;flex-wrap:wrap;gap:8px}
+  .document-heading{flex:1;min-width:180px}
+  .document-heading input{max-width:100%;font-size:14px}
+  .document-heading>span{font-size:12px}
+  .top-actions{gap:4px}
+  .top-actions button{min-width:34px;min-height:34px}
+  .mode-tabs{gap:12px}.mode-tabs button{font-size:12px;min-height:46px}
+  .modebar{min-height:46px}
+  .library-panel{width:100%;padding:8px;gap:8px}
+  .component-tile{min-width:66px;font-size:12px;height:72px}
+  .tile-symbol{height:28px}
+  .canvas-column{height:600px}
+  .mode-potential .canvas-column{height:680px}
+  .mode-worksheet .canvas-column{height:590px}
+  .workspace-actions{padding:6px 10px;gap:8px;min-height:42px}
+  .workspace-actions>span{display:none}
+  .details-open .workspace-actions>button:last-child{margin-right:0}
+  .inspector-panel{position:static;width:100%;box-shadow:none}
+  .editor-toolbar{overflow-x:auto;gap:4px;min-height:50px}
+  .tool-group button{min-width:34px;min-height:36px}
+  .toolbar-separator{display:none}.tidy-button{white-space:nowrap}
+  .canvas-selection-tools{top:36px;left:10px;right:auto}
+  .canvas-caption{top:12px;left:12px;font-size:12px}
+  .canvas-status{font-size:12px;gap:6px;padding:8px 10px}
+  .reference-label{margin-left:auto}
+  .worksheet-topbar{padding:8px;gap:6px}
+  .worksheet-topbar button{padding:7px 9px;font-size:12px}
+  .worksheet-topbar .worksheet-modes{margin-right:0}
+  .export-menu summary{padding:8px}
+  .canvas-diagnostics{max-height:140px;padding:8px 10px}
+  .canvas-diagnostics p{min-width:0;flex-basis:100%}
+  .hint-strip{font-size:12px;line-height:1.6}
+  .graph-note{min-width:0;font-size:12px}
+  .potential-controls{gap:8px;padding:8px}
+  .potential-legend{width:auto;margin-left:auto}
+}

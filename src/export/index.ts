@@ -3,7 +3,8 @@ import {
   componentPresentation,
   endpointPosition,
   escapeXml,
-  pointsAttribute,
+  wirePath,
+  wireCrossings,
   symbolMarkup,
   terminalPosition,
   wirePoints,
@@ -258,8 +259,9 @@ function createSvgExport(
   }
   chunks.push('<g font-family="Arial, sans-serif">');
 
+  const crossings=wireCrossings(document);
   for (const wire of document.wires) {
-    chunks.push(`<polyline points="${pointsAttribute(wirePoints(document, wire))}" fill="none" stroke="${colors.ink}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`);
+    chunks.push(`<path d="${wirePath(document, wire, crossings)}" fill="none" stroke="${colors.ink}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`);
   }
 
   for (const component of document.components) {

@@ -1,0 +1,100 @@
+{
+  "date": "2026-09-23",
+  "commit": "9e9a00e",
+  "viewport": {
+    "width": 1536,
+    "height": 695
+  },
+  "observations": [
+    {
+      "areaRatio": 0.4259165288161317,
+      "canvasHeight": 432.2000122070313,
+      "canvasWidth": 1052,
+      "mode": "build",
+      "viewportHeight": 695,
+      "viewportWidth": 1536
+    },
+    {
+      "areaRatio": 0.23611661272940876,
+      "canvasHeight": 239.6000061035156,
+      "canvasWidth": 1052,
+      "mode": "potential-2d",
+      "viewportHeight": 695,
+      "viewportWidth": 1536
+    },
+    {
+      "areaRatio": 0.36509744343426015,
+      "canvasHeight": 312.8000183105469,
+      "canvasWidth": 1246,
+      "mode": "measure",
+      "viewportHeight": 695,
+      "viewportWidth": 1536
+    }
+  ],
+  "contrast": [
+    {
+      "background": "rgb(255, 255, 255)",
+      "fontSize": "12px",
+      "foreground": "rgb(139, 150, 166)",
+      "ratio": 2.9953072984456246,
+      "selector": ".mode-tabs button:not(.active)",
+      "text": "전위 보기"
+    },
+    {
+      "background": "rgb(255, 255, 255)",
+      "fontSize": "11px",
+      "foreground": "rgb(138, 149, 165)",
+      "ratio": 3.0333864715834995,
+      "selector": ".library-panel .muted",
+      "text": "선택한 뒤 캔버스에 놓으세요"
+    },
+    {
+      "background": "rgb(245, 247, 250)",
+      "fontSize": "9px",
+      "foreground": "rgb(154, 166, 181)",
+      "ratio": 2.3031833084280913,
+      "selector": ".hint-strip",
+      "text": "Shift+클릭 복수 선택 · 방향키 이동 · R 회전 · W 배선 · Ctrl+Z 실행 취소"
+    },
+    {
+      "background": "rgb(255, 255, 255)",
+      "fontSize": "10px",
+      "foreground": "rgb(153, 163, 177)",
+      "ratio": 2.552197610222487,
+      "selector": ".document-heading>span",
+      "text": "자동 저장됨"
+    }
+  ],
+  "recordReload": {
+    "before": 1,
+    "after": 0,
+    "circuitRestored": true,
+    "scope": "isolated local port 5174, synthetic record"
+  },
+  "worksheetCopyButton": {
+    "top": 876.8,
+    "bottom": 911.8,
+    "viewportHeight": 695,
+    "state": "R1 selected, inspector top"
+  },
+  "mobile": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "valueEdit": {
+      "scrollY": 573.6,
+      "canvasTop": -296,
+      "canvasBottom": 112,
+      "inputTop": 403.8,
+      "inputBottom": 440.6
+    },
+    "scope": "desktop Chrome CSS viewport; no physical touch or mobile keyboard"
+  },
+  "limitations": [
+    "200% browser zoom not verified",
+    "No physical phone/tablet or projector test",
+    "No user timing study",
+    "Competitor full circuit/export not tested"
+  ]
+}

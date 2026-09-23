@@ -8,6 +8,7 @@ import { examples } from '../src/fixtures';
 import { createComponent } from '../src/component-library';
 import { createHistory, executeCommand } from '../src/editor';
 import type { Point } from '../src/domain';
+import { emptyDocument } from '../src/domain';
 
 let root: Root;
 let host: HTMLDivElement;
@@ -40,7 +41,7 @@ function setup(overrides: Partial<CanvasProps> = {}) {
     render({ document: history.present });
   });
   let props: CanvasProps = {
-    document: history.present, selected: [], tool: 'select', placement: null, wireStart: null,
+    document: history.present, selected: [], tool: 'select', placement: null,
     onSelect: () => {}, onMove, onPlace: vi.fn(), onEndpoint: () => {}, onWire: () => {},
     onValue: () => {}, onSwitch: () => {}, onBackground: () => {}, ...overrides,
   };
@@ -69,8 +70,33 @@ function setup(overrides: Partial<CanvasProps> = {}) {
 }
 
 describe('live canvas drag geometry', () => {
+  it('edits a value next to the circuit, keeps invalid input open and cancels with Escape',()=>{
+    const commit=vi.fn(()=>true),c=setup({onCommitValue:commit});
+    const value=host.querySelector('[aria-label="R1 값 편집"]')!;
+    act(()=>value.dispatchEvent(new MouseEvent('click',{bubbles:true})));
+    let input=host.querySelector<HTMLInputElement>('[aria-label="R1 회로 위 값"]')!;
+    expect(input).not.toBeNull();expect(document.activeElement).toBe(input);
+    const change=(text:string)=>act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));});
+    change('wrong');act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(commit).not.toHaveBeenCalled();expect(input.getAttribute('aria-invalid')).toBe('true');
+    change('1k');act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',1000);expect(host.querySelector('.inline-value-editor')).toBeNull();
+    act(()=>value.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
+    input=host.querySelector<HTMLInputElement>('[aria-label="R1 회로 위 값"]')!;
+    act(()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
+    expect(host.querySelector('.inline-value-editor')).toBeNull();expect(commit).toHaveBeenCalledTimes(1);
+    expect(c.onMove).not.toHaveBeenCalled();
+  });
+  it('shows the actual source symbol and vertical terminals before placement',()=>{
+    const c=setup({placement:'dc-voltage-source'});
+    c.pointer(c.svg,'pointermove',500,400);
+    const preview=host.querySelector('[aria-label="부품 배치 미리보기"]')!;
+    expect(preview.innerHTML).toContain('rotate(90)');
+    expect([...preview.querySelectorAll('circle')].map(x=>[x.getAttribute('cx'),x.getAttribute('cy')])).toEqual([['500','356'],['500','444']]);
+    expect(preview.textContent).toContain('+');
+  });
   it.each(['mouse', 'touch'])('keeps all existing routes throughout an unconnected R3 %s drag', pointerType => {
-    const c = setup();
+    const c = setup({ selected: ['R3'] });
     const before = c.paths();
     c.pointer(c.component('R3'), 'pointerdown', 440, 400, 1, pointerType);
     for (const [x, y] of [[442, 403], [480, 420], [600, 500]]) {
@@ -140,6 +166,61 @@ describe('live canvas drag geometry', () => {
     expect(c.onMove).not.toHaveBeenCalled();
     c.pointer(c.svg, 'pointerup', 480, 440);
     expect(c.onMove).toHaveBeenCalledExactlyOnceWith({ R3: { x: 480, y: 440 } });
+  });
+
+  it('pans from an unselected component on touch without moving or selecting a wire', () => {
+    const commit=vi.fn(()=>true), onWire=vi.fn();
+    const c=setup({onWiringCommit:commit,onWire});
+    const before=c.svg.getAttribute('viewBox');
+    c.pointer(c.component('R3'),'pointerdown',440,400,1,'touch');
+    c.pointer(c.svg,'pointermove',500,440,1,'touch');
+    c.pointer(c.svg,'pointerup',500,440,1,'touch');
+    act(()=>c.svg.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:500,clientY:440})));
+    expect(c.svg.getAttribute('viewBox')).not.toBe(before);
+    expect(c.onMove).not.toHaveBeenCalled();expect(commit).not.toHaveBeenCalled();expect(onWire).not.toHaveBeenCalled();
+  });
+
+  it('routes actual touch taps through start, wire preview, and explicit confirmation', () => {
+    const doc=emptyDocument('touch');doc.components=[createComponent('resistor','A',{x:200,y:400}),createComponent('resistor','B',{x:800,y:400})];
+    doc.wires=[{id:'W',start:{kind:'terminal',id:'A.b'},end:{kind:'terminal',id:'B.a'},waypoints:[]}];
+    const commit=vi.fn(()=>true),c=setup({document:doc,onWiringCommit:commit});
+    const tap=(x:number,y:number)=>{c.pointer(c.svg,'pointerdown',x,y,1,'touch');c.pointer(c.svg,'pointerup',x,y,1,'touch');act(()=>c.svg.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:x,clientY:y})));};
+    tap(156,400);expect(host.querySelector('[aria-label="배선 취소"]')).not.toBeNull();
+    expect(host.querySelector('.wiring-status,.wiring-hint')).toBeNull();
+    tap(500,400);expect(commit).not.toHaveBeenCalled();
+    const confirm=host.querySelector<HTMLButtonElement>('[aria-label="여기에 연결"]')!;
+    expect(confirm).toBeDefined();act(()=>confirm.click());expect(commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps touch endpoint selection available in measurement mode', () => {
+    const onEndpoint=vi.fn(),c=setup({readOnly:true,onEndpoint});
+    const terminal=host.querySelector('[data-endpoint-id]')!;
+    c.pointer(terminal,'pointerdown',100,100,1,'touch');c.pointer(c.svg,'pointerup',100,100,1,'touch');
+    act(()=>terminal.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:100,clientY:100})));
+    expect(onEndpoint).toHaveBeenCalledExactlyOnceWith({kind:'terminal',id:terminal.getAttribute('data-endpoint-id')});
+  });
+
+  it('forgets a canceled touch navigation session after window blur',()=>{
+    const c=setup({selected:['R3'],onWiringCommit:vi.fn(()=>true)});
+    c.pointer(c.svg,'pointerdown',50,50,1,'touch');
+    act(()=>window.dispatchEvent(new Event('blur')));
+    c.pointer(c.component('R3'),'pointerdown',440,400,2,'touch');
+    c.pointer(c.svg,'pointermove',480,440,2,'touch');c.pointer(c.svg,'pointerup',480,440,2,'touch');
+    expect(c.onMove).toHaveBeenCalledExactlyOnceWith({R3:{x:480,y:440}});
+  });
+
+  it('cancels a selected component drag when a second touch begins, with no edit after pinch release', () => {
+    const commit=vi.fn(()=>true),c=setup({selected:['R3'],onWiringCommit:commit});
+    Object.assign(c.svg,{getBoundingClientRect:()=>({left:0,top:0,width:1000,height:620})});
+    c.pointer(c.component('R3'),'pointerdown',440,400,1,'touch');
+    c.pointer(c.svg,'pointermove',480,440,1,'touch');
+    c.pointer(c.svg,'pointerdown',600,400,2,'touch');
+    c.pointer(c.svg,'pointermove',700,400,2,'touch');
+    c.pointer(c.svg,'pointerup',700,400,2,'touch');
+    c.pointer(c.svg,'pointerup',480,440,1,'touch');
+    act(()=>c.svg.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:480,clientY:440})));
+    expect(c.onMove).not.toHaveBeenCalled();expect(commit).not.toHaveBeenCalled();
+    expect(c.svg.getAttribute('viewBox')).not.toContain('NaN');
   });
 
   it.each(['document', 'tool', 'readOnly'])('invalidates stale movement when %s changes', change => {

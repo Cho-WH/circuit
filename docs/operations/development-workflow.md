@@ -38,6 +38,21 @@
 
 ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 
+## 로컬 검증
+
+변경 영향에 맞는 검사만 실행하고 결과를 [작업 추적](../implementation/mvp-tracker.md)에 기록한다. 동일한 코드 상태의 전체 테스트·빌드를 반복하지 않는다. 실패 수정이나 새 변경이 있으면 해당 범위를 다시 확인한다.
+
+| 대상 | 명령·확인 |
+|---|---|
+| 기능 변경 | `npm test -- tests/<관련 파일>.test.ts`, 변경에 맞는 실제 조작 확인 |
+| 타입 | `npm run typecheck`. 같은 상태에서 `npm run build`를 실행하면 타입 검사가 포함됨 |
+| 모듈 의존 | `npm run check:boundaries` 또는 해당 검사가 포함된 명세 테스트 |
+| 요구사항·스키마·fixture | `python -m pip install -r requirements.txt` 후 `python tools/validate_specs.py` |
+| 문서 정리만 변경 | 변경한 링크·앵커와 삭제 문서의 남은 참조 확인. 코드 테스트·빌드 생략 |
+| 배포 산출물 | `npm run build`; Pages 경로는 `GITHUB_PAGES=true` 적용 |
+
+계산 변경은 관련 fixture·물리 불변식, 편집 변경은 실행 취소·다시 실행, 출력 변경은 실제 SVG·PNG를 확인한다. 실제 사용자·기기 검증과 자동화·브라우저 크기 검증을 구분해 기록한다. 새 요청 전까지 메인이 직접 구현·검증하며 예전 에이전트 분담은 이력에만 남긴다.
+
 ## 릴리스
 
 | 릴리스 | 포함 단계 | 공개 기준 |
@@ -52,7 +67,7 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 ## 배포와 장애 대응
 
 - 정적 호스팅과 자동 빌드를 우선한다.
-- 배포 전에 단위·통합·E2E·출력 스냅샷을 실행한다.
+- 배포 CI는 아래 명세·경계·테스트·타입·빌드 게이트를 실행한다. 로컬에서는 변경에 필요한 사용자 흐름과 출력만 추가 확인한다.
 - 앱 정보에 빌드 버전과 문서 스키마 버전을 함께 표시한다.
 - 이전 안정 배포를 유지한다.
 - 핵심 자산과 파일 입출력은 서버 API에 의존하지 않는다.
@@ -61,3 +76,9 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 ### MVP 정적 사이트 게시
 
 GitHub Pages + Actions로 `codex/mvp`의 검증된 `dist`를 게시한다. URL은 https://cho-wh.github.io/circuit/ 이다. `GITHUB_PAGES=true`는 배포 빌드에만 적용한다. `github-pages` 환경은 이 브랜치만 허용하고 deploy job에만 `pages: write`, `id-token: write`를 부여한다. 빌드 검증 실패 시 배포 job을 실행하지 않는다. 단계 6의 학생 활동·공유 서버 기능과 별개인 현재 정적 MVP의 게시다.
+
+`codex/mvp` push 또는 수동 실행 시 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 명세 검증 → 모듈 경계 → `npm test` → `npm run build`(타입 포함)를 수행한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**를 사용한다. 게시 브랜치를 바꿀 때 push 대상·build 조건·github-pages 환경의 허용 브랜치를 함께 바꾼다.
+
+배포 빌드는 `/circuit/`, 로컬 개발은 `/` 경로다. 빌드 결과만 업로드하며 소스·테스트·브라우저 저장 데이터는 배포하지 않는다. 다른 기기로 회로를 옮길 때는 JSON을 사용한다.
+
+배포 실패 시 Actions의 **Deploy GitHub Pages** 로그를 확인한다. 재배포는 해당 실행의 Re-run jobs를 사용한다. 회귀가 있으면 문제 커밋을 되돌리는 새 커밋을 배포 브랜치에 푸시한다. 로컬 구현·푸시·Actions 성공·공개 사이트 확인을 서로 다른 상태로 기록한다.

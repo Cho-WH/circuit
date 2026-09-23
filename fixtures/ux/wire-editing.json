@@ -1,0 +1,12 @@
+{
+  "format": "edu-circuit", "version": 1, "documentId": "ux-wire-editing", "title": "도선 삽입·교차 연결 연습",
+  "components": [
+    {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":200,"y":340},"rotation":90,"properties":{"voltageV":9},"terminals":[{"id":"V1.a","role":"positive"},{"id":"V1.b","role":"negative"}]},
+    {"id":"R1","type":"resistor","label":"R1","position":{"x":680,"y":340},"rotation":0,"properties":{"resistanceOhm":3},"terminals":[{"id":"R1.a","role":"a"},{"id":"R1.b","role":"b"}]}
+  ],
+  "wires": [
+    {"id":"W1","start":{"kind":"terminal","id":"V1.a"},"end":{"kind":"terminal","id":"R1.a"},"waypoints":[{"x":200,"y":180},{"x":636,"y":180}]},
+    {"id":"W2","start":{"kind":"terminal","id":"R1.b"},"end":{"kind":"terminal","id":"V1.b"},"waypoints":[{"x":800,"y":340},{"x":800,"y":80},{"x":400,"y":80},{"x":400,"y":450},{"x":200,"y":450}]}
+  ],
+  "junctions": [], "annotations": [], "referenceNode":{"kind":"terminal","id":"V1.b"}, "activity":null
+}

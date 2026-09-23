@@ -13,6 +13,7 @@ const coreModules = new Set([
   "simulation",
   "diagnostics",
   "activity",
+  "feedback",
 ]);
 const uiAndBrowserModules = new Set([
   "app",
@@ -23,6 +24,7 @@ const uiAndBrowserModules = new Set([
   "export",
   "persistence",
   "shared-ui",
+  "feedback-local",
 ]);
 const uiAndBrowserPackages = ["react", "react-dom", "three", "lucide-react"];
 

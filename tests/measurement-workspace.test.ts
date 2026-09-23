@@ -10,7 +10,7 @@ import type { CircuitDocument } from '../src/domain';
 const document = JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document as CircuitDocument;
 const compilation = compileCircuit(document), result = solveCircuit(compilation.circuit);
 const noop = () => {};
-const canvasProps: CanvasProps = {document,selected:[],tool:'probe',placement:null,wireStart:null,onSelect:noop,onMove:noop,onPlace:noop,onEndpoint:noop,onWire:noop,onValue:noop,onSwitch:noop,onBackground:noop};
+const canvasProps: CanvasProps = {document,selected:[],tool:'probe',placement:null,onSelect:noop,onMove:noop,onPlace:noop,onEndpoint:noop,onWire:noop,onValue:noop,onSwitch:noop,onBackground:noop};
 function panel(red:string,black:string) {
   return renderToStaticMarkup(createElement(MeasurementPanel, {document,compilation,result,active:true,kind:'voltage',onKind:noop,branchId:'',onBranch:noop,onEdit:noop,red,black,activeProbe:'red',onProbes:noop,onActiveProbe:noop,onPreview:noop,children:null}));
 }

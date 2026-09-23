@@ -25,3 +25,5 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | ADR-010 | v1 런타임 계약과 검증 | accepted | 단계 0 |
 | ADR-011 | 등가저항의 포트와 외부 시험 전원 | accepted | 단계 4 구현 전 |
 | [ADR-012](ADR-012-worksheet-presentation.md) | 문제·정답 공통 표기와 독립 출력 | accepted | 단계 5 구현 전 |
+| [ADR-013](ADR-013-wire-editing-ux.md) | 도선 삽입과 교차 연결의 명시적 편집 | accepted | MVP UX 개선 |
+| [ADR-014](ADR-014-feedback-board.md) | 익명 후기 게시판과 백엔드 교체 경계 | accepted | MVP 이후 피드백 |

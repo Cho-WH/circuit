@@ -1,6 +1,7 @@
 import { cloneDocument, type CircuitDocument } from '../domain';
 export function layoutExample(input: CircuitDocument): CircuitDocument {
   const document = cloneDocument(input);
+  if(document.documentId==='ux-wire-editing')return document;
   for (const c of document.components) { c.position = { x: 240 + c.position.x * 1.2, y: 320 + c.position.y * 1.2 }; if (c.type === 'dc-voltage-source') c.rotation = 90; }
   for (const j of document.junctions) j.position = { x: 240 + j.position.x * 1.2, y: 320 + j.position.y * 1.2 };
   const put = (id: string, x: number, y: number) => { const item = [...document.components, ...document.junctions].find(i => i.id === id); if (item) item.position = { x, y }; };

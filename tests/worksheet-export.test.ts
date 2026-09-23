@@ -246,7 +246,7 @@ describe('independent worksheet SVG export', () => {
     expect(second).toBe(first);
     expect(first.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true);
     expect(first.endsWith('</svg>')).toBe(true);
-    expect(first).toContain('<polyline');
+    expect(first).toContain('<path d=');
     expect(first).toContain('R1');
     expect(first).toContain('3.00 Ω');
     expect(first).not.toMatch(/selection|selected|toolbar|zoom|pan/i);

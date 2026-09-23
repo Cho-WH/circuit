@@ -1,5 +1,12 @@
 # 문서 색인
 
+## 먼저 읽을 문서
+
+- [현재 작업 현황](implementation/current-phase.md): 현재 구현·미완료 범위와 커밋·배포 상태
+- [빠른 시작](ux/quick-start.md): 현재 앱 사용법
+- [작업 추적](implementation/mvp-tracker.md): 변경별 구현·검증 이력
+- [요구사항](../requirements/requirements.yaml) · [스키마](../schemas/) · [기술 결정 색인](../decisions/README.md): 규범과 계약
+
 ## 제품
 
 - [`product/brief.md`](product/brief.md): 제품 정의, 사용자, 원칙, 성공 지표
@@ -10,7 +17,8 @@
 - [`ux/quick-start.md`](ux/quick-start.md): 실행, 편집, 전위·측정, 저장과 단축키
 - [`ux/overview.md`](ux/overview.md): 화면 모드와 반응형 구조
 - [`ux/interactions.md`](ux/interactions.md): 부품 배치, 배선, 값 수정, 오류 피드백
-- [`ux/workflows.md`](ux/workflows.md): 교사·학생의 주요 작업 흐름
+- [`ux/workflows.md`](ux/workflows.md): 현재 교사·학생 흐름과 후속 활동 배포 구분
+- [2026-09-23 UX 검토](ux/reviews/2026-09-23-mvp-ux-review.md): 개선 전 관찰·제안과 화면 근거를 보존한 역사 기록
 
 ## 물리 규약
 
@@ -27,13 +35,18 @@
 - [`architecture/extension-points.md`](architecture/extension-points.md): 부품·엔진·출력 확장 경계
 - [`architecture/persistence-and-sharing.md`](architecture/persistence-and-sharing.md): 자동 저장, 파일, 마이그레이션, 공유
 
+- [`architecture/feedback.md`](architecture/feedback.md): 후기 로컬 미리보기와 원격 전환 조건
+- [ADR-012](../decisions/ADR-012-worksheet-presentation.md): 문제·정답 표기 속성과 출력 계약
+- [ADR-013](../decisions/ADR-013-wire-editing-ux.md): 삽입·분기·교차와 문맥 배선
+- [ADR-014](../decisions/ADR-014-feedback-board.md): 후기 저장·공개·삭제 정책
+
 ## 구현·검증
 
 - [`implementation/phases.md`](implementation/phases.md): 단계 0~7의 산출물과 종료 조건
-- [`implementation/current-phase.md`](implementation/current-phase.md): 현재 단계의 작업 목록
-- [`implementation/mvp-tracker.md`](implementation/mvp-tracker.md): MVP 진행 상태·에이전트 역할·검증 근거
+- [`implementation/current-phase.md`](implementation/current-phase.md): 현재 구현 범위·게시 상태·남은 작업
+- [`implementation/mvp-tracker.md`](implementation/mvp-tracker.md): 초기 MVP와 후속 작업의 검증 이력
 - [`implementation/definition-of-done.md`](implementation/definition-of-done.md): 공통 완료 조건
-- [`testing/mvp-coverage.md`](testing/mvp-coverage.md): 요구사항별 최종 검증·도구 제한·사용자 연구 미수행 범위
+- [`testing/mvp-coverage.md`](testing/mvp-coverage.md): 초기 요구사항별 근거·후속 검증 범위·남은 한계
 - [`testing/strategy.md`](testing/strategy.md): 테스트 층과 물리 불변식
 - [`testing/fixtures.md`](testing/fixtures.md): FIX-01~FIX-10의 목적
 - [`testing/usability.md`](testing/usability.md): 교사·학생 사용성 과제

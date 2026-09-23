@@ -11,8 +11,14 @@ import {
   type Point,
   type Wire,
 } from '../domain';
+import { connectCrossing, disconnectCrossing, insertComponent, splitWire } from './wire-edits';
+export { insertionCandidates, type InsertionCandidate } from './wire-edits';
 
 export type Command =
+  | { type: 'InsertComponentOnWire'; component: ComponentInstance; wireId: string; segment: number; newWireId: string }
+  | { type: 'ConnectCrossing'; point: Point; wireIds: [string,string]; junctionId: string; newWireIds: [string,string] }
+  | { type: 'DisconnectCrossing'; junctionId: string }
+  | { type: 'ConnectToWire'; start: EndpointRef; wireId: string; point: Point; junctionId: string; newWireId: string; branchId: string }
   | { type: 'AddComponent'; component: ComponentInstance }
   | { type: 'MoveComponents'; positions: Record<string, Point> }
   | { type: 'RotateComponents'; ids: string[] }
@@ -160,6 +166,28 @@ function applyCommand(
   ]);
 
   switch (command.type) {
+    case 'InsertComponentOnWire': {
+      const error=insertComponent(document,structuredClone(command.component),command.wireId,command.segment,command.newWireId);
+      if(error)return error;
+      break;
+    }
+    case 'ConnectCrossing': {
+      const error=connectCrossing(document,command.point,command.wireIds,command.junctionId,command.newWireIds);
+      if(error)return error;
+      break;
+    }
+    case 'DisconnectCrossing': {
+      const error=disconnectCrossing(document,command.junctionId);
+      if(error)return error;
+      break;
+    }
+    case 'ConnectToWire': {
+      const wire=document.wires.find(w=>w.id===command.wireId);
+      if(!wire||!splitWire(document,wire,command.point,command.junctionId,command.newWireId))return [diagnostic('WIRE_EDIT_UNAVAILABLE',[command.wireId],'error',{reason:'target'})];
+      document.junctions.push({id:command.junctionId,position:command.point});
+      document.wires.push({id:command.branchId,start:command.start,end:{kind:'junction',id:command.junctionId},waypoints:[]});
+      break;
+    }
     case 'AddComponent':
       document.components.push(command.component);
       break;
@@ -235,15 +263,9 @@ function applyCommand(
       if (command.wireId !== undefined && command.newWireId !== undefined) {
         const wire = document.wires.find((item) => item.id === command.wireId);
         if (!wire) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.wireId])];
-        const oldEnd = { ...wire.end };
-        wire.end = { kind: 'junction', id: command.junction.id };
-        wire.waypoints = [];
-        document.wires.push({
-          id: command.newWireId,
-          start: { kind: 'junction', id: command.junction.id },
-          end: oldEnd,
-          waypoints: [],
-        });
+        if (!splitWire(document, wire, command.junction.position, command.junction.id, command.newWireId)) {
+          return [diagnostic('WIRE_EDIT_UNAVAILABLE', [command.wireId], 'error', { reason: 'target' })];
+        }
       }
       break;
     }
@@ -315,6 +337,18 @@ export function executeCommand(history: History, command: Command): ExecuteComma
   })) return { ok: true, history };
   const past = [...history.past, cloneDocument(history.present)].slice(-HISTORY_CAPACITY);
   return { ok: true, history: { past, present: preview.document, future: [] } };
+}
+
+/** Validate every command, then publish one undo step. Failure never publishes a partial edit. */
+export function executeCommands(history: History, commands: readonly Command[]): ExecuteCommandResult {
+  if (!commands.length) return { ok: true, history };
+  let present = history.present;
+  for (const command of commands) {
+    const result = previewCommand(present, command);
+    if (!result.ok) return result;
+    present = result.document;
+  }
+  return { ok: true, history: { past: [...history.past, cloneDocument(history.present)].slice(-HISTORY_CAPACITY), present, future: [] } };
 }
 
 export function undo(history: History): History {

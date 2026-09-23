@@ -54,3 +54,11 @@ React 기본 상태와 순수한 문서 명령·스냅샷 기록을 사용한다
 - 같은 위치로의 이동은 도선 경로와 undo/redo 기록을 변경하지 않는다. 전체 도선 정리는 명시적인 `SetWireWaypoints` 동작으로만 수행한다.
 - 드래그는 시작 문서·시작 좌표·현재 좌표·선택 위치·포인터 ID를 하나의 세션으로 유지한다. 놓는 이벤트의 좌표로 최종 명령을 만든다. Escape, pointercancel, 캡처 손실, 창 초점 이탈, 문서/도구/편집 권한 변경 시 세션을 폐기한다. 다른 포인터는 진행 중인 세션을 수정하거나 확정하지 못한다.
 - 실제 React 이벤트와 SVG points를 검증하는 happy-dom 회귀 테스트를 추가한다. SVG 화면 좌표 변환은 테스트에서 고정하고 실제 브라우저에서 확대 상태와 포인터 배치를 확인한다. 저장 형식과 물리 모델은 바뀌지 않는다.
+
+### 문맥 배선과 원자적 명령 묶음 (EDT-002/003/005)
+
+`executeCommands(history, readonly Command[])`를 editor 공개 API에 추가한다. 각 명령을 순서대로 `previewCommand`에 전달하여 권한·구조를 검사하고 모두 성공한 최종 문서만 한 번의 기록으로 저장한다. 중간 실패와 빈 목록은 부분 문서를 게시하지 않는다. 별도의 우회 권한이나 저장 스키마는 추가하지 않는다.
+
+배선 중 도선 위 시작점은 UI의 임시 WireAnchor이며 실제 Junction을 저장하지 않는다. 완료 시 AddJunction과 ConnectWire/ConnectToWire를 묶어 실행한다. AddJunction의 도선 분할도 공통 splitWire를 사용하여 기존 꺾임과 외부 단자를 보존하고 도선 내부가 아닌 좌표를 거부한다.
+
+`app/wiring`의 model은 대상 판정과 명령 구성을, useContextWiring은 배선 시작·후보·터치 확인·교차 안내의 수명을, WiringOverlay는 표시를 담당한다. useTouchNavigation은 이동·핀치·후속 클릭 억제만 담당하며 회로 명령을 실행하지 않는다. App은 문서 기록과 모드 권한 검사를 소유하고 Canvas는 이벤트와 각 모듈을 연결한다.
