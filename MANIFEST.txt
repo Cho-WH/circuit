@@ -77,6 +77,7 @@ src/app/diagnostic-text.ts
 src/app/ErrorBoundary.tsx
 src/app/examples.ts
 src/app/index.ts
+src/app/measurement.css
 src/app/MeasurementPanel.tsx
 src/app/PotentialGraph.tsx
 src/app/styles.css
@@ -103,6 +104,7 @@ tests/fixtures/invalid/dangling-endpoint.json
 tests/fixtures/invalid/duplicate-document-id.json
 tests/fixtures/invalid/endpoint-kind-mismatch.json
 tests/fixtures/invalid/invalid-rotation.json
+tests/measurement-workspace.test.ts
 tests/measurement.test.ts
 tests/potential-3d.test.ts
 tests/simulation.test.ts

@@ -3,6 +3,7 @@ import type { CircuitDocument, ComponentType, EndpointRef, Point, SimulationResu
 import { componentPresentation, annotationPlacements, type WorksheetMode, type NumberFormat, componentValue, documentBounds, endpointPosition, pointsAttribute, symbolMarkup, terminalPosition, wirePoints } from '../component-library';
 
 export interface CanvasProps {
+  readOnly?: boolean;
   document: CircuitDocument; selected: string[]; tool: string; placement: ComponentType | null;
   wireStart: EndpointRef | null; onSelect: (id: string | null, additive?: boolean) => void;
   onMove: (positions: Record<string, Point>) => void; onPlace: (type: ComponentType, point: Point) => void;
@@ -67,12 +68,12 @@ export function CircuitCanvas(props: CanvasProps) {
   const zoom = (factor: number) => setView(v => { const width = Math.min(5000, Math.max(200, v.width * factor)); const height = width * v.height / v.width; return { x: v.x + (v.width - width) / 2, y: v.y + (v.height - height) / 2, width, height }; });
   function chooseEndpoint(ref: EndpointRef) { props.onEndpoint(ref); }
   return <div className={`canvas-shell ${placement ? 'placing' : ''}`}>
-    <svg ref={svg} className="circuit-canvas" aria-label="회로 편집 캔버스" role="group" viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} tabIndex={0}
+    <svg ref={svg} className="circuit-canvas" aria-label={props.readOnly ? '측정 회로' : '회로 편집 캔버스'} role="group" viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} tabIndex={0}
       onWheel={e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoom(e.deltaY > 0 ? 1.1 : 0.9); } }}
-      onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const type = e.dataTransfer.getData('component') as ComponentType; if (['dc-voltage-source', 'resistor', 'switch', 'ammeter', 'voltmeter', 'resistive-load'].includes(type)) props.onPlace(type, snap(point(e.clientX, e.clientY))); }}
+      onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if(props.readOnly) return; const type = e.dataTransfer.getData('component') as ComponentType; if (['dc-voltage-source', 'resistor', 'switch', 'ammeter', 'voltmeter', 'resistive-load'].includes(type)) props.onPlace(type, snap(point(e.clientX, e.clientY))); }}
       onKeyDown={e => {
         if (e.target !== e.currentTarget) return;
-        if (placement && e.key === 'Enter') { e.preventDefault(); props.onPlace(placement, snap({ x: view.x + view.width / 2, y: view.y + view.height / 2 })); }
+        if (!props.readOnly && placement && e.key === 'Enter') { e.preventDefault(); props.onPlace(placement, snap({ x: view.x + view.width / 2, y: view.y + view.height / 2 })); }
         if (e.key === '+' || e.key === '=') zoom(.8);
         if (e.key === '-') zoom(1.25);
         if (tool === 'pan' && e.key.startsWith('Arrow')) { e.preventDefault(); e.stopPropagation(); setView(v => ({ ...v, x: v.x + (e.key === 'ArrowRight' ? 40 : e.key === 'ArrowLeft' ? -40 : 0), y: v.y + (e.key === 'ArrowDown' ? 40 : e.key === 'ArrowUp' ? -40 : 0) })); }
@@ -106,6 +107,7 @@ export function CircuitCanvas(props: CanvasProps) {
         return <g key={c.id} onMouseEnter={() => props.onHoverElement?.(c.id)} onMouseLeave={() => props.onHoverElement?.(null)}>
           {(select || glow) && <rect x={c.position.x - 62} y={c.position.y - 58} width="124" height="116" rx="12" fill={glow ? '#fff4d6' : '#eaf1ff'} stroke={glow ? '#efb14c' : '#3478f6'} strokeWidth="1.5" strokeDasharray={select ? '5 4' : undefined} />}
           <g role="button" tabIndex={0} aria-label={`${c.label} ${componentValue(c)}`} className="component" onPointerDown={e => {
+            if (props.readOnly) { e.stopPropagation(); props.onSelect(c.id); return; }
             if (tool === 'path') { e.stopPropagation(); props.onSelect(c.id); return; }
             if (tool !== 'select' || placement) return; e.stopPropagation();
             const ids = selected.includes(c.id) ? selected : [c.id];
@@ -113,13 +115,13 @@ export function CircuitCanvas(props: CanvasProps) {
             if (e.shiftKey) return;
             setDrag({ start: point(e.clientX, e.clientY), positions: Object.fromEntries(document.components.filter(x => ids.includes(x.id)).map(x => [x.id, x.position])), pointerId: e.pointerId });
             svg.current?.setPointerCapture(e.pointerId);
-          }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onSelect(c.id, e.shiftKey); } }} onDoubleClick={() => c.type === 'switch' ? props.onSwitch(c.id) : props.onValue(c.id)}>
+          }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onSelect(c.id, e.shiftKey); } }} onDoubleClick={() => { if(!props.readOnly) { if(c.type === 'switch') props.onSwitch(c.id); else props.onValue(c.id); } }}>
             <rect x={c.position.x - 36} y={c.position.y - 30} width="72" height="60" fill="transparent" />
             <g transform={`translate(${c.position.x},${c.position.y}) rotate(${c.rotation})`} stroke="#263548" fill="white" strokeWidth="2.5" color="#263548" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: symbolMarkup(c) }} />
           </g>
           {props.currentArrows?.[c.id] !== undefined && props.currentArrows[c.id] !== 0 && <g transform={`translate(${c.position.x},${c.position.y}) rotate(${c.rotation})`} stroke="#70828f" strokeWidth={Math.min(4, 1 + Math.sqrt(Math.abs(props.currentArrows[c.id])))} fill="none" pointerEvents="none"><path d={props.currentArrows[c.id] > 0 ? 'M-20 24H20 M13 19L20 24 13 29' : 'M20 24H-20 M-13 19L-20 24 -13 29'}/></g>}
           <text x={c.position.x + (c.rotation % 180 ? 32 * labelScale : 0)} y={c.position.y + (c.rotation % 180 ? -9 * labelScale : -30 * labelScale)} textAnchor={c.rotation % 180 ? 'start' : 'middle'} fontSize={14 * labelScale} fontWeight="650" fill="#344358" pointerEvents="none">{presentation.label}</text>
-          <text className="editable-value" role="button" tabIndex={0} aria-label={`${c.label} 값 편집`} x={c.position.x + (c.rotation % 180 ? 32 * labelScale : 0)} y={c.position.y + (c.rotation % 180 ? 13 * labelScale : 38 * labelScale)} textAnchor={c.rotation % 180 ? 'start' : 'middle'} fontSize={14 * labelScale} fill="#64758b" onClick={() => props.onValue(c.id)} onKeyDown={e => { if (e.key === 'Enter') props.onValue(c.id); }}>{value}</text>
+          <text className={props.readOnly ? 'component-value' : 'editable-value'} role={props.readOnly ? undefined : 'button'} tabIndex={props.readOnly ? undefined : 0} aria-label={props.readOnly ? undefined : `${c.label} 값 편집`} x={c.position.x + (c.rotation % 180 ? 32 * labelScale : 0)} y={c.position.y + (c.rotation % 180 ? 13 * labelScale : 38 * labelScale)} textAnchor={c.rotation % 180 ? 'start' : 'middle'} fontSize={14 * labelScale} fill="#64758b" onClick={() => { if(!props.readOnly) props.onValue(c.id); }} onKeyDown={e => { if (!props.readOnly && e.key === 'Enter') props.onValue(c.id); }}>{value}</text>
           {[presentation.voltage && `U = ${presentation.voltage}`, presentation.current && `I = ${presentation.current}`].filter(Boolean).map((text,i)=><text key={i} x={c.position.x+(c.rotation%180?32*labelScale:0)} y={c.position.y+(c.rotation%180?38+i*22:61+i*22)*labelScale} textAnchor={c.rotation%180?'start':'middle'} fontSize={12*labelScale} fill="#506a88" pointerEvents="none">{text}</text>)}
           {c.terminals.map((t, i) => { const p = terminalPosition(c, i); return <g key={t.id} role="button" tabIndex={0} aria-label={`단자 ${t.id}`} className="terminal" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); chooseEndpoint({ kind: 'terminal', id: t.id }); }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseEndpoint({ kind: 'terminal', id: t.id }); } }}>
             <circle cx={p.x} cy={p.y} r="1" fill="transparent" stroke="transparent" strokeWidth="40" vectorEffect="non-scaling-stroke" /><circle cx={p.x} cy={p.y} r={highlighted(t.id) || wireStart?.id === t.id ? 6 : 4} fill={wireStart?.id === t.id ? '#3478f6' : endColor(t.id)} stroke="white" strokeWidth="1.2" />
@@ -144,7 +146,7 @@ export function CircuitCanvas(props: CanvasProps) {
       {placement && <g transform={`translate(${snap(pointer).x},${snap(pointer).y})`} opacity=".45" pointerEvents="none"><rect x="-50" y="-35" width="100" height="70" rx="8" fill="#dbe8ff" stroke="#3478f6"/><circle cx="-44" r="4" fill="#3478f6"/><circle cx="44" r="4" fill="#3478f6"/><text textAnchor="middle" y="5" fill="#235dbd" fontSize="13">여기에 배치</text></g>}
     </svg>
     <div className="canvas-view-tools"><button onClick={() => zoom(.8)} aria-label="확대">＋</button><span>{Math.round(100000 / view.width)}%</span><button onClick={() => zoom(1.25)} aria-label="축소">−</button><button onClick={() => setView(documentBounds(document, 110))}>전체 보기</button></div>
-    <div className="canvas-caption"><span className="small-dot" />이상적인 선형 직류 회로 <span>·</span> 20 단위 격자</div>
+    <div className="canvas-caption"><span className="small-dot" />{props.readOnly ? '측정 회로' : '이상적인 선형 직류 회로 · 20 단위 격자'}</div>
   </div>;
 }
 

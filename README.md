@@ -28,7 +28,7 @@ Node.js 20.19 이상이 필요하다. 기본 주소는 http://localhost:5173 이
 
 ## 현재 단계
 
-**단계 0~5 기능 MVP 완료.** 최종 232개 테스트·타입·경계·명세·빌드를 통과했고 메인 에이전트가 데스크톱·모바일 시각 검증을 마쳤다. [검증 범위와 제한](docs/testing/mvp-coverage.md)을 함께 확인한다.
+**단계 0~5 기능 MVP 완료.** 최종 235개 테스트·타입·경계·명세·빌드를 통과했고 메인 에이전트가 데스크톱·모바일 시각 검증을 마쳤다. [검증 범위와 제한](docs/testing/mvp-coverage.md)을 함께 확인한다.
 
 현재 진행은 [현재 단계](docs/implementation/current-phase.md)와 [MVP 작업 추적](docs/implementation/mvp-tracker.md)에서 확인한다. 각 단계의 검증 게이트를 통과한 뒤 다음 단계로 진행한다.
 

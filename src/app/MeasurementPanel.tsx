@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { CircuitDocument, CompileResult, EndpointRef, SimulationResult, Diagnostic } from '../domain';
 import { circuitCompiler } from '../connectivity';
 import { dcEngine, checkKcl, checkKvl, equivalentResistance, type ConservationResult } from '../simulation';
 import { createComponent, formatQuantity } from '../component-library';
 import { probeVoltage, insertSeriesAmmeter, parameterSweep, createMeasurementRecord, measurementsToCsv, type MeasurementRecord, type ParameterSweepResult } from '../measurement';
 import { suggestPaths } from '../visualization';
+import { ArrowLeftRight, RotateCcw, Pencil, Plus, Activity } from 'lucide-react';
+import './measurement.css';
 import { diagnosticText } from './diagnostic-text';
 
 interface Props {
+  kind: 'voltage'|'current'|'resistance'; onKind: (kind: 'voltage'|'current'|'resistance') => void;
+  branchId: string; onBranch: (id: string) => void; onEdit: () => void; children: ReactNode;
   document: CircuitDocument; compilation: CompileResult; result: SimulationResult; active: boolean;
   red: string; black: string; activeProbe: 'red' | 'black';
   onProbes: (red: string, black: string) => void; onActiveProbe: (probe: 'red' | 'black') => void;
@@ -29,8 +33,8 @@ function SweepGraph({ data }: { data: ParameterSweepResult }) {
 }
 export function MeasurementPanel(props: Props) {
   const { document: doc, compilation, result, red, black } = props;
-  const [kind, setKind] = useState<'voltage'|'current'|'resistance'>('voltage');
-  const [branchId, setBranchId] = useState(''); const [insertedView, setInsertedView] = useState(true);
+  const { kind, onKind: setKind, branchId, onBranch: setBranchId } = props;
+  const [insertedView, setInsertedView] = useState(true);
   const [resistanceMode, setResistanceMode] = useState<'load'|'whole'>('load');
   const [prediction, setPrediction] = useState(''); const [condition, setCondition] = useState('');
   const [records, setRecords] = useState<MeasurementRecord[]>([]); const [message,setMessage] = useState('');
@@ -68,15 +72,38 @@ export function MeasurementPanel(props: Props) {
     const saved=createMeasurementRecord(doc,{condition: `${condition||doc.title} · ${kind==='resistance'?(resistanceMode==='load'?`부하, 분리 전원 ${excluded.join(',')||'없음'}`:'전체 회로'):kind==='current'?`임시 직렬 전류계 ${branch?.id}`:'빨강−검정'}${prediction?` · 예측: ${prediction}`:''}`,source:'simulation',quantity:kind,value:reading,unit,targetIds:kind==='current'?[branch!.id]:[red,black],recordedAt:new Date().toISOString()});
     if(saved.ok){setRecords(r=>[...r,saved.value]);setMessage('현재 회로 조건과 측정값을 기록했습니다.');}else setMessage('기록 형식을 확인하세요.');
   }
-  return <section className="measurement-panel"><h3>측정기 연결</h3><div className="segmented measurement-kinds">{(['voltage','current','resistance'] as const).map(k=><button key={k} className={kind===k?'active':''} onClick={()=>setKind(k)}>{k==='voltage'?'전압':k==='current'?'전류':'등가저항'}</button>)}</div>
-    {kind!=='current'?<><p className="tiny-note">탐침을 고른 뒤 단자·분기점을 누르거나 목록에서 선택하세요.</p>{(['red','black'] as const).map(color=><label className={`field-label probe-${color}`} key={color}><button className={props.activeProbe===color?'active':''} onClick={()=>props.onActiveProbe(color)}>{color==='red'?'빨강 (+)':'검정 (−)'} 탐침</button><select aria-label={`${color==='red'?'빨강':'검정'} 탐침 위치`} value={endpoints.some(e=>e.id===(color==='red'?red:black))?(color==='red'?red:black):''} onChange={e=>props.onProbes(color==='red'?e.target.value:red,color==='black'?e.target.value:black)}><option value="">미연결</option>{endpoints.map(e=><option key={e.id}>{e.id}</option>)}</select></label>)}<button className="wide-button" onClick={()=>props.onProbes(black,red)}>탐침 순서 바꾸기</button></>:<><label className="field-label">전류를 측정할 가지<select aria-label="전류 측정 가지" value={branch?.id??''} onChange={e=>setBranchId(e.target.value)}>{doc.components.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label><div className="segmented"><button className={!insertedView?'active':''} onClick={()=>setInsertedView(false)}>원본 연결</button><button className={insertedView?'active':''} onClick={()=>setInsertedView(true)}>전류계 삽입 후</button></div><p className="tiny-note">{insertion?.ok?`${insertion.value.terminalId} 앞에 이상적인 0 Ω 전류계를 직렬로 삽입합니다. 계기 a→b 방향. 원본은 저장·변경하지 않습니다.`:'측정할 부품을 선택하세요.'}</p>{insertion&&!insertion.ok&&<Diagnostics items={insertion.diagnostics}/>}<Diagnostics items={inserted?.diagnostics??[]}/></>}
-    {kind==='resistance'&&<><label className="field-label">측정 대상<select value={resistanceMode} onChange={e=>setResistanceMode(e.target.value as 'load'|'whole')}><option value="load">부하 · 포트 전원 분리</option><option value="whole">전체 회로 · 전원 0 V 치환</option></select></label><p className="tiny-note">{resistanceMode==='load'?`분리한 외부 전원: ${excluded.join(', ')||'없음'}`:'모든 독립 전압원을 0 V로 치환합니다.'} · 1 V 시험 전원으로 계산</p></>}
-    <output className="meter-display" aria-label="측정값">{kind==='resistance'&&resistance?.status==='open'?'개방 · ∞ Ω':formatQuantity(reading,unit)}</output>
-    {kind==='voltage'&&<><p className="tiny-note">V빨강 − V검정{redNet&&redNet===blackNet?' · 같은 절점이므로 전위차 0 V':''}</p>{!voltage.ok&&<Diagnostics items={voltage.diagnostics}/>}</>}{kind==='resistance'&&<Diagnostics items={resistance?.diagnostics??[]}/>}
-    <label className="field-label">측정 전 예측<input aria-label="측정 전 예측" value={prediction} onChange={e=>setPrediction(e.target.value)} placeholder="예: 빨강 쪽이 3 V 높다"/></label><label className="field-label">기록 조건<input aria-label="기록 조건" value={condition} onChange={e=>setCondition(e.target.value)} placeholder="예: 저항값을 바꾸기 전"/></label><button className="primary wide-button" onClick={record}>측정값 기록</button>{message&&<p role="status" className="tiny-note">{message}</p>}
-    <details className="measurement-details"><summary>측정 기록 ({records.length})</summary><div className="record-scroll"><table><thead><tr><th>조건</th><th>값</th></tr></thead><tbody>{records.map((r,i)=><tr key={i}><td>{r.condition}<small>{r.recordedAt}</small></td><td>{formatQuantity(r.value??undefined,r.unit)}</td></tr>)}</tbody></table></div><button className="wide-button" disabled={!records.length} onClick={()=>{const csv=measurementsToCsv(records);if(csv.ok)download('\uFEFF'+csv.value,'회로-측정기록.csv','text/csv;charset=utf-8');else setMessage('CSV를 만들 수 없습니다.');}}>CSV 저장 · 단위와 회로 조건 포함</button><button disabled={!records.length} onClick={()=>setRecords([])}>기록 비우기</button></details>
+  const connected = kind==='current' ? reading!==undefined : Boolean(ref(red)&&ref(black));
+  const ready = reading!==undefined && Number.isFinite(reading);
+  const probeName = (id:string) => {
+    const c=doc.components.find(c=>c.terminals.some(t=>t.id===id));
+    return c ? `${c.label} · ${id.split('.').at(-1)}` : id || '연결할 점 선택';
+  };
+  return <section className="measurement-panel" aria-label="측정 작업 공간">
+    <header className="measure-header"><div className="measure-heading"><Activity size={19}/><h2>측정</h2></div>
+      <div className="measure-tools" aria-label="측정 도구">{(['voltage','current','resistance'] as const).map(k=><button key={k} aria-pressed={kind===k} className={kind===k?'active':''} onClick={()=>setKind(k)}><span>{k==='voltage'?'V':k==='current'?'A':'Ω'}</span>{k==='voltage'?'전압':k==='current'?'전류':'등가저항'}</button>)}</div>
+      <button className="measure-edit" onClick={props.onEdit}><Pencil size={14}/>회로 편집</button>
+    </header>
+    <div className="measure-console">
+      <div className="measure-connections">
+        {kind!=='current'?<><div className="probe-pair">{(['red','black'] as const).map(color=>{
+          const id=color==='red'?red:black, attached=Boolean(ref(id));
+          return <div className={`probe-control probe-${color}${props.activeProbe===color?' is-active':''}${attached?' is-connected':''}`} key={color}>
+            <button aria-label={`${color==='red'?'빨강':'검정'} 탐침`} aria-pressed={props.activeProbe===color} onClick={()=>props.onActiveProbe(color)}><i>{color==='red'?'+':'−'}</i><span>{color==='red'?'빨강':'검정'} 탐침</span><small>{attached?'연결됨':props.activeProbe===color?'선택 중':'미연결'}</small></button>
+            <select aria-label={`${color==='red'?'빨강':'검정'} 탐침 위치`} value={attached?id:''} onChange={e=>{props.onProbes(color==='red'?e.target.value:red,color==='black'?e.target.value:black);if(color==='red'&&e.target.value&&!ref(black))props.onActiveProbe('black');}}><option value="">연결할 점 선택</option>{endpoints.map(e=><option key={e.id} value={e.id}>{probeName(e.id)}</option>)}</select>
+          </div>;
+        })}<div className="probe-actions"><button aria-label="탐침 순서 바꾸기" title="탐침 순서 바꾸기" onClick={()=>props.onProbes(black,red)}><ArrowLeftRight size={16}/></button><button aria-label="탐침 초기화" title="탐침 초기화" onClick={()=>{props.onProbes('','');props.onActiveProbe('red');}}><RotateCcw size={15}/></button></div></div>
+        {kind==='resistance'&&<div className="resistance-options"><select aria-label="저항 측정 대상" value={resistanceMode} onChange={e=>setResistanceMode(e.target.value as 'load'|'whole')}><option value="load">부하 · 포트 전원 분리</option><option value="whole">전체 회로 · 전원 0 V 치환</option></select><span>{resistanceMode==='load'?`분리 전원: ${excluded.join(', ')||'없음'}`:'독립 전원 0 V'}</span></div>}</>:<div className="branch-control"><label>측정할 가지<select aria-label="전류 측정 가지" value={branch?.id??''} onChange={e=>setBranchId(e.target.value)}>{doc.components.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label><div><div className="segmented"><button aria-pressed={!insertedView} className={!insertedView?'active':''} onClick={()=>setInsertedView(false)}>원본 연결</button><button aria-pressed={insertedView} className={insertedView?'active':''} onClick={()=>setInsertedView(true)}>전류계 삽입</button></div><span className="branch-note">임시 직렬 연결 · a → b</span></div></div>}
+      </div>
+      <div className={`measure-result${ready?' ready':''}`}><div className="measure-result-label"><span>{kind==='voltage'?'전위차':kind==='current'?'가지 전류':'등가저항'}</span><span className="measure-state">{ready?'측정 중':connected?'확인 필요':'연결 대기'}</span></div><div className="measure-result-row"><output aria-label="측정값" aria-live="polite">{kind==='resistance'&&resistance?.status==='open'?'∞ Ω':formatQuantity(reading,unit)}</output><button className="record-reading" aria-label="측정값 기록" title="측정값 기록" disabled={!ready} onClick={record}><Plus size={15}/>기록</button></div><small>{kind==='voltage'?redNet&&redNet===blackNet?'같은 절점':'빨강 − 검정':kind==='current'?`${branch?.label??'가지 선택'} · 직렬 전류계`:resistanceMode==='load'?'부하 저항':'전체 회로 저항'}</small></div>
+    </div>
+    <div className="measure-circuit">{kind==='current'&&insertedView&&insertion?.ok&&<span className="measure-preview-badge">전류계 삽입 미리보기</span>}{props.children}</div>
+    <aside className="measure-notebook" aria-label="실험 기록"><div className="notebook-heading"><h3>실험 기록</h3><span>{records.length}</span></div>
+    {kind==='voltage'&&connected&&!voltage.ok&&<Diagnostics items={voltage.diagnostics}/>}{kind==='resistance'&&<Diagnostics items={resistance?.diagnostics??[]}/>}{kind==='current'&&<>{insertion&&!insertion.ok&&<Diagnostics items={insertion.diagnostics}/>}<Diagnostics items={inserted?.diagnostics??[]}/></>}
+    {message&&<p role="status" className="tiny-note">{message}</p>}
+    <details className="measurement-details record-condition"><summary>예측 · 기록 조건</summary><label className="field-label">예측<input aria-label="측정 전 예측" value={prediction} onChange={e=>setPrediction(e.target.value)} placeholder="예측값"/></label><label className="field-label">조건<input aria-label="기록 조건" value={condition} onChange={e=>setCondition(e.target.value)} placeholder="실험 조건"/></label></details>
+    <details className="measurement-details" open><summary>측정 기록 ({records.length})</summary><div className="record-scroll">{records.length===0&&<div className="records-empty"><Plus size={18}/><span>측정값을 기록하면 여기에 쌓입니다</span></div>}<table hidden={records.length===0}><thead><tr><th>조건</th><th>값</th></tr></thead><tbody>{records.map((r,i)=><tr key={i}><td>{r.condition}<small>{r.recordedAt}</small></td><td>{formatQuantity(r.value??undefined,r.unit)}</td></tr>)}</tbody></table></div><button className="wide-button" disabled={!records.length} onClick={()=>{const csv=measurementsToCsv(records);if(csv.ok)download('\uFEFF'+csv.value,'회로-측정기록.csv','text/csv;charset=utf-8');else setMessage('CSV를 만들 수 없습니다.');}}>CSV 저장 · 단위와 회로 조건 포함</button><button disabled={!records.length} onClick={()=>setRecords([])}>기록 비우기</button></details>
     <details className="measurement-details"><summary>KCL · KVL 확인</summary><h4>KCL: 빨강 탐침 절점</h4><p className="tiny-note">나가는 전류 (+), 들어오는 전류 (−)</p>{redNet?<Conservation value={checkKcl(compilation.circuit,result,redNet)} unit="A"/>:<p className="tiny-note">빨강 탐침 위치를 선택하세요.</p>}<h4>KVL: 폐경로의 전위 변화</h4><select aria-label="KVL 경로" value={loopIndex} onChange={e=>setLoopIndex(Number(e.target.value))}>{loops.map((p,i)=><option key={p.id} value={i}>{p.label}</option>)}</select>{loop?<Conservation value={checkKvl(compilation.circuit,result,loop.steps)} unit="V"/>:<p className="tiny-note">전원을 포함한 폐경로가 없습니다.</p>}</details>
     <details className="measurement-details"><summary>값 변화 실험</summary><p className="tiny-note">원본을 바꾸지 않고 21개 조건에서 계산합니다. 그래프는 실행 당시 조건을 유지합니다.</p><label className="field-label">x축: 바꿀 부품<select value={variable?.id??''} onChange={e=>setVariableId(e.target.value)}>{variables.map(c=><option value={c.id} key={c.id}>{c.label} ({c.type==='dc-voltage-source'?'V':'Ω'})</option>)}</select></label><div className="range-inputs"><label>시작<input aria-label="실험 시작값" type="number" value={sweepStart} onChange={e=>setSweepStart(e.target.valueAsNumber)}/></label><label>끝<input aria-label="실험 끝값" type="number" value={sweepEnd} onChange={e=>setSweepEnd(e.target.valueAsNumber)}/></label></div><label className="field-label">y축: 관찰할 부품<select aria-label="실험 관찰 부품" value={branch?.id??''} onChange={e=>setBranchId(e.target.value)}>{doc.components.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label><select aria-label="실험 관찰 물리량" value={sweepKind} onChange={e=>setSweepKind(e.target.value as typeof sweepKind)}><option value="branch-current">가지 전류 (A)</option><option value="component-voltage">양단 전압 (V)</option><option value="component-power">전력 (W)</option></select><button className="wide-button" disabled={!variable||!branch} onClick={()=>{if(!variable||!branch)return;const computed=parameterSweep(doc,{componentId:variable.id,property:variable.type==='dc-voltage-source'?'voltageV':'resistanceOhm',values:Array.from({length:21},(_,i)=>sweepStart+(sweepEnd-sweepStart)*i/20),xLabel:variable.label,xUnit:variable.type==='dc-voltage-source'?'V':'Ω',yLabel:branch.label,quantity:{kind:sweepKind,componentId:branch.id}},circuitCompiler,dcEngine);if(computed.ok){setSweep(computed.value);setMessage('값 변화 실험을 완료했습니다.');}else{setSweep(null);setMessage('실험 범위를 확인하세요. 유한한 전압·0 이상 저항을 입력하세요.');}}}>실험 실행</button>{sweep&&<SweepGraph data={sweep}/>}</details>
-    <div className="library-divider"/>
+    </aside>
   </section>;
 }
