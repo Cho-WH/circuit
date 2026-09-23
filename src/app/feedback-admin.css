@@ -1,0 +1,6 @@
+.feedback-admin{width:min(880px,100%);max-height:none;min-height:100dvh;margin:0 auto;padding:0 36px 48px;background:#fcfbf8;color:#383d36}
+.feedback-admin-header{display:flex;justify-content:space-between;align-items:center;padding:22px 0;border-bottom:1px solid #e7e4dc;color:#727a68;font-size:12px}
+.feedback-admin-header a,.feedback-admin-header span{display:flex;align-items:center;gap:7px}.feedback-admin-header a{padding:8px 0}.feedback-admin-header a:focus-visible{outline:3px solid #839779;outline-offset:3px}
+.feedback-admin-intro{padding:36px 0 8px}.feedback-admin-intro h1{font-size:30px;letter-spacing:-1px;margin:9px 0 13px}.feedback-admin-intro>p:last-child{color:#777e6f;line-height:1.8}.feedback-admin-count{margin-top:24px;font-size:12px;color:#7b826f}
+.feedback-admin .feedback-post{padding:22px 14px}.feedback-admin .feedback-post-footer{flex-wrap:wrap;justify-content:flex-start;gap:18px}.feedback-admin-unavailable{padding:50px 18px;text-align:center;color:#6d7664;line-height:1.9}.feedback-admin-unavailable h2{font-size:18px;margin:15px 0 8px}
+@media(max-width:640px){.feedback-admin{padding:0 20px 30px}.feedback-admin-intro{padding-top:28px}.feedback-admin-intro h1{font-size:26px}.feedback-admin .feedback-post{padding:20px 8px}.feedback-admin .feedback-post-footer{gap:5px}.feedback-admin .feedback-post-footer time{width:100%}}

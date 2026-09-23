@@ -28,7 +28,7 @@ function isSnapshot(value: unknown): value is Snapshot {
 }
 
 /** Local preview only: browser storage is not a security boundary. Never use as a public backend. */
-export function createLocalFeedback(deps: LocalDependencies): { gateway: FeedbackGateway; adminPreview: FeedbackAdminGateway } {
+export function createLocalFeedback(deps: LocalDependencies): { gateway: FeedbackGateway; admin: FeedbackAdminGateway } {
   function read(): Snapshot {
     const raw = deps.storage.getItem(key);
     if (raw !== null) {
@@ -81,7 +81,7 @@ export function createLocalFeedback(deps: LocalDependencies): { gateway: Feedbac
       return ok(undefined);
     }),
   };
-  return { gateway, adminPreview: { list: () => guarded(async data => ok([...data.posts].reverse().map(post => ({ ...publicPost(post), deletedAt: post.deletedAt })))) } };
+  return { gateway, admin: { list: () => guarded(async data => ok([...data.posts].reverse().map(post => ({ ...publicPost(post), deletedAt: post.deletedAt })))) } };
 }
 
 export function createBrowserFeedbackPreview() {

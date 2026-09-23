@@ -3,7 +3,8 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FeedbackBoard } from '../src/app/FeedbackBoard';
-import type { FeedbackGateway, FeedbackPost } from '../src/feedback';
+import { FeedbackAdminPage } from '../src/app/FeedbackAdminPage';
+import type { FeedbackAdminGateway, FeedbackGateway, FeedbackPost } from '../src/feedback';
 
 let host: HTMLDivElement;
 let root: Root;
@@ -28,8 +29,8 @@ async function fill(selector: string, value: string) {
     element.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
-async function render(port: FeedbackGateway, admin = false) {
-  await act(async () => root.render(createElement(FeedbackBoard, { gateway: port, onClose: vi.fn(), ...(admin ? { admin: { list: async () => ({ ok: true as const, value: [{ ...post, deletedAt: '2026-09-23T01:00:00Z' }] }) } } : {}) })));
+async function render(port: FeedbackGateway) {
+  await act(async () => root.render(createElement(FeedbackBoard, { gateway: port, onClose: vi.fn() })));
 }
 async function compose() {
   await click(button('한마디 남기기'));
@@ -80,10 +81,27 @@ describe('DAT-005: feedback board interaction', () => {
     expect(host.textContent).toContain('관리자 보관함에는 기록이 남습니다');
   });
   it('shows retained deleted bodies only through the supplied administrator port', async () => {
-    await render(gateway(), true); await click(button('관리자 미리보기'));
+    await act(async () => root.render(createElement(FeedbackAdminPage, { gateway: { list: async (): ReturnType<FeedbackAdminGateway['list']> => ({ ok: true, value: [{ ...post, deletedAt: '2026-09-23T01:00:00Z' }, { ...post, id: 'private', content: '비공개 원문', visibility: 'private', deletedAt: null }] }) } })));
+    expect(host.querySelector('dialog')).toBeNull();
     expect(host.textContent).toContain('삭제된 글');
     expect(host.textContent).toContain(post.content);
     expect(button('글 삭제')).toBeUndefined();
+    await click(button('비공개'));
+    expect(host.textContent).toContain('비공개 원문');
+    expect(host.textContent).not.toContain(post.content);
+    await click(button('삭제된 글'));
+    expect(host.textContent).toContain(post.content);
+    expect(host.textContent).not.toContain('비공개 원문');
+  });
+  it('does not load records without an administrator gateway', async () => {
+    await act(async () => root.render(createElement(FeedbackAdminPage)));
+    expect(host.textContent).toContain('관리자 인증 연결이 필요합니다');
+    expect(host.querySelector('article')).toBeNull();
+  });
+  it('handles administrator access denial without exposing cached records', async () => {
+    await act(async () => root.render(createElement(FeedbackAdminPage, { gateway: { list: async (): ReturnType<FeedbackAdminGateway['list']> => ({ ok: false, code: 'FORBIDDEN' }) } })));
+    expect(host.textContent).toContain('관리자 권한을 확인할 수 없습니다');
+    expect(host.querySelector('article')).toBeNull();
   });
   it('reports unavailable storage and allows retry without claiming an empty board', async () => {
     const port = gateway(); port.list = vi.fn<FeedbackGateway['list']>(async () => ({ ok: false, code: 'UNAVAILABLE' }));

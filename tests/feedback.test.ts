@@ -26,7 +26,7 @@ describe('DAT-005: feedback adapter contract', () => {
     expect(value(await gateway.list({ scope: 'mine' })).posts).toHaveLength(2);
   });
   it('hashes passwords with unique salts and keeps deletion records only in the admin view', async () => {
-    const { gateway, adminPreview, store } = setup();
+    const { gateway, admin, store } = setup();
     const first = value(await gateway.create(draft));
     await gateway.create(draft);
     const raw = [...store.values()][0];
@@ -38,7 +38,7 @@ describe('DAT-005: feedback adapter contract', () => {
     expect(await gateway.remove({ id: first.id, password: draft.password })).toEqual({ ok: true, value: undefined });
     expect(value(await gateway.list({ scope: 'public' })).posts.map(post => post.id)).not.toContain(first.id);
     expect(value(await gateway.list({ scope: 'mine' })).posts.map(post => post.id)).not.toContain(first.id);
-    expect(value(await adminPreview.list()).find(post => post.id === first.id)).toEqual({ ...first, deletedAt: '2026-09-23T14:59:00.000Z' });
+    expect(value(await admin.list()).find(post => post.id === first.id)).toEqual({ ...first, deletedAt: '2026-09-23T14:59:00.000Z' });
     expect(await gateway.remove({ id: first.id, password: draft.password })).toEqual({ ok: false, code: 'NOT_FOUND' });
   });
   it('enforces the quota across parallel calls, private posts, reloads and deletion', async () => {
@@ -51,12 +51,12 @@ describe('DAT-005: feedback adapter contract', () => {
     expect(await createLocalFeedback(deps).gateway.create(draft)).toEqual({ ok: false, code: 'DAILY_LIMIT' });
   });
   it('resets at Korea midnight and keeps earlier records', async () => {
-    const { gateway, setTime, adminPreview } = setup();
+    const { gateway, setTime, admin } = setup();
     await Promise.all([gateway.create(draft), gateway.create(draft), gateway.create(draft)]);
     setTime('2026-09-23T15:00:00Z');
     expect(feedbackDay(new Date('2026-09-23T15:00:00Z'))).toBe('2026-09-24');
     expect((await gateway.create(draft)).ok).toBe(true);
-    expect(value(await adminPreview.list())).toHaveLength(4);
+    expect(value(await admin.list())).toHaveLength(4);
   });
   it('uses identity only for the mine view and requires the password even for the owner', async () => {
     const { gateway, store } = setup();
@@ -69,9 +69,9 @@ describe('DAT-005: feedback adapter contract', () => {
     expect((await gateway.remove({ id: post.id, password: draft.password })).ok).toBe(true);
   });
   it.each([{ nickname: ' ' }, { content: ' ' }, { password: '   ' }, { password: 'abc' }, { content: 'a'.repeat(2001) }, { nickname: 'a'.repeat(21) }, { visibility: 'unknown' }])('rejects invalid input without consuming quota: %j', async change => {
-    const { gateway, adminPreview } = setup();
+    const { gateway, admin } = setup();
     expect(await gateway.create({ ...draft, ...change } as FeedbackDraft)).toEqual({ ok: false, code: 'INVALID_INPUT' });
-    expect(value(await adminPreview.list())).toEqual([]);
+    expect(value(await admin.list())).toEqual([]);
   });
   it('surfaces corrupt storage without overwriting it', async () => {
     const { gateway, store } = setup();
