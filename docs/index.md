@@ -4,7 +4,7 @@
 
 - [현재 작업 현황](implementation/current-phase.md): 현재 구현·미완료 범위와 커밋·배포 상태
 - [빠른 시작](ux/quick-start.md): 현재 앱 사용법
-- [작업 추적](implementation/mvp-tracker.md): 변경별 구현·검증 이력
+- [작업 추적](implementation/mvp-tracker.md): 최근 변경과 주요 완료 결과
 - [요구사항](../requirements/requirements.yaml) · [스키마](../schemas/) · [기술 결정 색인](../decisions/README.md): 규범과 계약
 
 ## 제품
@@ -14,13 +14,12 @@
 
 ## 사용자 경험
 
-- [터치 UX 구현 결과와 점검 이력](ux/2026-09-24-touch-interaction-audit.md): 코드 반영·배포 완료, 남은 실기기 검증과 후순위. 최초 점검·권장안은 접힌 이력으로 보존
-- [프론트엔드 디자인 구현 결과와 검토 이력](ux/2026-09-24-frontend-design-review.md): 채택한 개선안 반영 완료, 변경된 결정·미반영 제안·검증 한계. 최초 진단과 계획은 접힌 이력으로 보존
+- [남은 작업과 검증](implementation/follow-up.md): 활동·공유·교실 알파, 유보한 UX 후보와 미검증 범위
+
 - [`ux/quick-start.md`](ux/quick-start.md): 실행, 편집, 전위·측정, 저장과 단축키
 - [`ux/overview.md`](ux/overview.md): 화면 모드와 반응형 구조
 - [`ux/interactions.md`](ux/interactions.md): 부품 배치, 배선, 값 수정, 오류 피드백
 - [`ux/workflows.md`](ux/workflows.md): 현재 교사·학생 흐름과 후속 활동 배포 구분
-- [2026-09-23 UX 검토](archive/ux-review/2026-09-23-mvp-ux-review.md): 개선 전 관찰·제안과 화면 근거를 보존한 역사 기록
 
 ## 물리 규약
 
@@ -46,10 +45,10 @@
 
 - [`implementation/phases.md`](implementation/phases.md): 단계 0~7의 산출물과 종료 조건
 - [`implementation/current-phase.md`](implementation/current-phase.md): 현재 구현 범위·게시 상태·남은 작업
-- [`implementation/mvp-tracker.md`](implementation/mvp-tracker.md): 초기 MVP와 후속 작업의 검증 이력
+- [`implementation/mvp-tracker.md`](implementation/mvp-tracker.md): 주요 완료 결과와 최근 변경의 근거
 - [`implementation/firebase-setup.md`](implementation/firebase-setup.md): Firebase와 공개 사이트 설정·검증 기록
 - [`implementation/definition-of-done.md`](implementation/definition-of-done.md): 공통 완료 조건
-- [`testing/mvp-coverage.md`](testing/mvp-coverage.md): 초기 요구사항별 근거·후속 검증 범위·남은 한계
+- [`testing/mvp-coverage.md`](testing/mvp-coverage.md): 요구사항별 회귀 근거·확인된 실행·남은 한계
 - [`testing/strategy.md`](testing/strategy.md): 테스트 층과 물리 불변식
 - [`testing/fixtures.md`](testing/fixtures.md): FIX-01~FIX-10의 목적
 - [`testing/usability.md`](testing/usability.md): 교사·학생 사용성 과제
