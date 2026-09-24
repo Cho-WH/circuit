@@ -11,6 +11,7 @@ import { analyze } from './analyze';
 import { diagnosticText } from './diagnostic-text';
 import { layoutExample } from './examples';
 import { CircuitCanvas } from './CircuitCanvas';
+import { ComponentPalette, type PaletteDrag } from './ComponentPalette';
 import { buildPotentialModel, makePath, potentialColor, potentialColorStops, suggestPaths } from '../visualization';
 import { PotentialGraph } from './PotentialGraph';
 import { MeasurementPanel } from './MeasurementPanel';
@@ -23,6 +24,7 @@ import { useDialogFocus } from './useDialogFocus';
 import { FileMenu } from './FileMenu';
 import { FeedbackLoading } from './FeedbackLoading';
 import { PotentialWorkspace } from './PotentialWorkspace';
+import { useVisibleViewport } from './useVisibleViewport';
 import './styles.css';
 import './ux.css';
 const FeedbackFeature = lazy(() => import('./FeedbackBoard'));
@@ -33,11 +35,13 @@ function GroundIcon({ size = 18 }: { size?: number }) {
 
 type Mode = 'build' | 'measure' | 'potential' | 'worksheet';
 export function App() {
+  useVisibleViewport();
   const [history, setHistory] = useState(() => { const saved = loadLocal(); return createHistory(saved?.ok ? saved.document : layoutExample(examples[1].document)); });
   const doc = history.present;
   const [selected, setSelected] = useState<string[]>([]);
   const [tool, setTool] = useState('select');
   const [placement, setPlacement] = useState<ComponentType | null>(null);
+  const [paletteDrag,setPaletteDrag]=useState<PaletteDrag|null>(null);
   const [wiringResetKey, setWiringResetKey] = useState(0);
   const [mode, setMode] = useState<Mode>('build');
   const [notice, updateNotice] = useState({ message: '', kind: 'status' as 'status' | 'error' });
@@ -124,7 +128,7 @@ export function App() {
     if (dispatch({ type: 'Paste', ...payload })) { setSelected(payload.components.map(c => c.id)); setClipboard(payload); }
   }
   function remove() { if (dispatch({ type: 'DeleteElements', ids: selected })) setSelected([]); }
-  function cancelTool() { setOutputFontPreview(null); setOutputTool('select'); setPlacement(null); setTool('select'); setWiringResetKey(key=>key+1); }
+  function cancelTool() { setPaletteDrag(null); setOutputFontPreview(null); setOutputTool('select'); setPlacement(null); setTool('select'); setWiringResetKey(key=>key+1); }
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (feedbackOpen) return;
@@ -197,7 +201,7 @@ export function App() {
   function selectElement(id: string | null, additive?: boolean) {
     if (mode === 'measure') { if (id && measurementKind === 'current' && doc.components.some(c=>c.id===id)) placeMeasurement('current',{kind:'component',id}); return; }
     if (tool === 'path' && id) { setCustomPathIds(ids => [...ids, id]); setHovered(id); return; }
-    if(mode==='worksheet'&&id)setDetailsOpen(true);
+    if(mode==='worksheet'&&id&&window.matchMedia('(min-width: 641px)').matches)setDetailsOpen(true);
     setSelected(id === null ? [] : additive ? selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id] : [id]);
   }
   function downloadJson() {
@@ -218,7 +222,7 @@ export function App() {
     setSelected(ids => next === 'measure' ? [] : next === 'worksheet' ? ids.filter(id => doc.components.some(c => c.id === id) || doc.annotations.some(a => a.id === id)) : ids.filter(id => !doc.annotations.some(a => a.id === id)));
   }
   const settingsButton = <button ref={settingsTrigger} className="settings-toggle" aria-label={mode === 'worksheet' ? '표시 설정' : '상세 설정'} aria-expanded={detailsOpen} onClick={() => setDetailsOpen(v => !v)}><SlidersHorizontal size={17}/><span>{mode === 'worksheet' ? '표시 설정' : '상세 설정'}</span></button>;
-  const circuitCanvas = <CircuitCanvas initialView={canvasView.current?.documentId===doc.documentId?canvasView.current.view:undefined} onViewChange={view=>{canvasView.current={documentId:doc.documentId,view};}} document={doc} largeLabels={presentation} measurement={mode==='measure'?{disconnectSources:measurementKind==='resistance',tool:measurementKind==='current'?'current':activeProbe,anchors:measurementAnchors,amperes:currentReading.ok?currentReading.value.amperes:undefined,onPlace:placeMeasurement,onActivate:which=>{if(which!=='current')setActiveProbe(which);}}:undefined} readOnly={mode === 'measure'} onWiringCommit={mode==='build'?commitWiring:undefined} wiringResetKey={wiringResetKey} selected={mode === 'measure' ? measurementKind === 'current' ? currentTarget?[currentTarget.id]:[] : [] : selected} tool={mode === 'measure' && tool === 'select' ? 'probe' : tool} placement={placement} currentArrows={mode === 'potential' && showCurrent ? result.branchCurrents : undefined} endpointColors={mode === 'measure' ? measurementKind === 'current' ? undefined : { [redProbe]: '#dc4545', [blackProbe]: '#252f3c' } : mode === 'potential' && showColors ? Object.fromEntries(Object.entries(potential.endpoints).map(([id, v]) => [id, v.color])) : undefined} endpointGroups={compilation.circuit.endpointToNet} endpointLabels={mode === 'potential' && showNumbers ? Object.fromEntries(Object.entries(potential.endpoints).map(([id, v]) => [id, formatQuantity(v.voltage, 'V')])) : undefined} highlightedEndpoints={mode === 'potential' && selectedNet ? potential.nets[selectedNet]?.endpointIds : undefined} highlightedElements={mode !== 'measure' && hovered ? [hovered] : undefined} onHoverElement={setHovered} onSelect={selectElement} onMove={positions => dispatch({ type: 'MoveComponents', positions })} onPlace={place} onEndpoint={endpoint} onWire={onWire} focusIds={focusIds} onCancel={cancelTool} onCommitComponent={(id,edit)=>{
+  const circuitCanvas = <CircuitCanvas paletteDrag={paletteDrag} initialView={canvasView.current?.documentId===doc.documentId?canvasView.current.view:undefined} onViewChange={view=>{canvasView.current={documentId:doc.documentId,view};}} document={doc} largeLabels={presentation} measurement={mode==='measure'?{disconnectSources:measurementKind==='resistance',tool:measurementKind==='current'?'current':activeProbe,anchors:measurementAnchors,amperes:currentReading.ok?currentReading.value.amperes:undefined,onPlace:placeMeasurement,onActivate:which=>{if(which!=='current')setActiveProbe(which);}}:undefined} readOnly={mode === 'measure'} onWiringCommit={mode==='build'?commitWiring:undefined} wiringResetKey={wiringResetKey} selected={mode === 'measure' ? measurementKind === 'current' ? currentTarget?[currentTarget.id]:[] : [] : selected} tool={mode === 'measure' && tool === 'select' ? 'probe' : tool} placement={placement} currentArrows={mode === 'potential' && showCurrent ? result.branchCurrents : undefined} endpointColors={mode === 'measure' ? measurementKind === 'current' ? undefined : { [redProbe]: '#dc4545', [blackProbe]: '#252f3c' } : mode === 'potential' && showColors ? Object.fromEntries(Object.entries(potential.endpoints).map(([id, v]) => [id, v.color])) : undefined} endpointGroups={compilation.circuit.endpointToNet} endpointLabels={mode === 'potential' && showNumbers ? Object.fromEntries(Object.entries(potential.endpoints).map(([id, v]) => [id, formatQuantity(v.voltage, 'V')])) : undefined} highlightedEndpoints={mode === 'potential' && selectedNet ? potential.nets[selectedNet]?.endpointIds : undefined} highlightedElements={mode !== 'measure' && hovered ? [hovered] : undefined} onHoverElement={setHovered} onSelect={selectElement} onMove={positions => dispatch({ type: 'MoveComponents', positions })} onPlace={place} onEndpoint={endpoint} onWire={onWire} focusIds={focusIds} onCancel={cancelTool} onCommitComponent={(id,edit)=>{
     const c=doc.components.find(c=>c.id===id);if(!c||mode!=='build')return false;
     const commands:Command[]=[];
     if(edit.label!==c.label)commands.push({type:'SetLabel',id,label:edit.label});
@@ -237,8 +241,7 @@ export function App() {
     <nav className="modebar" aria-label="작업 모드"><div className="mode-tabs"><button aria-pressed={mode === 'build'} className={mode === 'build' ? 'active' : ''} onClick={() => changeMode('build')}><MousePointer2 size={16}/>회로 만들기</button><button aria-pressed={mode === 'potential'} className={mode === 'potential' ? 'active' : ''} onClick={() => changeMode('potential')}><Zap size={16}/>전위 보기</button><button aria-pressed={mode === 'measure'} className={mode === 'measure' ? 'active' : ''} onClick={() => changeMode('measure')}><Crosshair size={16}/>측정하기</button><button aria-pressed={mode === 'worksheet'} className={mode === 'worksheet' ? 'active' : ''} onClick={() => changeMode('worksheet')}><Copy size={16}/>회로도 출력</button></div><button className="presentation-toggle" onClick={()=>setPresentation(v=>!v)}>{presentation?'편집 화면':'수업 화면'}</button></nav>
     <div className="workspace">
       <aside className="library-panel" hidden={mode !== 'build'}><div className="section-heading"><h2>부품</h2></div>
-        <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentType[]).map(type => <button key={type} className={placement === type ? 'component-tile chosen' : 'component-tile'} aria-pressed={placement===type} draggable onDragStart={e => {e.dataTransfer.setData('component', type);setPlacement(type);setTool('select');setWiringResetKey(key=>key+1);}} onDragEnd={()=>setPlacement(null)} onClick={() => { setPlacement(type); setTool('select'); setWiringResetKey(key=>key+1); }}>
-          <span className="tile-symbol"><svg width="62" height="32" viewBox="-50 -27 100 54" aria-hidden="true" stroke="currentColor" fill="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:symbolMarkup(createComponent(type,'palette',{x:0,y:0}))}}/></span><span>{componentDefinitions[type].name}</span></button>)}</div>
+        <ComponentPalette key={mode} resetKey={doc} placement={placement} onChoose={type=>{setPlacement(type);setTool('select');setWiringResetKey(key=>key+1);}} onClear={()=>setPlacement(null)} onDrag={event=>{setPaletteDrag(event);if(event.phase==='cancel')setPlacement(null);}}/>
         <div className="library-divider"/><div className="section-heading"><h2>시작하기</h2></div>
         <button className="wide-button" onClick={() => replace(emptyDocument(newId('circuit-')))}><Plus size={16}/>빈 회로 만들기</button>
         <label className="field-label">예제 회로<select aria-label="예제 회로" value={examples.some(x => x.document.documentId === doc.documentId) ? doc.documentId : ''} onChange={e => { const ex = examples.find(x => x.document.documentId === e.target.value); if (ex) replace(layoutExample(ex.document)); }}><option value="" disabled>예제 선택</option>{examples.map(example => <option key={example.id} value={example.document.documentId}>{example.title}</option>)}</select></label>
@@ -271,6 +274,6 @@ export function App() {
     </div>
     {saveStatus==='failed' && <div className="save-failure" role="alert"><AlertCircle size={17}/><span>저장하지 못했어요</span><button onClick={downloadJson}>회로 파일 저장</button></div>}
     {notice.message && <div className={`toast ${notice.kind}`} role={notice.kind==='error'?'alert':'status'}>{notice.message}<button onClick={() => setNotice('')} aria-label="알림 닫기"><X size={16}/></button></div>}
-    {help && <div className="modal-backdrop" onClick={() => setHelp(false)}><section ref={helpDialog} tabIndex={-1} className="help-dialog" role="dialog" aria-modal="true" aria-label="사용 도움말" onClick={e => e.stopPropagation()}><button className="dialog-close" onClick={() => setHelp(false)} aria-label="도움말 닫기"><X/></button><span className="eyebrow">빠른 시작</span><h2>작은 회로에서 시작하세요.</h2><ol><li>부품을 선택하고 캔버스를 눌러 놓습니다. 드래그해서 놓을 수도 있습니다.</li><li>첫 번째 단자, 두 번째 단자를 눌러 도선을 연결합니다.</li><li>저항이나 전원을 선택해 값을 바꾸면 결과가 즉시 갱신됩니다.</li><li>Shift+클릭으로 복수 선택하고 방향키·회전·복사·삭제를 사용할 수 있습니다.</li><li>파일 메뉴에서 회로 파일을 저장하세요. 자동 저장은 이 브라우저에만 남습니다.</li></ol><p>도선이 교차하는 것만으로는 전기적으로 연결되지 않습니다. 교차점을 누르면 연결 상태가 바뀌어요.</p><p>이 앱은 이상적인 직류 저항 회로를 다룹니다. 전위 높이와 부품의 경사는 전압 차이를 보여 주는 표현이며 실제 공간 높이가 아닙니다. 화살표는 관습적 전류 방향이고, 굵기는 전류 크기를 나타냅니다.</p><button className="primary" onClick={() => setHelp(false)}>닫기</button></section></div>}
+    {help && <div className="modal-backdrop" onClick={() => setHelp(false)}><section ref={helpDialog} tabIndex={-1} className="help-dialog" role="dialog" aria-modal="true" aria-label="사용 도움말" onClick={e => e.stopPropagation()}><button className="dialog-close" onClick={() => setHelp(false)} aria-label="도움말 닫기"><X/></button><span className="eyebrow">빠른 시작</span><h2>작은 회로에서 시작하세요.</h2><ol><li>부품을 선택하고 놓을 곳을 누릅니다. 터치는 길게 눌러 끌어올 수도 있습니다. 도선 위에서는 미리보기를 확인하고 삽입을 누릅니다.</li><li>첫 번째 단자, 두 번째 단자를 눌러 도선을 연결합니다.</li><li>저항이나 전원을 선택해 값을 바꾸면 결과가 즉시 갱신됩니다.</li><li>터치는 미선택 부품을 길게 눌러 옮기거나, 선택 후 이동·놓기 버튼을 사용합니다. 짧게 밀면 화면 이동, 두 손가락은 확대·이동입니다. 마우스 복수 선택은 Shift+클릭입니다.</li><li>파일 메뉴에서 회로 파일을 저장하세요. 자동 저장은 이 브라우저에만 남습니다.</li></ol><p>도선이 교차하는 것만으로는 전기적으로 연결되지 않습니다. 교차점을 누르면 연결 상태가 바뀌어요.</p><p>이 앱은 이상적인 직류 저항 회로를 다룹니다. 전위 높이와 부품의 경사는 전압 차이를 보여 주는 표현이며 실제 공간 높이가 아닙니다. 화살표는 관습적 전류 방향이고, 굵기는 전류 크기를 나타냅니다.</p><button className="primary" onClick={() => setHelp(false)}>닫기</button></section></div>}
   </div>;
 }

@@ -166,7 +166,8 @@ export function Potential3D(props: Potential3DProps) {
     element.appendChild(renderer.domElement);
     const scene = new THREE.Scene(), camera = new THREE.OrthographicCamera();
     camera.up.set(0, 0, 1);
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controlSurface = element.parentElement ?? element;
+    const controls = new OrbitControls(camera, controlSurface);
     controls.enableDamping = false; controls.screenSpacePanning = true; controls.minZoom = .3; controls.maxZoom = 8;
     const floor = new THREE.Group(), content = new THREE.Group(), raised = new THREE.Group();
     content.add(raised); scene.add(floor, content);
@@ -230,11 +231,20 @@ export function Potential3D(props: Potential3DProps) {
     controls.addEventListener('change', r.render);
     const interrupt = () => { r.stop(); r.render(); };
     controls.addEventListener('start', interrupt);
-    let start: { x: number; y: number } | null = null;
-    const down = (event: PointerEvent) => { start = { x: event.clientX, y: event.clientY }; };
+    const pointers = new Set<number>();
+    let start: { id:number; x: number; y: number; moved:boolean; label:string|null } | null = null;
+    const down = (event: PointerEvent) => {
+      pointers.add(event.pointerId);
+      start=pointers.size===1&&event.button===0?{id:event.pointerId,x:event.clientX,y:event.clientY,moved:false,label:(event.target as Element).closest('[data-selection-id]')?.getAttribute('data-selection-id')??null}:null;
+    };
+    const move = (event:PointerEvent) => {if(start?.id===event.pointerId&&Math.hypot(event.clientX-start.x,event.clientY-start.y)>5)start.moved=true;};
+    const cancel = (event:PointerEvent) => {pointers.delete(event.pointerId);start=null;};
+    const blur = () => {pointers.clear();start=null;};
     const up = (event: PointerEvent) => {
-      if (!start || Math.hypot(event.clientX-start.x,event.clientY-start.y)>5) { start = null; return; }
-      start = null;
+      pointers.delete(event.pointerId);
+      if (!start || start.id!==event.pointerId || start.moved || pointers.size || Math.hypot(event.clientX-start.x,event.clientY-start.y)>5) { start = null; return; }
+      const label=start.label;start = null;
+      if(label){latest.current.onSelect?.(label);return;}
       const rect = renderer.domElement.getBoundingClientRect();
       const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);
       const hit = ray.intersectObjects(r.raised.children,true).find(hit => typeof hit.object.userData.id === 'string');
@@ -247,10 +257,10 @@ export function Potential3D(props: Potential3DProps) {
       }
     };
     const lost = (event: Event) => { event.preventDefault(); r.stop(); controls.enabled = false; setFallback(true); latest.current.onError?.('context-lost'); };
-    renderer.domElement.addEventListener('pointerdown', down); renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('webglcontextlost', lost);
+    controlSurface.addEventListener('pointerdown', down); controlSurface.addEventListener('pointermove', move); controlSurface.addEventListener('pointercancel', cancel); controlSurface.addEventListener('lostpointercapture', cancel); controlSurface.addEventListener('pointerup', up); renderer.domElement.addEventListener('webglcontextlost', lost); window.addEventListener('blur',blur);
     return () => {
       cancelAnimationFrame(r.frame); observer.disconnect(); controls.removeEventListener('change',r.render); controls.removeEventListener('start',interrupt); controls.dispose();
-      renderer.domElement.removeEventListener('pointerdown',down); renderer.domElement.removeEventListener('pointerup',up); renderer.domElement.removeEventListener('webglcontextlost',lost);
+      controlSurface.removeEventListener('pointerdown',down); controlSurface.removeEventListener('pointermove',move); controlSurface.removeEventListener('pointercancel',cancel); controlSurface.removeEventListener('lostpointercapture',cancel); controlSurface.removeEventListener('pointerup',up); renderer.domElement.removeEventListener('webglcontextlost',lost); window.removeEventListener('blur',blur);
       dispose(r.floor); dispose(r.content); renderer.dispose(); renderer.domElement.remove();
       labelHost?.replaceChildren(); r.labels = []; runtime.current = null;
     };
@@ -323,7 +333,7 @@ export function Potential3D(props: Potential3DProps) {
       if (!reusable || reusable.text !== text) {
         if(className==='component-tag'){element.setAttribute('aria-label',text);element.innerHTML=htmlNotation(text,true);}else element.textContent=text;
       }
-      if (id) { element.setAttribute('type','button'); element.setAttribute('aria-label',`${text} 선택`); element.onclick = () => latest.current.onSelect?.(id); }
+      if (id) { element.setAttribute('type','button'); element.setAttribute('data-selection-id',id); element.setAttribute('aria-label',`${text} 선택`); element.onclick = e => { if(e.detail===0)latest.current.onSelect?.(id); }; }
       existingLabels.delete(key);
       nextLabels.push({key,text,element,point:p,lifted,priority});
     };

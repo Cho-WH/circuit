@@ -7,9 +7,13 @@ import { useContextWiring, WiringMarks, WiringOverlay, endpointTarget, wiringTar
 import { MeasurementLayer, measurementHit } from './measurement-tools';
 import type { MeasurementLayerProps } from './measurement-tools/MeasurementLayer';
 import { useTouchNavigation } from './useTouchNavigation';
+import { useCanvasViewport } from './useCanvasViewport';
+import type { PaletteDrag } from './ComponentPalette';
+import { compactWirePoints } from '../component-library';
 import { componentDefinitions, circuitTextScale, componentNotationLayout, notationMetrics, createComponent, wireCrossings, wirePath, componentValue, componentValueInput, documentBounds, endpointPosition, pointsAttribute, symbolMarkup, terminalPosition, wirePoints } from '../component-library';
 
 export interface CanvasProps {
+  paletteDrag?: PaletteDrag|null;
   initialView?: {x:number;y:number;width:number;height:number};
   onViewChange?: (view:{x:number;y:number;width:number;height:number})=>void;
   readOnly?: boolean;
@@ -40,6 +44,13 @@ export function CircuitCanvas(props: CanvasProps) {
   const [pointer, setPointer] = useState<Point>({ x: 500, y: 300 });
   const [insertionWire,setInsertionWire]=useState<string>();
   const [choosingInsertion,setChoosingInsertion]=useState(false);
+  const [touchCandidates,setTouchCandidates]=useState<ReturnType<typeof insertionCandidates>|null>(null);
+  useEffect(()=>{setTouchCandidates(null);},[document,tool,placement]);
+  const [touchInput,setTouchInput]=useState(false);
+  const [tapMove,setTapMove]=useState(false);
+  const [componentChoices,setComponentChoices]=useState<string[]>([]);
+  const [measurementCancel,setMeasurementCancel]=useState(0);
+  const placementPointer=useRef<number|null>(null);
   const [placementMessage,setPlacementMessage]=useState('');
   const [editing,setEditing]=useState<{id:string;label:string;draft:string;error:string}|null>(null);
   const inlineInput=useRef<HTMLInputElement>(null);
@@ -49,24 +60,25 @@ export function CircuitCanvas(props: CanvasProps) {
   const [pan, setPan] = useState<{ x: number; y: number; view: typeof view } | null>(null);
   const capturedPointer = useRef<number | null>(null);
   function cancelGesture() {
-    setDrag(null); setPan(null);
+    setDrag(null); setPan(null); setTapMove(false); placementPointer.current=null; setMeasurementCancel(n=>n+1);
     const id = capturedPointer.current;
     capturedPointer.current = null;
     if (id !== null && svg.current?.hasPointerCapture(id)) svg.current.releasePointerCapture(id);
   }
   useEffect(() => { cancelGesture(); }, [document, tool, placement, props.readOnly]);
   useEffect(() => {
-    const cancel = (e: KeyboardEvent) => { if (e.key === 'Escape') cancelGesture(); };
+    const cancel = (e: KeyboardEvent) => { if (e.key === 'Escape') {cancelGesture();touchNavigation.reset();setComponentChoices([]);} };
     window.addEventListener('keydown', cancel);
     window.addEventListener('blur', cancelGesture);
     return () => { window.removeEventListener('keydown', cancel); window.removeEventListener('blur', cancelGesture); };
   }, []);
-  const [viewport, setViewport] = useState({ width: 1000, height: 620 });
-  useEffect(() => { if (!svg.current) return; const observer = new ResizeObserver(([entry]) => setViewport({ width: entry.contentRect.width, height: entry.contentRect.height })); observer.observe(svg.current); return () => observer.disconnect(); }, []);
+  const viewport = useCanvasViewport(svg,view,setView,()=>{cancelGesture();touchNavigation.reset();wiring.clearHint();},document.components.find(c=>c.id===(editing?.id??selected[0]))?.position,Boolean(editing));
   const drawingScale = Math.max(.01, Math.min(viewport.width / view.width, viewport.height / view.height));
-  const wiring = useContextWiring({ document, enabled: Boolean(props.onWiringCommit) && !props.readOnly && !placement && (tool === 'select' || tool === 'wire'), tool, selected, resetKey: props.wiringResetKey, onSelect: props.onSelect, commit: props.onWiringCommit, onFinish: props.onCancel });
+  const wiring = useContextWiring({ document, enabled: Boolean(props.onWiringCommit) && !props.readOnly && !placement && !tapMove && (tool === 'select' || tool === 'wire'), tool, selected, resetKey: props.wiringResetKey, onSelect: props.onSelect, commit: props.onWiringCommit, onFinish: props.onCancel });
   const touchNavigation = useTouchNavigation(view, setView, drawingScale, cancelGesture);
   useEffect(() => { touchNavigation.reset(); }, [document, tool, placement, props.readOnly]);
+  useEffect(() => {setComponentChoices([]);wiring.clearHint();},[view]);
+  useEffect(() => {setComponentChoices([]);},[document,tool,placement]);
   const inputType = useRef('mouse');
   const cancelWiring = () => { wiring.cancel(); props.onCancel?.(); };
   useEffect(()=>{
@@ -83,11 +95,20 @@ export function CircuitCanvas(props: CanvasProps) {
     if (!matrix) return { x: 0, y: 0 };
     const p = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse()); return { x: p.x, y: p.y };
   }
+  function bodyTargets(x:number,y:number):string[] {
+    return [...(svg.current?.querySelectorAll<SVGElement>('.component-hit')??[])].filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&x>=r.left-12&&x<=r.right+12&&y>=r.top-12&&y<=r.bottom+12;}).map(el=>el.closest('[data-component-id]')!.getAttribute('data-component-id')!);
+  }
   const activeDrag = drag?.document === document && tool === 'select' && !placement && !props.readOnly ? drag : null;
   function dragPositions(session: NonNullable<typeof drag>, current: Point): Record<string, Point> {
     const delta = snap({ x: current.x - session.start.x, y: current.y - session.start.y });
     if (delta.x === 0 && delta.y === 0) return {};
     return Object.fromEntries(Object.entries(session.positions).map(([id, pos]) => [id, { x: pos.x + delta.x, y: pos.y + delta.y }]));
+  }
+  function beginDrag(id:string, start:Point, pointerId:number) {
+    const ids=selected.includes(id)?selected:[id];
+    props.onSelect(id);wiring.clearHint();
+    setDrag({start,current:start,positions:Object.fromEntries(document.components.filter(c=>ids.includes(c.id)).map(c=>[c.id,c.position])),pointerId,document});
+    if(pointerId>=0){capturedPointer.current=pointerId;svg.current?.setPointerCapture(pointerId);}
   }
   const movedDocument = useMemo(() => {
     if (!activeDrag) return document;
@@ -96,8 +117,8 @@ export function CircuitCanvas(props: CanvasProps) {
     const result = previewCommand(document, { type: 'MoveComponents', positions });
     return result.ok ? result.document : document;
   }, [document, activeDrag]);
-  const candidates=placement?insertionCandidates(document,snap(pointer)):[];
-  const chosenCandidates=insertionWire?candidates.filter(c=>c.wireId===insertionWire):candidates;
+  const candidates=placement?(touchCandidates??insertionCandidates(document,snap(pointer))):[];
+  const chosenCandidates=insertionWire?candidates.filter(c=>`${c.wireId}:${c.segment}`===insertionWire):candidates;
   const candidate=chosenCandidates.length===1?chosenCandidates[0]:undefined;
   let previewId='__placement';
   const usedIds=new Set([...document.components,...document.components.flatMap(c=>c.terminals),...document.wires,...document.junctions,...document.annotations].map(x=>x.id));
@@ -107,16 +128,49 @@ export function CircuitCanvas(props: CanvasProps) {
   const insertionPreview=previewComponent&&candidate&&!candidate.reason&&placement!=='voltmeter'?previewCommand(document,{type:'InsertComponentOnWire',component:previewComponent,wireId:candidate.wireId,segment:candidate.segment,newWireId:previewId+'.wire'}):null;
   const effective=insertionPreview?.ok?insertionPreview.document:movedDocument;
   const crossings=wireCrossings(effective);
-  function placeAt(type:ComponentType,p:Point){
-    const all=insertionCandidates(document,p);
-    const options=insertionWire?all.filter(c=>c.wireId===insertionWire):all;
+  function placeAt(type:ComponentType,p:Point,touchConfirm=false){
+    const all=touchConfirm&&touchCandidates?touchCandidates:insertionCandidates(document,p);
+    const options=insertionWire?all.filter(c=>`${c.wireId}:${c.segment}`===insertionWire):all;
     if(all.length){
       if(options.length!==1){setPointer(p);setChoosingInsertion(true);setPlacementMessage('겹친 도선 중 삽입할 도선을 선택하세요.');return;}
       const target=options[0];
       if(type==='voltmeter'||target.reason){setPlacementMessage(type==='voltmeter'?'전압계는 빈 공간에 놓고 두 점에 병렬로 연결하세요.':target.reason==='space'?'부품 양쪽에 공간이 필요합니다. 꺾임·단자에서 더 떨어진 곳을 선택하세요.':'교차점에서 떨어진 구간에 놓으세요.');return;}
-      props.onPlace(type,p,{wireId:target.wireId,segment:target.segment});
+      props.onPlace(type,target.position,{wireId:target.wireId,segment:target.segment});
     }else props.onPlace(type,p);
   }
+  function touchInsertionOptions(p:Point):ReturnType<typeof insertionCandidates> {
+    // Retain every screen-near segment by ID, including distinct wires at low zoom.
+    const options:ReturnType<typeof insertionCandidates>=[];
+    for(const w of document.wires){const points=compactWirePoints(wirePoints(document,w));for(let i=1;i<points.length;i++){
+      const a=points[i-1],b=points[i],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));
+      const q={x:a.x+t*dx,y:a.y+t*dy};
+      if(Math.hypot(q.x-p.x,q.y-p.y)<=18/drawingScale){
+        const aligned=dx===0?{x:q.x,y:snap(q).y}:{x:snap(q).x,y:q.y};
+        const option=insertionCandidates(document,aligned,w.id).find(c=>c.segment===i-1);if(option)options.push(option);
+      }
+    }}
+    return options;
+  }
+  function touchPlacementPoint(p:Point):Point {
+    const options=touchInsertionOptions(p);setTouchCandidates(options);
+    return options.length===1?options[0].position:snap(p);
+  }
+  function touchPlaceAt(type:ComponentType,p:Point){
+    const options=touchInsertionOptions(p),target=options.length===1?options[0].position:snap(p);setTouchCandidates(options);
+    setPointer(target);setInsertionWire(undefined);setPlacementMessage('');
+    if(options.length){setChoosingInsertion(true);return;}
+    setChoosingInsertion(false);props.onPlace(type,target);
+  }
+  useEffect(()=>{
+    const e=props.paletteDrag;if(!e||props.readOnly)return;
+    inputType.current='touch';setTouchInput(true);
+    if(e.phase==='cancel'){cancelGesture();setChoosingInsertion(false);return;}
+    if(placement!==e.type)return;
+    const rect=svg.current?.getBoundingClientRect();
+    const inside=rect&&e.x>=rect.left&&e.x<=rect.right&&e.y>=rect.top&&e.y<=rect.bottom;
+    if(inside){setPointer(touchPlacementPoint(point(e.x,e.y)));setChoosingInsertion(false);setInsertionWire(undefined);}
+    if(e.phase==='drop'){if(inside)touchPlaceAt(e.type,point(e.x,e.y));else props.onCancel?.();}
+  },[props.paletteDrag]);
   function editValue(id:string,fromAction=false){
     const c=document.components.find(c=>c.id===id),def=c&&componentDefinitions[c.type];
     if(!c||!def)return;
@@ -158,16 +212,23 @@ export function CircuitCanvas(props: CanvasProps) {
   const wireOrigin = wiring.active ? wiring.start?.point : null;
   const isWireStart = (id: string) => wiring.start?.kind === 'endpoint' && wiring.start.ref.id === id;
   const wireEnd = wiring.active && wiring.end ? wiring.end : snap(pointer);
-  return <div className={`canvas-shell ${placement ? 'placing' : ''} ${wiring.active ? 'smart-wiring' : ''}`}>
+  return <div data-touch={touchInput||undefined} data-gesture={activeDrag?'dragging':touchNavigation.state} className={`canvas-shell ${editing?'is-editing ':''}${placement ? 'placing' : ''} ${wiring.active ? 'smart-wiring' : ''}`}>
     <svg ref={svg} className="circuit-canvas" aria-label={props.readOnly ? (props.readOnlyLabel??'측정 회로') : '회로 편집 캔버스'} role="group" viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} tabIndex={0}
       onPointerDownCapture={e => {
-        inputType.current = e.pointerType; wiring.setTouch(e.pointerType === 'touch');
+        if(tapMove&&e.pointerType!=='touch'){touchNavigation.down(e,false);e.stopPropagation();return;}
+        if(e.pointerType!=='touch')setTouchCandidates(null);
+        inputType.current = e.pointerType; setTouchInput(e.pointerType==='touch'); wiring.setTouch(e.pointerType === 'touch');
         const target = e.target as Element;
-        if (target.closest('[data-wiring-ui], [data-measurement-handle]')) return;
+        if (target.closest('[data-wiring-ui]')) return;
         const componentId = target.closest('[data-component-id]')?.getAttribute('data-component-id');
+        const bodies=e.pointerType==='touch'?bodyTargets(e.clientX,e.clientY):[];
         const hits = wiring.active ? wiringTargets(document, point(e.clientX, e.clientY), drawingScale, Boolean(wiring.start)) : [];
-        const selectedBody = target.closest('.editable-value') || (componentId && selected.includes(componentId) && !hits.length);
-        if (touchNavigation.down(e, !selectedBody)) { e.stopPropagation(); return; }
+        const handle=target.closest('[data-measurement-handle]');
+        const selectedBody = !placement&&!tapMove&&(handle||target.closest('.editable-value') || (componentId && selected.includes(componentId) && !hits.length));
+        const p=point(e.clientX,e.clientY),id=e.pointerId;
+        if(e.pointerType==='touch'&&placement){setPointer(touchPlacementPoint(p));setInsertionWire(undefined);setChoosingInsertion(false);}
+        const hold=placement&&!props.readOnly?()=>{placementPointer.current=id;svg.current?.setPointerCapture(id);}:componentId&&bodies.length<=1&&!selectedBody&&!hits.length&&!props.readOnly&&!tapMove&&tool==='select'&&!target.closest('.editable-value')?()=>beginDrag(componentId,p,id):undefined;
+        if (touchNavigation.down(e, !selectedBody, hold)) { e.stopPropagation(); return; }
         if (wiring.active && hits.length && !target.closest('.editable-value')) e.stopPropagation();
       }}
       onPointerMoveCapture={e => {
@@ -180,9 +241,15 @@ export function CircuitCanvas(props: CanvasProps) {
         if (touchNavigation.consumeClick()) { e.stopPropagation(); e.preventDefault(); return; }
         const target = (inputType.current === 'touch' ? svg.current?.ownerDocument.elementFromPoint?.(e.clientX, e.clientY) ?? e.target : e.target) as Element | null;
         if (target?.closest('[data-wiring-ui]')) return;
+        if(tapMove&&drag){e.stopPropagation();setDrag({...drag,current:snap(point(e.clientX,e.clientY))});return;}
+        if(inputType.current==='touch'&&placement&&!props.readOnly){e.stopPropagation();touchPlaceAt(placement,point(e.clientX,e.clientY));return;}
         if (props.measurement) {
           if (inputType.current==='touch' && e.target===svg.current) { const hit=measurementHit(document,point(e.clientX,e.clientY),drawingScale,props.measurement.tool); if(hit)props.measurement.onPlace(props.measurement.tool,hit); e.stopPropagation(); }
           return;
+        }
+        if(inputType.current==='touch'&&!wiring.start&&tool==='select'&&!target?.closest('[data-endpoint-id]')){
+          const bodies=bodyTargets(e.clientX,e.clientY);
+          if(bodies.length>1){e.stopPropagation();wiring.clearHint();setComponentChoices(bodies);return;}
         }
         if (target?.closest('.editable-value')) return;
         if (wiring.active && wiring.tap(point(e.clientX, e.clientY), drawingScale, inputType.current === 'touch')) { e.stopPropagation(); return; }
@@ -194,7 +261,6 @@ export function CircuitCanvas(props: CanvasProps) {
           if (!wiring.active && wireElement) { e.stopPropagation(); props.onWire(wireElement.getAttribute('data-wire-id')!,snap(point(e.clientX,e.clientY))); return; }
           const id = target?.closest('[data-component-id]')?.getAttribute('data-component-id');
           if (id) { wiring.cancel(); props.onSelect(id); }
-          else if (placement && !props.readOnly) placeAt(placement, snap(point(e.clientX, e.clientY)));
           else { wiring.clearHint(); props.onSelect(null); }
         }
       }}
@@ -209,6 +275,7 @@ export function CircuitCanvas(props: CanvasProps) {
         if (tool === 'pan' && e.key.startsWith('Arrow')) { e.preventDefault(); e.stopPropagation(); setView(v => ({ ...v, x: v.x + (e.key === 'ArrowRight' ? 40 : e.key === 'ArrowLeft' ? -40 : 0), y: v.y + (e.key === 'ArrowDown' ? 40 : e.key === 'ArrowUp' ? -40 : 0) })); }
       }}
       onPointerDown={e => {
+        if(tapMove)return;
         if (capturedPointer.current !== null) return;
         if (e.button === 1 || tool === 'pan') { e.preventDefault(); setPan({ x: e.clientX, y: e.clientY, view }); capturedPointer.current = e.pointerId; e.currentTarget.setPointerCapture(e.pointerId); return; }
         if (e.button !== 0) return;
@@ -218,20 +285,24 @@ export function CircuitCanvas(props: CanvasProps) {
         wiring.clearHint(); props.onSelect(null); props.onBackground(p);
       }}
       onPointerMove={e => {
-        const p = point(e.clientX, e.clientY); if(!choosingInsertion){setPointer(p);setPlacementMessage('');}
+        const p = point(e.clientX, e.clientY); if(!choosingInsertion&&!tapMove){setPointer(placement&&e.pointerType==='touch'?touchPlacementPoint(p):p);setPlacementMessage('');}
         if (pan && capturedPointer.current === e.pointerId && svg.current) { const scale = pan.view.width / svg.current.clientWidth; setView({ ...pan.view, x: pan.view.x - (e.clientX - pan.x) * scale, y: pan.view.y - (e.clientY - pan.y) * scale }); }
         if (activeDrag?.pointerId === e.pointerId) setDrag({ ...activeDrag, current: p });
       }}
       onPointerUp={e => {
+        if(placementPointer.current===e.pointerId&&placement){const r=e.currentTarget.getBoundingClientRect();if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom)touchPlaceAt(placement,point(e.clientX,e.clientY));cancelGesture();return;}
         if (capturedPointer.current !== e.pointerId) return;
         // Commit the release coordinates, not a possibly older pointermove render.
         if (activeDrag?.pointerId === e.pointerId) {
           const positions = dragPositions(activeDrag, point(e.clientX, e.clientY));
-          if (Object.keys(positions).length) props.onMove(positions);
+          const rect=e.currentTarget.getBoundingClientRect();
+          const inside=!rect.width||(e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom);
+          if(Object.keys(positions).length&&e.pointerType==='touch')touchNavigation.suppress();
+          if (inside&&Object.keys(positions).length) props.onMove(positions);
         }
         cancelGesture();
-      }} onPointerCancel={e => { if (capturedPointer.current === e.pointerId) cancelGesture(); }}
-      onLostPointerCapture={e => { if (capturedPointer.current === e.pointerId) cancelGesture(); }}>
+      }} onContextMenu={e=>{if(inputType.current==='touch')e.preventDefault();}} onPointerCancel={e => { if (capturedPointer.current === e.pointerId) cancelGesture(); }}
+      onLostPointerCapture={e => { touchNavigation.lost(e); if (capturedPointer.current === e.pointerId) cancelGesture(); }}>
       <defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r="1" fill="#d5dce3" /></pattern></defs>
       <rect className="canvas-background" x={view.x} y={view.y} width={view.width} height={view.height} fill="url(#grid)" />
       {!document.components.length && <g pointerEvents="none"><text x="500" y="270" textAnchor="middle" fontSize="24" fill="#5c6978">{props.readOnly ? '측정할 회로가 없습니다' : '첫 번째 회로를 그려볼까요?'}</text><text x="500" y="306" textAnchor="middle" fontSize="15" fill="#8290a0">{props.readOnly ? '회로 편집에서 부품을 추가하세요' : '왼쪽에서 부품을 선택하고 이곳에 놓으세요.'}</text></g>}
@@ -246,7 +317,7 @@ export function CircuitCanvas(props: CanvasProps) {
         const presentation = { label: c.label, value: componentValue(c), voltage: null, current: null };
         const textLayout=componentNotationLayout(c,presentation.label,presentation.value,14*labelScale);
         const value = presentation.value;
-        return <g key={c.id} className="circuit-element" data-component-id={c.id} data-source-isolated={isolated||undefined} data-selected={select} data-highlighted={Boolean(glow)} onMouseEnter={() => props.onHoverElement?.(c.id)} onMouseLeave={() => props.onHoverElement?.(null)}>
+        return <g key={c.id} className="circuit-element" data-component-id={c.id} data-source-isolated={isolated||undefined} data-selected={select} data-dragging={Boolean(activeDrag?.positions[c.id])} data-highlighted={Boolean(glow)} onMouseEnter={() => props.onHoverElement?.(c.id)} onMouseLeave={() => props.onHoverElement?.(null)}>
           <g role="button" tabIndex={0} aria-pressed={select} aria-label={`${c.label} ${componentValue(c)}`} className="component" onPointerDown={e => {
             if (e.button !== 0 || capturedPointer.current !== null) return;
             if (props.readOnly) { e.stopPropagation(); props.onSelect(c.id); return; }
@@ -281,13 +352,15 @@ export function CircuitCanvas(props: CanvasProps) {
       {document.referenceNode && (() => { const p = endpointPosition(effective, document.referenceNode!); return <g transform={`translate(${p.x},${p.y + 9})`} pointerEvents="none" stroke="#8694a5" strokeWidth="1.5"><path d="M0 0V10 M-10 10H10 M-6 14H6 M-2 18H2"/><text x={16 * labelScale} y={16 * labelScale} fill="#6a7c92" stroke="none" fontSize={11 * labelScale}>0 V</text></g>; })()}
 
       {callouts.map(label => <g key={label.id} pointerEvents="none"><path d={`M${label.anchor.x} ${label.anchor.y}L${label.x+label.w/2} ${label.y+label.h}`} fill="none" stroke={endColor(label.id)} strokeWidth="1" strokeDasharray="3 3"/><rect x={label.x} y={label.y} width={label.w} height={label.h} rx={5*labelScale} fill="white" stroke={endColor(label.id)}/><text x={label.x+label.w/2} y={label.y+15*labelScale} textAnchor="middle" fontSize={12*labelScale} fill={endColor(label.id)}>{label.text}</text></g>)}
-      {props.measurement&&<MeasurementLayer {...props.measurement} document={document} scale={drawingScale} bounds={view} point={point}/>}
+      {props.measurement&&<MeasurementLayer {...props.measurement} cancelKey={measurementCancel} document={document} scale={drawingScale} bounds={view} point={point}/>}
       {wireOrigin && <polyline points={pointsAttribute([wireOrigin, {x:wireOrigin.x,y:wireEnd.y}, wireEnd])} fill="none" stroke="#174895" strokeWidth="2.5" strokeDasharray="7 5" pointerEvents="none" />}
       <WiringMarks wiring={wiring} scale={drawingScale} bounds={view}/>
       {wiring.active&&!wiring.start&&crossings.map(c=><g key={c.point.x+':'+c.point.y} role="button" tabIndex={0} aria-label={'교차 '+c.horizontalId+' '+c.verticalId+' 연결 옵션'} onFocus={()=>wiring.focusTarget({kind:'crossing',crossing:c,point:c.point})} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();wiring.activate({kind:'crossing',crossing:c,point:c.point},true);}}}><circle cx={c.point.x} cy={c.point.y} r={22/drawingScale} fill="transparent"/></g>)}
       {previewComponent && <g opacity=".6" pointerEvents="none" aria-label="부품 배치 미리보기"><g transform={`translate(${previewComponent.position.x},${previewComponent.position.y}) rotate(${previewComponent.rotation})`} stroke="#245cb1" fill="white" color="#245cb1" strokeWidth="2.5" dangerouslySetInnerHTML={{__html:symbolMarkup(previewComponent)}}/>{previewComponent.terminals.map((t,i)=>{const p=terminalPosition(previewComponent,i);return <circle key={t.id} cx={p.x} cy={p.y} r="4" fill="#245cb1"/>;})}</g>}
     </svg>
-    {placement&&<div className="placement-status" role="status"><span>{placementMessage||(candidate?.reason==='space'?'삽입할 공간이 부족합니다':candidate?.reason==='crossing'?'교차점에서 떨어진 구간에 놓으세요':insertionPreview?.ok?'도선에 삽입 · 양쪽 단자에 연결':candidates.length>1?'삽입할 도선을 선택하세요':candidate&&placement==='voltmeter'?'전압계는 빈 공간에 놓으세요':'빈 공간에 부품 배치')}</span>{candidates.length>1&&[...new Set(candidates.map(c=>c.wireId))].map(id=><button key={id} aria-pressed={insertionWire===id} onClick={()=>{setInsertionWire(id);setPlacementMessage('');}}>{id}</button>)}<button onClick={()=>placeAt(placement,snap(pointer))}>여기에 배치</button><button onClick={props.onCancel}>취소</button></div>}
+    {componentChoices.length>0&&<div className="touch-choice-list" aria-label="겹친 부품 선택"><span>부품을 선택한 뒤 이동·이름·값을 조절하세요</span>{componentChoices.map(id=><button key={id} onClick={()=>{props.onSelect(id);setComponentChoices([]);}}>{document.components.find(c=>c.id===id)?.label} · {id}</button>)}<button onClick={()=>setComponentChoices([])}>취소</button></div>}
+    {placement&&<div className="placement-status" role="status"><span>{placementMessage||(candidate?.reason==='space'?'삽입할 공간이 부족합니다':candidate?.reason==='crossing'?'교차점에서 떨어진 구간에 놓으세요':insertionPreview?.ok?'양쪽 연결을 확인하고 삽입하세요':candidates.length>1?'삽입할 도선을 선택하세요':candidate&&placement==='voltmeter'?'전압계는 빈 공간에 놓으세요':'놓을 곳을 누르거나 길게 눌러 옮기세요')}</span>{candidates.length>1&&candidates.map(c=><button key={`${c.wireId}:${c.segment}`} aria-pressed={insertionWire===`${c.wireId}:${c.segment}`} onClick={()=>{setInsertionWire(`${c.wireId}:${c.segment}`);setPlacementMessage('');}}>{c.wireId} · 구간 {c.segment+1}</button>)}<button disabled={candidates.length>0&&(!candidate||Boolean(candidate.reason)||placement==='voltmeter')} onClick={()=>placeAt(placement,snap(pointer),true)}>{candidates.length?'삽입':'여기에 배치'}</button><button onClick={props.onCancel}>취소</button></div>}
+    {tapMove&&drag&&<div className="placement-status"><span>옮길 곳을 누르고 배선을 확인하세요</span><button onClick={()=>{const positions=dragPositions(drag,drag.current);if(Object.keys(positions).length)props.onMove(positions);cancelGesture();}}>놓기</button><button onClick={cancelGesture}>취소</button></div>}
     <WiringOverlay wiring={wiring} screenPoint={screenPoint} width={viewport.width} height={viewport.height} cancel={cancelWiring}/>
     {editing&&editingComponent&&editingDefinition&&<form className="inline-value-editor" aria-label={`${editingComponent.label} 회로 위 값 편집`} style={{left:Math.max(8,Math.min(viewport.width-288,editorPoint.x-140)),top:editorTop}} onKeyDown={e=>{e.stopPropagation();if(e.key==='Escape'){e.preventDefault();closeEditor();}}} onSubmit={e=>{
       e.preventDefault();
@@ -304,8 +377,9 @@ export function CircuitCanvas(props: CanvasProps) {
       <div className="inline-edit-actions"><button className="primary" type="submit">적용</button><button type="button" onClick={closeEditor}>취소</button></div>
       {editing.error&&<p id="inline-value-error" role="alert">{editing.error}</p>}
     </form>}
-    {!props.readOnly&&!placement&&!editing&&props.onAction&&selected.some(id=>document.components.some(c=>c.id===id))&&<div className="canvas-selection-tools" style={{left:Math.max(8,Math.min(viewport.width-260,selectionPoint.x-126)),right:'auto',top:Math.max(10,selectionPoint.y-Math.max(130,110*drawingScale))}} aria-label="선택 부품 도구"><button onClick={()=>editValue(selected[0],true)}>이름·값 편집</button><button onClick={()=>props.onAction?.('rotate')}>회전</button><button onClick={()=>props.onAction?.('copy')}>복사</button><button onClick={()=>props.onAction?.('delete')}>삭제</button></div>}
+    {!props.readOnly&&!placement&&!editing&&!tapMove&&props.onAction&&selectedComponent&&<div className="canvas-selection-tools" style={{left:Math.max(8,Math.min(viewport.width-320,selectionPoint.x-160)),right:'auto',top:Math.max(10,selectionPoint.y-Math.max(130,110*drawingScale))}} aria-label="선택 부품 도구"><button onClick={()=>editValue(selected[0],true)}>이름·값</button><button onClick={()=>{beginDrag(selectedComponent.id,selectedComponent.position,-1);setTapMove(true);}}>이동</button><button onClick={()=>props.onAction?.('rotate')}>회전</button><button onClick={()=>props.onAction?.('copy')}>복사</button><button onClick={()=>props.onAction?.('delete')}>삭제</button></div>}
+    <span className="wiring-sr-only" role="status">{activeDrag?'부품 이동 중':touchNavigation.state==='panning'?'화면 이동 중':touchNavigation.state==='pinching'?'화면 확대·이동 중':''}</span>
     <div className="canvas-view-tools"><button onClick={() => zoom(.8)} aria-label="확대">＋</button><span>{Math.round(100000 / view.width)}%</span><button onClick={() => zoom(1.25)} aria-label="축소">−</button><button onClick={() => setView(documentBounds(document, 110))}>전체 보기</button></div>
+    <details className="canvas-pan-tools"><summary aria-label="화면 이동 도구">화면 이동</summary><div>{[{text:'←',label:'왼쪽',x:-60,y:0},{text:'↑',label:'위',x:0,y:-60},{text:'↓',label:'아래',x:0,y:60},{text:'→',label:'오른쪽',x:60,y:0}].map(d=><button key={d.label} aria-label={`화면 ${d.label}로 이동`} onClick={()=>setView(v=>({...v,x:v.x+d.x/drawingScale,y:v.y+d.y/drawingScale}))}>{d.text}</button>)}</div></details>
   </div>;
 }
-

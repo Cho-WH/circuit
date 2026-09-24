@@ -56,6 +56,21 @@ async function mount(strict = false) {
   return { ready, entered, error, circuit, compiled, update };
 }
 describe('3D prepared first frame and camera lifetime', () => {
+  it('selects labels only on a single stationary pointer or keyboard activation',async()=>{
+    reduced=true;const {update}=await mount(),select=vi.fn();await update({onSelect:select});
+    await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());
+    const label=host.querySelector<HTMLElement>('[data-label-key="component:R1"]')!;
+    const pointer=(type:string,id:number,x=100)=>act(()=>label.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:id,pointerType:'touch',button:0,clientX:x,clientY:100})));
+    pointer('pointerdown',1);pointer('pointerup',1);expect(select).toHaveBeenCalledExactlyOnceWith('R1');select.mockClear();
+    pointer('pointerdown',1);pointer('pointermove',1,150);pointer('pointermove',1,100);pointer('pointerup',1);
+    pointer('pointerdown',1);pointer('pointerdown',2);pointer('pointerup',2);pointer('pointerup',1);
+    pointer('pointerdown',1);pointer('pointercancel',1);pointer('pointerup',1);
+    pointer('pointerdown',1);pointer('pointerup',2);pointer('pointerup',1);
+    act(()=>label.dispatchEvent(new MouseEvent('click',{bubbles:true,detail:1})));
+    expect(select).not.toHaveBeenCalled();
+    act(()=>label.dispatchEvent(new MouseEvent('click',{bubbles:true,detail:0})));
+    expect(select).toHaveBeenCalledExactlyOnceWith('R1');
+  });
   it('cleans imperative labels on effect teardown, including StrictMode remounts',async()=>{
     reduced=true;
     const {update}=await mount(true);await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());
