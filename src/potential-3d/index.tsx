@@ -401,7 +401,7 @@ export function Potential3D(props: Potential3DProps) {
     <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="potential-labels" ref={overlay}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
-    <footer className="scene-footer"><span className="floor-key"><i/>기준면 <b>0 V</b><small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number((potential.scale/18).toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
+    <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number((potential.scale/18).toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
     {selection&&<div className="scene-selection" aria-live="polite"><strong className="notation" aria-label={selection.component.label} dangerouslySetInnerHTML={{__html:htmlNotation(selection.component.label,true)}}/><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatQuantity(selection.difference,'V')}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
   </section>;
 }

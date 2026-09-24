@@ -1,7 +1,7 @@
 import { createDocumentIdAllocator, type CircuitDocument, type EndpointRef } from '../domain';
 import { terminalPosition } from '../component-library';
 import { orthogonalRoute } from '../wire-geometry';
-import { dissolveWireJunctions } from './wire-edits';
+import { normalizeWireJunctions } from './wire-topology';
 
 /** Replace removed terminals locally; never infer a connection from coincident coordinates. */
 function replaceConnectedComponents(document: CircuitDocument, ids: Set<string>, allocate: (prefix: string) => string) {
@@ -35,10 +35,11 @@ export function deleteElements(document: CircuitDocument, ids: Set<string>): voi
   const allocate = createDocumentIdAllocator(document);
   const removedEndpoints = new Set([
     ...document.components.filter(c => ids.has(c.id)).flatMap(c => c.terminals.map(t => t.id)),
-    ...document.junctions.filter(j => ids.has(j.id)).map(j => j.id),
   ]);
-  // Remove only explicitly selected wires and wires attached to explicitly removed junctions first.
-  document.wires = document.wires.filter(w => !ids.has(w.id) && !ids.has(w.start.id) && !ids.has(w.end.id));
+  // Only a wire's own ID can request its deletion. Junctions follow automatic topology cleanup.
+  const removedWires = document.wires.filter(w => ids.has(w.id));
+  const affectedJunctions = removedWires.flatMap(w => [w.start, w.end].filter(e => e.kind === 'junction').map(e => e.id));
+  document.wires = document.wires.filter(w => !removedWires.includes(w));
   const replacements = replaceConnectedComponents(document, ids, allocate);
   const remap = (ref: EndpointRef | null): EndpointRef | null =>
     ref ? replacements.get(ref.id) ?? (removedEndpoints.has(ref.id) ? null : ref) : null;
@@ -48,9 +49,8 @@ export function deleteElements(document: CircuitDocument, ids: Set<string>): voi
     wire.end = remap(wire.end)!;
   }
   document.components = document.components.filter(c => !ids.has(c.id));
-  document.junctions = document.junctions.filter(j => !ids.has(j.id));
   document.annotations = document.annotations.filter(a => !ids.has(a.id) && (!a.anchor || remap(a.anchor)));
   for (const annotation of document.annotations) annotation.anchor = remap(annotation.anchor);
   document.referenceNode = remap(document.referenceNode);
-  dissolveWireJunctions(document, [...replacements.values()].map(ref => ref.id));
+  normalizeWireJunctions(document, [...affectedJunctions, ...[...replacements.values()].map(ref => ref.id)]);
 }

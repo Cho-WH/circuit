@@ -29,6 +29,7 @@ describe('context wiring commands and state',()=>{
     const doc=emptyDocument('waypoints');doc.junctions=[{id:'A',position:{x:0,y:0}},{id:'B',position:{x:400,y:0}}];
     const c=setup(doc);
     c.run(a=>a.tap({x:0,y:0},1,coarse));
+    expect(c.api().start).toMatchObject({ref:{id:'A'}});
     c.run(a=>a.tap({x:100,y:100},1,coarse));
     c.run(a=>a.togglePosture());
     c.run(a=>a.tap({x:300,y:200},1,coarse));
@@ -100,13 +101,14 @@ describe('context wiring commands and state',()=>{
     c.run(a=>a.action!.run());expect(c.commit).toHaveBeenCalledTimes(1);expect(c.history().past).toHaveLength(1);
     const nets=compileCircuit(c.history().present).circuit.endpointToNet;expect(nets['V1.a']).toBe(nets['V1.b']);
   });
-  it('toggles a crossing by directly tapping it and shows only its current state',()=>{
+  it.each([false,true])('toggles a four-way crossing directly without selecting the node (touch=%s)',coarse=>{
     const c=setup();c.run(a=>a.hover({x:400,y:180},1));expect(c.api().crossingLabel).toBe('비연결');
     c.run(a=>a.tap({x:400,y:180},1,true));expect(wireCrossings(c.history().present)).toHaveLength(0);
     expect(c.api().crossingLabel).toBe('연결');expect(c.api().start).toBeNull();expect(c.api().action).toBeNull();
-    const j=c.history().present.junctions[0];c.run(a=>a.activate(endpointTarget(c.history().present,{kind:'junction',id:j.id}),true));
+    const before=c.history().present,j=before.junctions[0];c.run(a=>a.tap(j.position,1,coarse));
     expect(c.api().start).toBeNull();expect(c.api().crossingLabel).toBe('비연결');
     expect(wireCrossings(c.history().present)).toHaveLength(1);expect(c.api().hint?.kind).toBe('crossing');
+    expect(c.history().past).toHaveLength(2);
     c.run(a=>a.clearHint());expect(c.api().hint).toBeNull();
   });
   it('finishes active wiring at a connected crossing instead of disconnecting it',()=>{

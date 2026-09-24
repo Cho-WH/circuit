@@ -1,6 +1,7 @@
-import { diagnostic, type CircuitDocument, type ComponentInstance, type Diagnostic, type Point, type Wire } from '../domain';
+import { cloneDocument, diagnostic, type CircuitDocument, type ComponentInstance, type Diagnostic, type Point, type Wire } from '../domain';
 import { compactWirePoints, endpointPosition, terminalPosition, wireCrossings, wirePoints } from '../component-library';
 import { stretchWire } from '../wire-geometry';
+import { normalizeWireJunctions, normalizeWireRoute } from './wire-topology';
 
 /** Document adapter: geometry can only change waypoints, never electrical endpoint references. */
 export function preserveConnectedWirePaths(before: CircuitDocument, after: CircuitDocument): void {
@@ -12,34 +13,16 @@ export function preserveConnectedWirePaths(before: CircuitDocument, after: Circu
   }
 }
 
-/** Contract only the supplied degree-two junctions, preserving the full route and anchored points. */
-export function dissolveWireJunctions(document: CircuitDocument, junctionIds: Iterable<string>): void {
-  const anchored = new Set([
-    ...document.annotations.flatMap(a => a.anchor ? [a.anchor.id] : []),
-    ...(document.referenceNode ? [document.referenceNode.id] : []),
-  ]);
-  for (const id of junctionIds) {
-    if (anchored.has(id)) continue;
-    const attached = document.wires.filter(w => w.start.id === id || w.end.id === id);
-    // A self-loop has two incidences; it cannot be contracted into an endpoint-free wire.
-    if (attached.length !== 2 || attached.some(w => w.start.id === id && w.end.id === id)) continue;
-    const [keep, remove] = attached;
-    // Preserve the retained wire's direction. Orient both paths through the common junction.
-    const [incoming, outgoing] = keep.end.id === id ? [keep, remove] : [remove, keep];
-    const before = wirePoints(document, incoming), after = wirePoints(document, outgoing);
-    if (incoming.start.id === id) before.reverse();
-    if (outgoing.end.id === id) after.reverse();
-    const path = compactWirePoints([...before, ...after.slice(1)]);
-    const start = incoming.start.id === id ? incoming.end : incoming.start;
-    const end = outgoing.end.id === id ? outgoing.start : outgoing.end;
-    keep.start = start; keep.end = end; keep.waypoints = path.slice(1, -1);
-    document.wires = document.wires.filter(w => w !== remove);
-    document.junctions = document.junctions.filter(j => j.id !== id);
-  }
-}
-
 export interface InsertionCandidate { wireId: string; segment: number; position: Point; rotation: ComponentInstance['rotation']; reason?: 'space' | 'crossing' }
-export function insertionCandidates(document: CircuitDocument, point: Point, wireId?: string): InsertionCandidate[] {
+export function insertionCandidates(source: CircuitDocument, point: Point, wireId?: string, radius = 18): InsertionCandidate[] {
+  const document = cloneDocument(source);
+  if (wireId) {
+    wireId = normalizeWireRoute(document, wireId);
+    if (!wireId) return [];
+  } else normalizeWireJunctions(document, document.junctions.map(j => j.id));
+  return routeInsertionCandidates(document, point, wireId, radius);
+}
+function routeInsertionCandidates(document: CircuitDocument, point: Point, wireId?: string, radius = 18): InsertionCandidate[] {
   const crossings=wireCrossings(document);
   return document.wires.filter(w=>!wireId||w.id===wireId).flatMap(w=>{
     const points=compactWirePoints(wirePoints(document,w));
@@ -47,7 +30,7 @@ export function insertionCandidates(document: CircuitDocument, point: Point, wir
       const a=points[i], horizontal=a.y===b.y, vertical=a.x===b.x;
       if(!horizontal&&!vertical)return [];
       const position=horizontal?{x:Math.max(Math.min(a.x,b.x),Math.min(Math.max(a.x,b.x),point.x)),y:a.y}:{x:a.x,y:Math.max(Math.min(a.y,b.y),Math.min(Math.max(a.y,b.y),point.y))};
-      if(Math.hypot(position.x-point.x,position.y-point.y)>18)return [];
+      if(Math.hypot(position.x-point.x,position.y-point.y)>radius)return [];
       const space=Math.min(Math.hypot(position.x-a.x,position.y-a.y),Math.hypot(position.x-b.x,position.y-b.y));
       const crossing=crossings.some(c=>(c.horizontalId===w.id||c.verticalId===w.id)&&Math.hypot(c.point.x-position.x,c.point.y-position.y)<56);
       return [{wireId:w.id,segment:i,position,rotation:horizontal?0 as const:90 as const,...(space<56?{reason:'space' as const}:crossing?{reason:'crossing' as const}:{})}];
@@ -57,11 +40,13 @@ export function insertionCandidates(document: CircuitDocument, point: Point, wir
 const failure=(ids:string[],reason:string):Diagnostic[]=>[diagnostic('WIRE_EDIT_UNAVAILABLE',ids,'error',{reason})];
 export function insertComponent(document:CircuitDocument, component:ComponentInstance, wireId:string, segment:number, newWireId:string):Diagnostic[]|null {
   if(component.type==='voltmeter'||component.terminals.length!==2||component.terminals.some(t=>t.localPosition))return failure([component.id],'component');
-  const candidate=insertionCandidates(document,component.position,wireId).find(c=>c.segment===segment);
+  const routeId=normalizeWireRoute(document,wireId);
+  if(!routeId)return failure([wireId],'target');
+  const candidate=routeInsertionCandidates(document,component.position,routeId).find(c=>c.segment===segment);
   if(!candidate||candidate.reason)return failure([wireId],candidate?.reason??'target');
   if(Math.hypot(candidate.position.x-component.position.x,candidate.position.y-component.position.y)>18)return failure([wireId],'target');
   component.position=candidate.position; component.rotation=candidate.rotation;
-  const wire=document.wires.find(w=>w.id===wireId)!;
+  const wire=document.wires.find(w=>w.id===routeId)!;
   const points=compactWirePoints(wirePoints(document,wire)), a=points[segment], b=points[segment+1];
   const p0=terminalPosition(component,0),p1=terminalPosition(component,1);
   const first=Math.hypot(p0.x-a.x,p0.y-a.y)<Math.hypot(p1.x-a.x,p1.y-a.y)?0:1, second=1-first;

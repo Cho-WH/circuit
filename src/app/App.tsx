@@ -11,7 +11,6 @@ import {
   Zap,
   MousePointer2,
   Cable,
-  Hand,
   RotateCw,
   Trash2,
   Undo2,
@@ -531,6 +530,20 @@ export function App() {
       onViewChange={(view) => {
         canvasView.current = { documentId: doc.documentId, view };
       }}
+      viewLabel={
+        mode === 'potential' ? (
+          <div
+            className="potential-reference"
+            title={`접지(0V): ${doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'}`}
+          >
+            <span>접지(0V):</span>
+            <Notation
+              symbol
+              text={doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'}
+            />
+          </div>
+        ) : undefined
+      }
       document={doc}
       largeLabels={presentation}
       measurement={
@@ -810,7 +823,6 @@ export function App() {
               {[
                 { id: 'select', label: '선택', Icon: MousePointer2 },
                 { id: 'wire', label: '배선', Icon: Cable },
-                { id: 'pan', label: '화면 이동', Icon: Hand },
                 { id: 'reference', label: '접지(0V)', Icon: GroundIcon },
               ].map(({ id, label, Icon }) => (
                 <button
@@ -886,16 +898,18 @@ export function App() {
                 />
                 숫자
               </label>
-              {potentialView === '2d' && (
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={showCurrent}
-                    onChange={(e) => setShowCurrent(e.target.checked)}
-                  />
-                  전류 화살표
-                </label>
-              )}
+              <label
+                className="potential-current"
+                aria-hidden={potentialView === '3d' || undefined}
+              >
+                <input
+                  type="checkbox"
+                  disabled={potentialView === '3d'}
+                  checked={showCurrent}
+                  onChange={(e) => setShowCurrent(e.target.checked)}
+                />
+                전류 화살표
+              </label>
               {
                 <button
                   className="graph-toggle"
@@ -905,32 +919,25 @@ export function App() {
                   경로 그래프 {showGraph ? '접기' : '보기'}
                 </button>
               }
-              <div className="potential-legend">
-                {potential.undefinedCount === Object.keys(potential.nets).length ? (
-                  <span>전위 미정</span>
-                ) : (
-                  <>
-                    <span>{formatQuantity(potential.min, 'V')}</span>
-                    <PotentialPalettePicker
-                      value={potentialPalette}
-                      min={potential.min}
-                      max={potential.max}
-                      onChange={setPotentialPalette}
-                    />
-                    <span>{formatQuantity(potential.max, 'V')}</span>
-                    <small hidden={potentialView === '3d'}>
-                      기준:{' '}
-                      {doc.referenceNode ? (
-                        <Notation symbol text={endpointName(doc, doc.referenceNode.id)} />
-                      ) : (
-                        '미지정'
-                      )}{' '}
-                      · 0 V
-                    </small>
-                  </>
-                )}
+              <div className="potential-legend-tools">
+                <div className="potential-legend">
+                  {potential.undefinedCount === Object.keys(potential.nets).length ? (
+                    <span>전위 미정</span>
+                  ) : (
+                    <>
+                      <span>{formatQuantity(potential.min, 'V')}</span>
+                      <PotentialPalettePicker
+                        value={potentialPalette}
+                        min={potential.min}
+                        max={potential.max}
+                        onChange={setPotentialPalette}
+                      />
+                      <span>{formatQuantity(potential.max, 'V')}</span>
+                    </>
+                  )}
+                </div>
+                {settingsButton}
               </div>
-              {settingsButton}
             </div>
           )}
           <div hidden={mode !== 'measure'} className="measurement-workspace">

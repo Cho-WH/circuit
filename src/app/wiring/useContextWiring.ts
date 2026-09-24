@@ -58,6 +58,7 @@ export function useContextWiring(options: WiringOptions) {
     commit(commands);
   }
   function activate(target: WiringTarget, coarse = false) {
+    if (!enabled) return;
     recent.current = false; setTouch(coarse); setChoices([]); setError('');
     if (!start && target.kind !== 'wire') {
       const command = crossingCommand(doc,target);

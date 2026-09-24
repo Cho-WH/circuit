@@ -57,7 +57,9 @@ export function PotentialWorkspace({ active, children, onReturnTo2D, onStatusCha
   // A return to 2D must invalidate ready state before the next preparation starts.
   useEffect(() => { if (!active) setState({ document: scene.document, status: 'preparing' }); }, [active, scene.document]);
   return <div className="potential-workspace" data-status={status}>
-    <div className="potential-workspace-2d" aria-hidden={showing || undefined} inert={showing || undefined} style={{ visibility: showing ? 'hidden' : 'visible' }}>{children}</div>
+    <div className="potential-workspace-2d" aria-hidden={showing || undefined} inert={showing || undefined} style={{ visibility: showing ? 'hidden' : 'visible' }}>
+      {children}
+    </div>
     {active && status !== 'failed' && <div className="potential-workspace-3d" aria-hidden={!showing || undefined} inert={!showing || undefined} style={{ visibility: showing ? 'visible' : 'hidden' }}>
       <SceneAttempt key={`${documentKey}:${attempt}`} {...scene} onState={next => setState({ document: scene.document, status: next })}/>
     </div>}

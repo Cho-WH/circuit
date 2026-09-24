@@ -96,7 +96,7 @@ describe('component deletion preserves wiring locally', () => {
     expect(next.wires.some(w => w.id === 'W2' || w.id === 'branch')).toBe(false);
     expect(next.wires).toHaveLength(1);
     expect(wirePoints(next, next.wires[0])).toEqual([{ x: 0, y: 100 }, { x: 40, y: 100 }, { x: 40, y: 200 }, { x: 244, y: 200 }]);
-    expect(next.junctions).toHaveLength(doc.junctions.length + 1); // Only the open end remains.
+    expect(next.junctions).toHaveLength(2); // L and the open end; deleted wires' isolated R/T are removed.
     expect(nets(next).L).not.toBe(nets(next).R);
   });
 
@@ -106,19 +106,17 @@ describe('component deletion preserves wiring locally', () => {
     doc.annotations = [{ id: 'note', kind: 'note', anchor: doc.referenceNode, content: 'A', visibility: 'always' }];
     expect(remove(doc).present).toMatchObject({ components: [], wires: [], junctions: [], annotations: [], referenceNode: null });
     const all = fixture();
-    expect(remove(all, [...all.components, ...all.wires, ...all.junctions].map(x => x.id)).present)
+    expect(remove(all, [...all.components, ...all.wires].map(x => x.id)).present)
       .toMatchObject({ components: [], wires: [], junctions: [] });
   });
 
-  it('honors explicit junction deletion, including its wires and anchors', () => {
+  it('rejects manual junction deletion without removing attached wires or anchors', () => {
     const doc = fixture();
     doc.referenceNode = { kind: 'junction', id: 'L' };
     doc.annotations = [{ id: 'note', kind: 'note', anchor: doc.referenceNode, content: 'A', visibility: 'always' }];
-    const next = remove(doc, ['R1', 'L']).present;
-    expect(next.wires.some(w => w.id === 'W1')).toBe(false);
-    expect(next.junctions.some(j => j.id === 'L')).toBe(false);
-    expect(next.annotations).toEqual([]); expect(next.referenceNode).toBeNull();
-    expect(nets(next).T).toBe(nets(next).R);
+    const history = createHistory(doc);
+    expect(executeCommand(history, { type: 'DeleteElements', ids: ['R1', 'L'] })).toMatchObject({ok:false,diagnostics:[{code:'INVALID_COMMAND'}]});
+    expect(history.present).toEqual(doc);expect(history.past).toHaveLength(0);
   });
 
   it('bridges adjacent selected parts atomically and independently of selection order', () => {

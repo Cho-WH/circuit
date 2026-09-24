@@ -82,7 +82,7 @@ interface DocumentMigrator {
 
 도선 기하 계산은 `wire-geometry`의 순수 함수로, 문서 적용은 editor 명령으로, 조작 상태와 손잡이는 `app/wiring`으로 분리한다. 미리보기와 확정은 같은 공개 명령을 사용하며 기존 waypoints만 저장한다. 국소 보정·짧은 경로 공식·선분 이동·허용 명령은 [ADR-016](../../decisions/ADR-016-local-wire-routing.md)을 따른다.
 
-DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당한다. 두 단자 부품 자리를 도선으로 잇고 다단자는 단자별 외부 연결만 보존한다. `wire-edits.ts`의 내부 `dissolveWireJunctions`는 부품 종류와 무관하게 전달된 연결점 중 앵커 없는 두 도선의 접점을 없애고 경로를 합친다. 두 단계의 최종 결과를 한 번에 발행하며 UI는 기존 삭제 명령만 호출한다. 문맥 배선과 대체 편집의 ID는 domain의 `createDocumentIdAllocator`로 충돌 없이 예약한다. 공개 계약과 혼합 삭제 우선순위는 [ADR-017](../../decisions/ADR-017-delete-components-keep-wiring.md)을 따른다.
+DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당한다. 두 단자 부품 자리를 도선으로 잇고 다단자는 단자별 외부 연결만 보존한다. `wire-topology.ts`는 영향받은 연결점의 연결 수·앵커를 검사해 고립점을 제거하거나 두 도선 경로를 합친다. `wire-edits.ts`의 삽입 후보와 확정도 같은 경로 정리를 사용한다. UI는 선택·명령 전달과 일시적인 실패 표시만 소유한다. 문맥 배선과 대체 편집의 ID는 domain의 `createDocumentIdAllocator`로 충돌 없이 예약한다. 삭제 정책은 [ADR-017](../../decisions/ADR-017-delete-components-keep-wiring.md), 국소 정리와 삽입 규칙은 [ADR-018](../../decisions/ADR-018-junction-lifecycle.md)을 따른다.
 
 ## 측정과 출력의 공개 계약
 

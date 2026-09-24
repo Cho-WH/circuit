@@ -7,6 +7,7 @@ import { createSvgExport, type ExportOptions } from '../export';
 import { previewCommand, type Command } from '../editor';
 import { useTouchNavigation } from './useTouchNavigation';
 import { useCanvasViewport } from './useCanvasViewport';
+import { useCanvasWheelZoom } from './useCanvasWheelZoom';
 
 export type OutputTool = 'select' | 'point' | 'arrow' | 'corner-arrow' | 'note';
 interface Props {
@@ -76,6 +77,7 @@ export function OutputCanvas(props: Props) {
   const skipClick=useRef(false);
   useEffect(()=>{setChoices([]);},[view]);
   const touchNavigation=useTouchNavigation(view,setView,screenScale,()=>{cancel();setChoices([]);});
+  useCanvasWheelZoom(svg,view,setView,()=>{cancel();touchNavigation.reset();setChoices([]);},160,6000);
   useCanvasViewport(svg,view,setView,()=>{cancel();touchNavigation.reset();setChoices([]);},props.document.components.find(c=>c.id===props.selected[0])?.position);
   useEffect(()=>{
     const sync=()=>setScreenScale(svg.current?.getScreenCTM?.()?.a||1);

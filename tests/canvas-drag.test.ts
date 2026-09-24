@@ -74,6 +74,62 @@ function setup(overrides: Partial<CanvasProps> = {}) {
   return { svg, component, paths, pointer, onMove, commit, original, history: () => history, render: (changes: Partial<CanvasProps>) => act(() => render(changes)) };
 }
 
+describe('junction editing feedback', () => {
+  function junctionDocument(branch = true) {
+    const doc = emptyDocument('junction-ui');
+    doc.junctions = [
+      { id: 'L', position: { x: 100, y: 400 } }, { id: 'M', position: { x: 500, y: 400 } },
+      { id: 'R', position: { x: 900, y: 400 } }, { id: 'T', position: { x: 500, y: 100 } },
+    ];
+    doc.wires = [['left', 'L', 'M'], ['right', 'M', 'R'], ...(branch ? [['branch', 'M', 'T']] : [])].map(([id, start, end]) => ({ id, start: { kind: 'junction', id: start }, end: { kind: 'junction', id: end }, waypoints: [] }));
+    return doc;
+  }
+  it.each(['mouse', 'touch'])('shows only a brief rejection and retains placement on a branch (%s)', pointerType => {
+    vi.useFakeTimers();
+    try {
+      const onPlace = vi.fn(), c = setup({ document: junctionDocument(), placement: 'resistor', onPlace });
+      const node = host.querySelector('[data-endpoint-id="M"]')!;
+      c.pointer(node, 'pointermove', 500, 400, 1, pointerType);
+      c.pointer(node, 'pointerdown', 500, 400, 1, pointerType);
+      c.pointer(node, 'pointerup', 500, 400, 1, pointerType);
+      act(() => node.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 500, clientY: 400 })));
+      expect(onPlace).not.toHaveBeenCalled();
+      expect(host.querySelector('[aria-label="배치할 수 없음"]')).not.toBeNull();
+      expect(host.textContent).not.toMatch(/공간이 부족|가까운|교차점 근처/);
+      expect(c.history().past).toHaveLength(0);
+      act(() => vi.advanceTimersByTime(321));
+      expect(host.querySelector('[aria-label="배치할 수 없음"]')).toBeNull();
+      expect(host.querySelector('.placement-status')).not.toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+  it('previews and inserts across a redundant junction using the canonical route', () => {
+    const onPlace = vi.fn(), c = setup({ document: junctionDocument(false), placement: 'resistor', onPlace });
+    c.pointer(c.svg, 'pointermove', 500, 400);
+    expect(host.querySelector('[data-endpoint-id="M"]')).toBeNull();
+    c.pointer(c.svg, 'pointerdown', 500, 400);
+    expect(onPlace).toHaveBeenCalledWith('resistor', { x: 500, y: 400 }, { wireId: 'left', segment: 0 });
+  });
+  it.each(['mouse','touch','keyboard'])('starts wiring directly at a branch without a node menu or deletion (%s)', input => {
+    const onAction = vi.fn(), c = setup({ document: junctionDocument(), onAction });
+    c.render({ onWiringCommit: c.commit, onSelect: id => c.render({ selected: id ? [id] : [] }) });
+    const node = host.querySelector('[data-endpoint-id="M"]')!;
+    if (input === 'keyboard') act(() => node.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })));
+    else {
+      c.pointer(node, 'pointerdown', 500, 400, 1, input);
+      c.pointer(node, 'pointerup', 500, 400, 1, input);
+      act(() => node.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 500, clientY: 400 })));
+    }
+    c.pointer(c.svg, 'pointermove', 600, 500);
+    expect(host.querySelector('[data-wire-preview]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="선택 분기점 도구"]')).toBeNull();
+    expect([...host.querySelectorAll('button')].some(b => b.textContent === '배선 시작' || b.textContent === '삭제')).toBe(false);
+    act(() => node.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' })));
+    expect(c.history().present).toEqual(junctionDocument());
+    expect(c.history().past).toHaveLength(0);
+    expect(c.commit).not.toHaveBeenCalled();
+  });
+});
+
 describe('live canvas drag geometry', () => {
   it.each(['mouse','touch'])('previews and commits a local wire segment drag from its original path (%s)',pointerType=>{
     const c=setup({selected:['W4']});c.render({onWiringCommit:c.commit});

@@ -30,6 +30,46 @@ function canvas(overrides:Partial<CanvasProps>={}){
 function click(el:Element,x=500,y=400){act(()=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:x,clientY:y})));}
 function tap(svg:SVGSVGElement,el:Element,x:number,y:number){Object.defineProperty(document,'elementFromPoint',{configurable:true,value:()=>el});pointer(el,'pointerdown',x,y);pointer(svg,'pointerup',x,y);click(svg,x,y);}
 
+it.each(['circuit','output'])('zooms %s with an ordinary wheel around the pointer without document edits',kind=>{
+  const dispatch=vi.fn(()=>true),doc=fixture(),original=JSON.stringify(doc);
+  let svg:SVGSVGElement;
+  if(kind==='circuit')svg=canvas({document:doc}).svg;
+  else {
+    act(()=>root.render(createElement(OutputCanvas,{document:doc,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected:[],tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'note'})));
+    svg=mockSvg();
+  }
+  const read=()=>svg.getAttribute('viewBox')!.split(' ').map(Number);
+  const before=read();
+  // happy-dom's WheelEvent lacks the inherited mouse coordinates.
+  const wheelEvent=(deltaY:number,ctrlKey=false)=>Object.assign(new MouseEvent('wheel',{bubbles:true,cancelable:true,clientX:300,clientY:200,ctrlKey}),{deltaY,deltaMode:0});
+  const wheel=wheelEvent(-80);
+  act(()=>svg.dispatchEvent(wheel));const after=read();
+  expect(wheel.defaultPrevented).toBe(true);expect(after[2]).toBeLessThan(before[2]);
+  expect((300-after[0])/after[2]).toBeCloseTo((300-before[0])/before[2]);
+  expect((200-after[1])/after[3]).toBeCloseTo((200-before[1])/before[3]);
+  // Ctrl remains supported, and the opposite wheel direction zooms out.
+  act(()=>svg.dispatchEvent(wheelEvent(80,true)));
+  expect(read()[2]).toBeCloseTo(before[2]);
+  const outside=new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:-100});
+  act(()=>host.querySelector('button')!.dispatchEvent(outside));
+  expect(outside.defaultPrevented).toBe(false);expect(read()[2]).toBeCloseTo(before[2]);
+  expect(JSON.stringify(doc)).toBe(original);expect(dispatch).not.toHaveBeenCalled();
+});
+
+it.each([620,310])('pans the empty canvas at height %s without a separate tool or document edits',height=>{
+  const c=canvas(),original=JSON.stringify(c.props.document);
+  act(()=>resize([{contentRect:{width:1000,height}}] as ResizeObserverEntry[],{} as ResizeObserver));
+  const scale=620/height;
+  pointer(c.svg,'pointerdown',400,100,1,'mouse');
+  pointer(c.svg,'pointermove',480,140,1,'mouse');
+  pointer(c.svg,'pointerup',480,140,1,'mouse');
+  expect(c.svg.getAttribute('viewBox')).toBe(`${-80*scale} ${-40*scale} 1000 620`);
+  act(()=>c.svg.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})));
+  expect(c.svg.getAttribute('viewBox')).toBe(`${-80*scale+40} ${-40*scale} 1000 620`);
+  expect(c.props.onMove).not.toHaveBeenCalled();expect(c.props.onPlace).not.toHaveBeenCalled();
+  expect(JSON.stringify(c.props.document)).toBe(original);
+});
+
 it('previews a touch insertion without editing, confirms once, and leaves mouse insertion immediate',()=>{
   const c=canvas({placement:'resistor'}),wire=host.querySelector('[data-wire-id="W"]')!;
   tap(c.svg,wire,500,400);expect(c.props.onPlace).not.toHaveBeenCalled();expect(c.props.onWire).not.toHaveBeenCalled();

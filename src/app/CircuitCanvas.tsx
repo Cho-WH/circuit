@@ -1,6 +1,7 @@
 import { InlineComponentEditor, type ComponentEdit } from './InlineComponentEditor';
 import { SvgNotation } from './Notation';
-import { useEffect, useRef, useState } from 'react';
+import { PlacementFailure } from './PlacementFailure';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   useCanvasDragSession,
   dragPositions,
@@ -21,6 +22,7 @@ import { MeasurementLayer, measurementHit } from './measurement-tools';
 import type { MeasurementLayerProps } from './measurement-tools/MeasurementLayer';
 import { useTouchNavigation } from './useTouchNavigation';
 import { useCanvasViewport } from './useCanvasViewport';
+import { useCanvasWheelZoom } from './useCanvasWheelZoom';
 import type { PaletteDrag } from './ComponentPalette';
 import { compactWirePoints } from '../component-library';
 import {
@@ -42,6 +44,7 @@ import {
 export interface CanvasProps {
   paletteDrag?: PaletteDrag | null;
   initialView?: { x: number; y: number; width: number; height: number };
+  viewLabel?: ReactNode;
   onViewChange?: (view: { x: number; y: number; width: number; height: number }) => void;
   readOnly?: boolean;
   readOnlyLabel?: string;
@@ -102,12 +105,19 @@ export function CircuitCanvas(props: CanvasProps) {
   const [measurementCancel, setMeasurementCancel] = useState(0);
   const placementPointer = useRef<number | null>(null);
   const [placementMessage, setPlacementMessage] = useState('');
+  const [placementFailure, setPlacementFailure] = useState<{ point: Point; attempt: number } | null>(null);
+  function rejectPlacement(point: Point) {
+    setPlacementMessage('');
+    setChoosingInsertion(false);
+    setPlacementFailure(previous => ({ point, attempt: (previous?.attempt ?? 0) + 1 }));
+  }
   const [editingId, setEditingId] = useState<string | null>(null);
   useEffect(() => {
     setEditingId(null);
     setInsertionWire(undefined);
     setChoosingInsertion(false);
     setPlacementMessage('');
+    setPlacementFailure(null);
   }, [document, tool, placement, props.readOnly]);
   const dragSession = useCanvasDragSession(document, tool, placement, props.readOnly, svg);
   const { drag, activeDrag, activeWireDrag, pan, capturedPointer, movedDocument } = dragSession;
@@ -167,6 +177,17 @@ export function CircuitCanvas(props: CanvasProps) {
     onFinish: props.onCancel,
   });
   const touchNavigation = useTouchNavigation(view, setView, drawingScale, cancelGesture);
+  useCanvasWheelZoom(
+    svg,
+    view,
+    setView,
+    () => {
+      cancelGesture();
+      touchNavigation.reset();
+    },
+    200,
+    5000,
+  );
   useEffect(() => {
     touchNavigation.reset();
   }, [document, tool, placement, props.readOnly]);
@@ -279,6 +300,7 @@ export function CircuitCanvas(props: CanvasProps) {
       ? all.filter((c) => `${c.wireId}:${c.segment}` === insertionWire)
       : all;
     if (all.length) {
+      if (all.every(c => c.reason) || type === 'voltmeter') { rejectPlacement(p); return; }
       if (options.length !== 1) {
         setPointer(p);
         setChoosingInsertion(true);
@@ -286,44 +308,21 @@ export function CircuitCanvas(props: CanvasProps) {
         return;
       }
       const target = options[0];
-      if (type === 'voltmeter' || target.reason) {
-        setPlacementMessage(
-          type === 'voltmeter'
-            ? '전압계는 빈 공간에 놓고 두 점에 병렬로 연결하세요.'
-            : target.reason === 'space'
-              ? '부품 양쪽에 공간이 필요합니다. 꺾임·단자에서 더 떨어진 곳을 선택하세요.'
-              : '교차점에서 떨어진 구간에 놓으세요.',
-        );
+      if (target.reason) {
+        rejectPlacement(p);
         return;
       }
       props.onPlace(type, target.position, { wireId: target.wireId, segment: target.segment });
-    } else props.onPlace(type, p);
+    } else if (document.junctions.some(j => Math.hypot(j.position.x-p.x, j.position.y-p.y) < 56)) rejectPlacement(p);
+    else props.onPlace(type, p);
   }
   function touchInsertionOptions(p: Point): ReturnType<typeof insertionCandidates> {
-    // Retain every screen-near segment by ID, including distinct wires at low zoom.
-    const options: ReturnType<typeof insertionCandidates> = [];
-    for (const w of document.wires) {
-      const points = compactWirePoints(wirePoints(document, w));
-      for (let i = 1; i < points.length; i++) {
-        const a = points[i - 1],
-          b = points[i],
-          dx = b.x - a.x,
-          dy = b.y - a.y,
-          t = Math.max(
-            0,
-            Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)),
-          );
-        const q = { x: a.x + t * dx, y: a.y + t * dy };
-        if (Math.hypot(q.x - p.x, q.y - p.y) <= 18 / drawingScale) {
-          const aligned = dx === 0 ? { x: q.x, y: snap(q).y } : { x: snap(q).x, y: q.y };
-          const option = insertionCandidates(document, aligned, w.id).find(
-            (c) => c.segment === i - 1,
-          );
-          if (option) options.push(option);
-        }
-      }
-    }
-    return options;
+    // Use the same normalized routes as mouse preview and the insertion command.
+    return insertionCandidates(document, p, undefined, 18 / drawingScale).flatMap(candidate => {
+      const q = candidate.position;
+      const aligned = candidate.rotation === 90 ? { x: q.x, y: snap(q).y } : { x: snap(q).x, y: q.y };
+      return insertionCandidates(document, aligned, candidate.wireId).filter(c => c.segment === candidate.segment);
+    });
   }
   function touchPlacementPoint(p: Point): Point {
     const options = touchInsertionOptions(p);
@@ -338,11 +337,13 @@ export function CircuitCanvas(props: CanvasProps) {
     setInsertionWire(undefined);
     setPlacementMessage('');
     if (options.length) {
+      if (options.every(c => c.reason) || type === 'voltmeter') { rejectPlacement(target); return; }
       setChoosingInsertion(true);
       return;
     }
     setChoosingInsertion(false);
-    props.onPlace(type, target);
+    if (document.junctions.some(j => Math.hypot(j.position.x-target.x, j.position.y-target.y) < 56)) rejectPlacement(target);
+    else props.onPlace(type, target);
   }
   useEffect(() => {
     const e = props.paletteDrag;
@@ -656,10 +657,6 @@ export function CircuitCanvas(props: CanvasProps) {
             return;
           }
           if (inputType.current === 'touch') {
-            if (tool === 'pan') {
-              e.stopPropagation();
-              return;
-            }
             const endpointElement = target?.closest('[data-endpoint-id]');
             if (!wiring.active && endpointElement) {
               e.stopPropagation();
@@ -686,12 +683,6 @@ export function CircuitCanvas(props: CanvasProps) {
               wiring.clearHint();
               props.onSelect(null);
             }
-          }
-        }}
-        onWheel={(e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            zoom(e.deltaY > 0 ? 1.1 : 0.9);
           }
         }}
         onDragOver={(e) => {
@@ -732,7 +723,7 @@ export function CircuitCanvas(props: CanvasProps) {
           }
           if (e.key === '+' || e.key === '=') zoom(0.8);
           if (e.key === '-') zoom(1.25);
-          if (tool === 'pan' && e.key.startsWith('Arrow')) {
+          if (tool === 'select' && !placement && !wiring.active && e.key.startsWith('Arrow')) {
             e.preventDefault();
             e.stopPropagation();
             setView((v) => ({
@@ -745,7 +736,7 @@ export function CircuitCanvas(props: CanvasProps) {
         onPointerDown={(e) => {
           if (tapMove) return;
           if (capturedPointer.current !== null) return;
-          if (e.button === 1 || tool === 'pan') {
+          if (e.button === 1) {
             e.preventDefault();
             dragSession.beginPan(e.clientX, e.clientY, view, e.pointerId);
             return;
@@ -766,6 +757,10 @@ export function CircuitCanvas(props: CanvasProps) {
           wiring.clearHint();
           props.onSelect(null);
           props.onBackground(p);
+          if (tool === 'select' && e.pointerType !== 'touch') {
+            e.preventDefault();
+            dragSession.beginPan(e.clientX, e.clientY, view, e.pointerId);
+          }
         }}
         onPointerMove={(e) => {
           const p = point(e.clientX, e.clientY);
@@ -774,7 +769,7 @@ export function CircuitCanvas(props: CanvasProps) {
             setPlacementMessage('');
           }
           if (pan && capturedPointer.current === e.pointerId && svg.current) {
-            const scale = pan.view.width / svg.current.clientWidth;
+            const scale = 1 / drawingScale;
             setView({
               ...pan.view,
               x: pan.view.x - (e.clientX - pan.x) * scale,
@@ -1136,7 +1131,7 @@ export function CircuitCanvas(props: CanvasProps) {
             </g>
           );
         })}
-        {document.junctions.map((j) => (
+        {effective.junctions.map((j) => (
           <g
             key={j.id}
             role="button"
@@ -1310,6 +1305,7 @@ export function CircuitCanvas(props: CanvasProps) {
             })}
           </g>
         )}
+        {placement && placementFailure && <PlacementFailure key={placementFailure.attempt} point={placementFailure.point} scale={drawingScale}/>}
       </svg>
       {componentChoices.length > 0 && (
         <div className="touch-choice-list" aria-label="겹친 부품 선택">
@@ -1332,19 +1328,13 @@ export function CircuitCanvas(props: CanvasProps) {
         <div className="placement-status" role="status">
           <span>
             {placementMessage ||
-              (candidate?.reason === 'space'
-                ? '삽입할 공간이 부족합니다'
-                : candidate?.reason === 'crossing'
-                  ? '교차점에서 떨어진 구간에 놓으세요'
-                  : insertionPreview?.ok
+              (insertionPreview?.ok
                     ? '양쪽 연결을 확인하고 삽입하세요'
-                    : candidates.length > 1
+                    : candidates.length > 1 && candidates.some(c => !c.reason)
                       ? '삽입할 도선을 선택하세요'
-                      : candidate && placement === 'voltmeter'
-                        ? '전압계는 빈 공간에 놓으세요'
                         : '놓을 곳을 누르거나 길게 눌러 옮기세요')}
           </span>
-          {candidates.length > 1 &&
+          {candidates.length > 1 && candidates.some(c => !c.reason) &&
             candidates.map((c) => (
               <button
                 key={`${c.wireId}:${c.segment}`}
@@ -1358,10 +1348,6 @@ export function CircuitCanvas(props: CanvasProps) {
               </button>
             ))}
           <button
-            disabled={
-              candidates.length > 0 &&
-              (!candidate || Boolean(candidate.reason) || placement === 'voltmeter')
-            }
             onClick={() => placeAt(placement, snap(pointer), true)}
           >
             {candidates.length ? '삽입' : '여기에 배치'}
@@ -1441,37 +1427,19 @@ export function CircuitCanvas(props: CanvasProps) {
               ? '화면 확대·이동 중'
               : ''}
       </span>
-      <div className="canvas-view-tools">
-        <button onClick={() => zoom(0.8)} aria-label="확대">
-          ＋
-        </button>
-        <span>{Math.round(100000 / view.width)}%</span>
-        <button onClick={() => zoom(1.25)} aria-label="축소">
-          −
-        </button>
-        <button onClick={() => setView(documentBounds(document, 110))}>전체 보기</button>
-      </div>
-      <details className="canvas-pan-tools">
-        <summary aria-label="화면 이동 도구">화면 이동</summary>
-        <div>
-          {[
-            { text: '←', label: '왼쪽', x: -60, y: 0 },
-            { text: '↑', label: '위', x: 0, y: -60 },
-            { text: '↓', label: '아래', x: 0, y: 60 },
-            { text: '→', label: '오른쪽', x: 60, y: 0 },
-          ].map((d) => (
-            <button
-              key={d.label}
-              aria-label={`화면 ${d.label}로 이동`}
-              onClick={() =>
-                setView((v) => ({ ...v, x: v.x + d.x / drawingScale, y: v.y + d.y / drawingScale }))
-              }
-            >
-              {d.text}
-            </button>
-          ))}
+      <div className="canvas-bottom-bar">
+        {props.viewLabel}
+        <div className="canvas-view-tools">
+          <button onClick={() => zoom(0.8)} aria-label="확대">
+            ＋
+          </button>
+          <span>{Math.round(100000 / view.width)}%</span>
+          <button onClick={() => zoom(1.25)} aria-label="축소">
+            −
+          </button>
+          <button onClick={() => setView(documentBounds(document, 110))}>전체 보기</button>
         </div>
-      </details>
+      </div>
     </div>
   );
 }

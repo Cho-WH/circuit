@@ -198,6 +198,8 @@ function applyCommand(
       const ids = new Set(command.ids);
       const missing = missingTargets(ids, allElementIds);
       if (missing.length) return [diagnostic('COMMAND_TARGET_NOT_FOUND', missing)];
+      const junctionTargets = document.junctions.filter(j => ids.has(j.id)).map(j => j.id);
+      if (junctionTargets.length) return [diagnostic('INVALID_COMMAND', junctionTargets, 'error', { command: command.type })];
       deleteElements(document, ids);
       break;
     }
