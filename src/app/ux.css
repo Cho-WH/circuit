@@ -27,7 +27,6 @@
 .worksheet-topbar{position:relative;flex-wrap:wrap;flex-shrink:0;padding:9px 16px;gap:8px;background:var(--surface);min-height:58px}
 
 .worksheet-topbar button{margin:0;min-height:36px;font-size:13px}
-.worksheet-topbar .primary{color:white;background:var(--blue)}
 .export-menu{position:relative;font-size:12px}
 .export-menu summary{padding:10px;cursor:pointer;color:#324f75}
 .export-menu[open]{z-index:8}
