@@ -6,6 +6,7 @@
 
 | 대상 | 결과 |
 |---|---|
+| 구조 정리·화면 책임 분리 로컬 | 일반 29개 파일 540개, 타입·경계(69개 소스)·프로덕션 빌드·명세 통과. 같은 이벤트의 연속 명령·모드 제한·묶음 실패·전원 배치 undo·자동 저장·내부 순환 검사 추가. 최종 브라우저에서 편집/이동/undo·전위/3D·측정·출력·작은 화면 입력 초안·새로고침 복구 확인. Firestore 전용 24개 제외 |
 | 터치 개선 `a26c193` CI | 일반 25개 파일 466개, 별도 Firestore 에뮬레이터 24개 통과. 명세·경계·타입·Pages 빌드·배포 성공. [실행 로그](https://github.com/Cho-WH/circuit/actions/runs/35967493539) |
 | 팔레트 선택 `ab1f54a` 로컬 | visualization/potential-palette-picker/potential-3d/potential-3d-lifecycle/potential-workspace/simulation 6개 파일 84개, specifications/workspace-ui 2개 파일 78개 통과. 타입·경계(61개 소스)·Vite 빌드 통과 |
 | 목록 이름 제거 후 | 메뉴 테스트 5개·타입 검사·실제 3D 메뉴 배치 확인. 커밋 전 명세 검증 통과 |

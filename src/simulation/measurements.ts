@@ -1,5 +1,5 @@
 import { diagnostic, type CompiledCircuit, type Diagnostic, type SimulationResult } from '../domain';
-import { solveCircuit } from './index';
+import { solveCircuit } from './solver';
 
 export interface ResistanceResult { status: 'finite' | 'open' | 'short' | 'error'; ohms?: number; diagnostics: Diagnostic[] }
 /** ADR-011: remove explicitly external excitation sources, deactivate remaining sources, apply 1 V. */

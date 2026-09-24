@@ -2,7 +2,9 @@
 
 ## 부품 확장
 
-새 부품은 다음 정의를 등록한다.
+현재는 `componentDefinitions`의 표시 정보, `createComponent`의 기본값·단자, `symbolMarkup`의 공통 기호, connectivity·simulation의 전기 모델 분기를 사용한다. 여섯 부품에 대한 명시적 구현이며 범용 등록 프레임워크는 없다.
+
+아래는 새 전기 모델과 두 번째 구현이 필요해질 때의 분리 방향이다. 현재 존재하는 타입·등록 API로 해석하지 않는다. 새 부품은 다음 책임을 구분한다.
 
 | 정의 | 역할 |
 |---|---|
@@ -66,7 +68,7 @@ interface SimulationEngine {
 
 ## 활동 확장
 
-`ActivityPolicy`는 명령의 허용 여부를 판단한다. 활동 기능을 추가해도 편집 명령 자체에 역할별 분기문을 흩뿌리지 않는다.
+현재는 editor가 `document.activity.allowedCommands`를 검사한다. 아래 `ActivityPolicy`는 단계 6의 확장 예시이며 아직 구현한 인터페이스가 아니다. 활동 기능을 추가해도 편집 명령 자체에 역할별 분기문을 흩뿌리지 않는다.
 
 ```ts
 interface ActivityPolicy {

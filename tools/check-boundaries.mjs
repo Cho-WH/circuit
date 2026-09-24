@@ -1,37 +1,87 @@
-import { readFile, readdir } from "node:fs/promises";
-import path from "node:path";
-import process from "node:process";
-import { fileURLToPath } from "node:url";
+import { readFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourceRoot = path.join(repositoryRoot, "src");
+const repositoryRoot = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const sourceRoot = path.join(repositoryRoot, 'src');
 
-const sourceExtensions = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"]);
+const sourceExtensions = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx']);
 const coreModules = new Set([
-  "domain",
-  "connectivity",
-  "simulation",
-  "diagnostics",
-  "wire-geometry",
-  "activity",
-  "feedback",
+  'domain',
+  'connectivity',
+  'simulation',
+  'diagnostics',
+  'wire-geometry',
+  'activity',
+  'feedback',
 ]);
 const uiAndBrowserModules = new Set([
-  "app",
-  "editor",
-  "measurement",
-  "visualization",
-  "potential-3d",
-  "export",
-  "persistence",
-  "shared-ui",
-  "feedback-local",
-  "feedback-firebase",
+  'app',
+  'editor',
+  'measurement',
+  'visualization',
+  'potential-3d',
+  'export',
+  'persistence',
+  'shared-ui',
+  'feedback-local',
+  'feedback-firebase',
 ]);
-const uiAndBrowserPackages = ["react", "react-dom", "three", "lucide-react", "firebase"];
+const uiAndBrowserPackages = ['react', 'react-dom', 'three', 'lucide-react', 'firebase'];
 
-const importPattern =
-  /(?:\b(?:import|export)\s+(?:type\s+)?(?:[^"']*?\s+from\s*)?|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g;
+// Parse syntax so comments and erased type imports cannot create runtime cycles.
+function importsOf(source, filePath) {
+  const file = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
+  const imports = [];
+  const add = (node, specifier, runtime) => {
+    if (specifier && ts.isStringLiteralLike(specifier)) {
+      imports.push({
+        specifier: specifier.text,
+        line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
+        runtime,
+      });
+    }
+  };
+  function visit(node) {
+    if (ts.isImportDeclaration(node)) {
+      const clause = node.importClause;
+      const bindings = clause?.namedBindings;
+      const typeOnly =
+        clause?.isTypeOnly ||
+        (clause &&
+          !clause.name &&
+          bindings &&
+          ts.isNamedImports(bindings) &&
+          bindings.elements.length > 0 &&
+          bindings.elements.every((item) => item.isTypeOnly));
+      add(node, node.moduleSpecifier, !typeOnly);
+    } else if (ts.isExportDeclaration(node)) {
+      const clause = node.exportClause;
+      const typeOnly =
+        node.isTypeOnly ||
+        (clause &&
+          ts.isNamedExports(clause) &&
+          clause.elements.length > 0 &&
+          clause.elements.every((item) => item.isTypeOnly));
+      add(node, node.moduleSpecifier, !typeOnly);
+    } else if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) && node.expression.text === 'require'))
+    ) {
+      add(node, node.arguments[0], true);
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      add(node, node.argument.literal, false);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+  return imports;
+}
 
 async function collectSourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -58,13 +108,13 @@ function packageMatches(specifier, packageName) {
 }
 
 function resolveInternalImport(importer, specifier) {
-  if (specifier.startsWith("@/")) {
+  if (specifier.startsWith('@/')) {
     return path.join(sourceRoot, specifier.slice(2));
   }
-  if (specifier.startsWith("src/")) {
+  if (specifier.startsWith('src/')) {
     return path.join(repositoryRoot, specifier);
   }
-  if (specifier.startsWith(".")) {
+  if (specifier.startsWith('.')) {
     return path.resolve(path.dirname(importer), specifier);
   }
   return null;
@@ -77,7 +127,7 @@ function describeInternalImport(importer, specifier, sourceModules) {
   }
 
   const relativeTarget = path.relative(sourceRoot, resolved);
-  if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget)) {
+  if (relativeTarget.startsWith('..') || path.isAbsolute(relativeTarget)) {
     return null;
   }
 
@@ -85,15 +135,23 @@ function describeInternalImport(importer, specifier, sourceModules) {
   const moduleName = sourceModules.has(segments[0]) ? segments[0] : null;
   return {
     moduleName,
-    pathWithinModule: moduleName ? segments.slice(1).join("/") : "",
+    pathWithinModule: moduleName ? segments.slice(1).join('/') : '',
   };
 }
 
+function resolveSourceFile(importer, specifier, files) {
+  const resolved = resolveInternalImport(importer, specifier);
+  if (!resolved) return null;
+  const stem = resolved.replace(/\.[cm]?jsx?$/, '');
+  const candidates = [resolved];
+  for (const extension of sourceExtensions) {
+    candidates.push(`${stem}${extension}`, path.join(resolved, `index${extension}`));
+  }
+  return candidates.find((candidate) => files.has(candidate)) ?? null;
+}
+
 function isPublicIndexPath(pathWithinModule) {
-  return (
-    pathWithinModule === "" ||
-    /^index(?:\.[cm]?[jt]sx?)?$/.test(pathWithinModule)
-  );
+  return pathWithinModule === '' || /^index(?:\.[cm]?[jt]sx?)?$/.test(pathWithinModule);
 }
 
 function addEdge(graph, from, to) {
@@ -146,8 +204,8 @@ let files;
 try {
   files = await collectSourceFiles(sourceRoot);
 } catch (error) {
-  if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-    console.error("Boundary check failed: src directory does not exist.");
+  if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    console.error('Boundary check failed: src directory does not exist.');
     process.exitCode = 1;
   } else {
     throw error;
@@ -157,20 +215,21 @@ try {
 if (files) {
   const violations = [];
   const dependencyGraph = new Map();
+  const fileGraph = new Map();
+  const fileSet = new Set(files);
   const sourceModules = new Set(files.map(sourceModule).filter(Boolean));
 
   for (const filePath of files) {
     const importerModule = sourceModule(filePath);
-    if (!importerModule) {
-      continue;
-    }
-    dependencyGraph.set(importerModule, dependencyGraph.get(importerModule) ?? new Set());
+    if (importerModule)
+      dependencyGraph.set(importerModule, dependencyGraph.get(importerModule) ?? new Set());
 
-    const source = await readFile(filePath, "utf8");
-    for (const match of source.matchAll(importPattern)) {
-      const specifier = match[1];
-      const line = source.slice(0, match.index).split("\n").length;
+    const source = await readFile(filePath, 'utf8');
+    for (const { specifier, line, runtime } of importsOf(source, filePath)) {
       const location = `${path.relative(repositoryRoot, filePath)}:${line}`;
+      const targetFile = resolveSourceFile(filePath, specifier, fileSet);
+      if (runtime && targetFile) addEdge(fileGraph, filePath, targetFile);
+      if (!importerModule) continue;
 
       if (
         coreModules.has(importerModule) &&
@@ -184,7 +243,7 @@ if (files) {
         continue;
       }
 
-      if (importerModule === "wire-geometry" && internalImport.moduleName !== "domain") {
+      if (importerModule === 'wire-geometry' && internalImport.moduleName !== 'domain') {
         violations.push(`${location} wire-geometry must depend only on domain point types`);
       }
 
@@ -196,30 +255,33 @@ if (files) {
         );
       }
 
-      if (
-        coreModules.has(importerModule) &&
-        uiAndBrowserModules.has(internalImport.moduleName)
-      ) {
+      if (coreModules.has(importerModule) && uiAndBrowserModules.has(internalImport.moduleName)) {
         violations.push(
           `${location} core module imports UI/browser module "${internalImport.moduleName}"`,
         );
       }
 
-      if (importerModule === "domain") {
-        violations.push(
-          `${location} domain imports feature module "${internalImport.moduleName}"`,
-        );
+      if (importerModule === 'domain') {
+        violations.push(`${location} domain imports feature module "${internalImport.moduleName}"`);
       }
     }
   }
 
   const cycle = findCycle(dependencyGraph);
   if (cycle) {
-    violations.push(`module dependency cycle: ${cycle.join(" -> ")}`);
+    violations.push(`module dependency cycle: ${cycle.join(' -> ')}`);
+  }
+  const fileCycle = findCycle(fileGraph);
+  if (fileCycle) {
+    violations.push(
+      `runtime file dependency cycle: ${fileCycle
+        .map((file) => path.relative(repositoryRoot, file).split(path.sep).join('/'))
+        .join(' -> ')}`,
+    );
   }
 
   if (violations.length > 0) {
-    console.error("Module boundary violations:\n");
+    console.error('Module boundary violations:\n');
     for (const violation of violations) {
       console.error(`- ${violation}`);
     }

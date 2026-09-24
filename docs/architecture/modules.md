@@ -4,18 +4,18 @@
 
 | 모듈 | 책임 | 금지되는 결합 |
 |---|---|---|
-| `domain` | 회로 문서, 공통 타입, 단위, ID, 최소 검증 | React, SVG, Three.js, 저장 API |
+| `domain` | 회로 문서·계산 계약, ID, 스키마·참조 검증, 순차 마이그레이션 | React, SVG, Three.js, 저장 API |
 | `component-library` | 단자 구성, 기본값, 표시 이름, 기호 | 행렬 계산 직접 수행 |
 | `connectivity` | 명시적 연결을 따라 `net` 구성 | 화면 색, 선택 상태, 픽셀 좌표 판정 |
 | `simulation` | `CompiledCircuit`에서 전위·전류·전력 계산 | React와 화면 좌표 |
-| `diagnostics` | 컴파일·계산 결과에서 교육적 진단 생성 | 자유 문장만 반환 |
+| `diagnostics` | 컴파일·계산 모듈이 생성한 진단 집계와 중복 제거 | 자유 문장만 반환 |
 | `editor` | 문서 편집 명령, 권한 검사, 실행 취소 | 포인터·React 상태, 물리 계산식 구현 |
 | `wire-geometry` | Point 배열의 직각 경로·국소 변형·정리 | 문서·ID·UI·렌더러·명령·저장. domain 타입 외 모듈 의존 금지 |
 | `measurement` | 측정 도구를 질의나 임시 회로 요소로 변환 | 원본 문서의 몰래 영구 변경 |
 | `visualization` | `SimulationResult`를 2D 레이어로 변환 | 재계산 수행 |
 | `potential-3d` | 2D 위치와 전위를 3D 장면으로 변환 | 회로 해석 직접 수행 |
 | `export` | 공통 기호 자원에서 인쇄용 SVG·PNG 생성 | 화면 캡처에 의존 |
-| `persistence` | 자동 저장, 파일 입출력, 버전 변환 | 계산 결과를 정답으로 저장 |
+| `persistence` | 자동 저장, 파일 입출력, domain 검증·버전 변환 사용 | 계산 결과를 정답으로 저장 |
 | `feedback` | 후기 타입, 입력 정책, 일반·관리자 게이트웨이 계약 | React, 브라우저, Firebase SDK, 회로 문서 결합 |
 | `feedback-firebase` | 운영 후기의 익명 인증·Firestore 읽기/쓰기·관리자 접근 | 회로 문서·물리 계산 결합 |
 | `feedback-local` | 이전 로컬 자료와 계약 검증용 어댑터 | 물리·편집 모듈 접근, 운영 백엔드로 사용 |
@@ -99,9 +99,18 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 - `domain`은 다른 기능 모듈을 import하지 않는다.
 - `connectivity`와 `simulation`은 UI 모듈을 import하지 않는다.
 - `visualization`은 결과 타입을 읽되 `simulation` 내부 구현을 호출하지 않는다.
-- `app`만 여러 모듈을 조합한다.
+- `app`은 사용자 흐름에 맞춰 계산·저장·화면을 조합한다. 다른 모듈은 책임표와 전체 구조도의 의존 방향을 따른다.
 - 모듈 내부 파일이 아니라 공개 `index`를 사용한다.
 - 순환 의존성이 생기면 책임을 다시 나누고 공통 타입을 최소 범위로 이동한다.
+
+### 화면 내부의 책임
+
+- `app/useCircuitSession`: 확정 문서·이력·단일/묶음 명령의 화면 모드 제한·자동 저장을 소유한다. App은 공개 실행 함수와 undo/redo만 호출한다. 학생 활동 권한과 문서 무결성은 계속 editor가 검사한다.
+- `app/useCanvasDragSession`: 부품/도선 이동의 시작 문서·좌표·포인터 캡처·미리보기와 화면 이동 세션을 소유한다. Canvas는 실제 이벤트를 연결하고 터치·배선·측정 등 여러 조작의 취소를 함께 지시한다. 확정에는 미리보기와 같은 명령 구성 함수를 사용한다.
+- `app/InlineComponentEditor`: 이름·값 초안, 파싱 오류, 입력 초점과 입력창 배치를 소유한다. Canvas에는 편집 대상 ID만 남긴다. 화면 크기 변화는 초안을 초기화하지 않는다.
+- `app/PotentialSettings`: 전위 범위·높이 설정 표시를 담당한다. 설정 값은 App의 문서 밖 상태이며 같은 PotentialModel로 2D/3D를 갱신한다.
+
+이 파일들은 app 내부 구현이며 별도 패키지·상태 라이브러리·범용 조작 프레임워크를 만들지 않는다. simulation 내부에서는 solver를 measurements가 사용하고 index가 두 구현의 공개 API를 재노출한다.
 
 ## 분수 표기
 

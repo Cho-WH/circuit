@@ -8,40 +8,57 @@
 - 초기에는 하나의 저장소와 한 앱 안에서 폴더 경계를 지킨다.
 - 실제 재사용 필요가 생긴 뒤에만 독립 패키지로 분리한다.
 
-## 계층
+## 현재 모듈 의존 방향
+
+화살표는 import하는 쪽에서 사용되는 모듈 쪽을 향한다. 공통 `domain` 타입 의존과 작은 보조 모듈의 연결은 아래 설명으로 묶었다.
 
 ```mermaid
 flowchart TB
-    UI[app / editor / measurement]
-    VIEW[visualization / potential-3d / export / notation / typography]
-    CORE[domain / connectivity / simulation / diagnostics / feedback contract]
-    INFRA[persistence / feedback-firebase / browser / Three.js / SVG / file APIs]
+    APP[app · React 화면 조합]
+    CORE[connectivity / simulation / diagnostics]
+    EDIT[editor · 명령과 이력]
+    MEASURE[measurement · 순수 측정 함수]
+    VIEW[visualization · 전위 표시 모델]
+    SCENE[potential-3d · Three.js]
+    EXPORT[export · SVG / PNG]
+    SYMBOL[component-library · 공통 기호와 좌표]
+    GEOMETRY[wire-geometry · 순수 Point 기하]
+    STORE[persistence · 브라우저 저장]
+    REMOTE[feedback-firebase]
+    LOCAL[feedback-local · 호환 / 검증]
+    FEEDBACK[feedback · 계약]
 
-    UI --> CORE
-    VIEW --> CORE
-    UI --> VIEW
-    UI --> INFRA
-    VIEW --> INFRA
+    APP --> CORE & EDIT & MEASURE & VIEW & SCENE & EXPORT & STORE & SYMBOL & GEOMETRY & REMOTE & FEEDBACK
+    EDIT --> SYMBOL & GEOMETRY
+    VIEW --> SYMBOL
+    SCENE --> VIEW & SYMBOL & EXPORT
+    EXPORT --> SYMBOL
+    SYMBOL --> GEOMETRY
+    REMOTE --> FEEDBACK
+    LOCAL --> FEEDBACK
 ```
 
-`CORE`는 `UI`, `VIEW`, `INFRA`를 import하지 않는다.
+`domain`은 다른 기능 모듈에 의존하지 않는다. 회로 모듈들은 이곳의 문서·계산 계약을 사용하며 `wire-geometry`는 Point 타입만 사용한다. `connectivity`, `simulation`, `diagnostics`, `measurement`는 React·브라우저 없이 동작한다. `editor`도 순수 명령 처리이며 포인터·선택 상태는 `app`에 둔다.
+
+`notation`은 editor·component-library·export·app에서 사용하는 순수 표기 함수다. `typography`는 export의 글꼴 자원을 제공한다. 예제 `fixtures`는 app에서 읽는다. 후기 모듈은 회로 문서에 의존하지 않는다. 모듈 간 공개 index와 순환 의존성은 `tools/check-boundaries.mjs`로 검사한다.
 
 ## 현재 디렉터리
 
 ```text
 src/
   app/                화면 조합, 라우팅, 전역 오류 경계
-  domain/             회로 문서 타입, 단위, ID, 스키마
+  domain/             회로 문서·계산 계약, ID, 검증·마이그레이션
   component-library/  부품 정의, 단자, SVG 기호
   connectivity/       단자·도선을 net으로 묶는 컴파일러
   simulation/         MNA 직류 해석과 결과 타입
   diagnostics/        오류·경고 규칙
-  editor/             선택, 배치, 배선, 명령, 실행 취소
+  editor/             문서 변경 명령, 권한 검사, 실행 취소
+  wire-geometry/      직각 경로·국소 변형·정리의 순수 함수
   measurement/        탐침, 비접촉 전류 측정, 측정 기록
   visualization/      전위 색·숫자·전류 레이어
   potential-3d/       Three.js 전위 높이 어댑터
   export/             SVG, PNG, 클립보드
-  persistence/        자동 저장, JSON, 마이그레이션
+  persistence/        자동 저장, JSON 입출력, domain 검증 사용
   notation/           수치·분수·첨자 표기
   typography/         공통 글꼴·표기 배치
   feedback/           후기 공개 계약과 입력 정책
