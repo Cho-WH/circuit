@@ -17,6 +17,9 @@ import {
   makePath,
   pathVoltages,
   potentialColor,
+  defaultPotentialPalette,
+  potentialPalettes,
+  potentialGradient,
   suggestPaths,
 } from "../src/visualization";
 
@@ -131,21 +134,54 @@ describe("potential model invariants", () => {
   });
 
   it("uses a stable midpoint color for a single potential and clamps fixed-range overflow", () => {
-    expect(potentialColor(0, 0, 0)).toBe("rgb(190,38,100)");
+    expect(potentialColor(0, 0, 0)).toBe("rgb(127,255,128)");
     expect(potentialColor(-20, -10, 10)).toBe(potentialColor(-10, -10, 10));
     expect(potentialColor(20, -10, 10)).toBe(potentialColor(10, -10, 10));
     expect(potentialColor(Number.NaN, -10, 10)).toBe("#9aa5b3");
   });
 });
 
-describe("thermal palette", () => {
-  it("distinguishes low, middle and high voltages and interpolates continuously", () => {
-    expect(potentialColor(0, 0, 12)).toBe("rgb(35,20,90)");
-    expect(potentialColor(6, 0, 12)).toBe("rgb(190,38,100)");
-    expect(potentialColor(12, 0, 12)).toBe("rgb(235,188,38)");
-    expect(potentialColor(1, 0, 12)).toBe("rgb(52,30,120)");
+describe("approved potential palettes", () => {
+  it("defaults to the accepted spectrum with navy lows and the unchanged red end", () => {
+    expect(defaultPotentialPalette).toBe('spectrum');
+    expect([0,3,6,9,12].map(v=>potentialColor(v,0,12))).toEqual([
+      'rgb(0,0,168)', 'rgb(0,148,255)', 'rgb(127,255,128)', 'rgb(255,191,0)', 'rgb(255,0,0)',
+    ]);
     expect(potentialColor(6 - 1e-8, 0, 12)).toBe(potentialColor(6 + 1e-8, 0, 12));
   });
+  it('preserves the final A/C colors and their low-to-high direction', () => {
+    expect([0,6,12].map(v=>potentialColor(v,0,12,'blue-yellow'))).toEqual(['rgb(34,52,165)','rgb(0,189,182)','rgb(244,223,0)']);
+    expect([0,12].map(v=>potentialColor(v,0,12,'red-yellow'))).toEqual(['rgb(128,13,38)','rgb(255,228,90)']);
+  });
+  for (const palette of potentialPalettes) {
+    it(`${palette.id}: changes only color, with shared endpoint/wire values and matching legend ends`, () => {
+      const { document, circuit, result, model: original } = solvedModel('FIX-02-series.json');
+      const snapshot = JSON.stringify({document,result});
+      const model = buildPotentialModel(document,circuit,result,{palette:palette.id});
+      for(const net of circuit.nets) {
+        const n=model.nets[net.id];
+        expect(n.voltage).toBe(original.nets[net.id].voltage);
+        expect(n.height).toBe(original.nets[net.id].height);
+        net.endpointIds.forEach(id=>expect(model.endpoints[id]).toBe(n));
+        net.wireIds.forEach(id=>expect(model.segments.find(s=>s.id===id)?.color).toBe(n.color));
+      }
+      expect(model.segments.map(s=>s.points)).toEqual(original.segments.map(s=>s.points));
+      expect(JSON.stringify({document,result})).toBe(snapshot);
+      expect(potentialGradient(palette.id)).toContain(potentialColor(0,0,12,palette.id));
+      expect(potentialGradient(palette.id)).toContain(potentialColor(12,0,12,palette.id));
+      expect(potentialColor(-100,-9,9,palette.id)).toBe(potentialColor(-9,-9,9,palette.id));
+      expect(potentialColor(100,-9,9,palette.id)).toBe(potentialColor(9,-9,9,palette.id));
+      expect(potentialColor(0,0,0,palette.id)).toBe(potentialColor(6,0,12,palette.id));
+      expect(potentialColor(undefined,0,12,palette.id)).toBe('#9aa5b3');
+      expect(potentialColor(Number.NaN,0,12,palette.id)).toBe('#9aa5b3');
+      const floating=fixture('FIX-07-floating-network.json'),compiled=compileCircuit(floating).circuit;
+      const undefinedModel=buildPotentialModel(floating,compiled,solveCircuit(compiled),{palette:palette.id});
+      expect(undefinedModel.segments).toEqual([]);
+      expect(Object.values(undefinedModel.nets).every(n=>n.height===undefined&&n.color==='#9aa5b3')).toBe(true);
+      const fixed={range:{min:-9,max:9},palette:palette.id};
+      expect(solvedModel('FIX-02-series.json',fixed).model.endpoints.J1.color).toBe(solvedModel('FIX-03-parallel.json',fixed).model.endpoints.JT.color);
+    });
+  }
 });
 
 describe("potential paths", () => {

@@ -43,7 +43,15 @@ VIS-004/PV-01~04,07~08에 따라 3D 공개 입력을 `CircuitDocument`, 공통 `
 
 ### 2026-09-23 색상 범례와 화면 공간
 
-visualization은 읽기 전용 `potentialColorStops`를 공개한다. `potentialColor`는 이 색상점을 보간하고 UI 범례는 같은 색상점에서 그라데이션을 생성한다. 전위 범위·계산·저장 계약은 바뀌지 않는다. 3D 제목과 축 이름 중복 표기를 제거하고 카메라 도구는 화면 위 오버레이로 배치한다. 기준 전위·높이 배율·축 눈금은 유지한다.
+visualization은 읽기 전용 `potentialColorStops`를 공개한다. `potentialColor`는 이 색상점을 보간하고 UI 범례는 같은 색상점에서 그라데이션을 생성한다. 전위 범위·계산·저장 계약은 바뀌지 않는다. 3D 제목과 축 이름 중복 표기를 제거하고 카메라 도구는 화면 위 오버레이로 배치한다. 기준 전위·높이 배율·축 눈금은 유지한다. 기본 색상표는 아래 2026-09-24 선택 계약으로 대체한다.
+
+### 2026-09-24 확정 팔레트 선택 (VIS-001/002/004)
+
+사용자가 비교 앱에서 확정한 세 가지 색상표를 `visualization/palettes.ts`에 저장한다. 낮은 전위부터 파랑 → 노랑(`blue-yellow`), 남색부터 빨강까지 전체 스펙트럼(`spectrum`, 기본), 검붉은색 → 밝은 노랑(`red-yellow`)이다. A/C는 직접 지정한 RGB 색상점이며 B는 Jet 계열의 RGB 구간함수에서 아래 절반만 남색으로 확장한 256개 표본이다. 검토 참고는 [WiredWhite 그림 10](https://wiredwhite.com/wireless-signal-strength-matlab/)이며 외부 라이브러리의 기본 색상표로 대체하지 않는다.
+
+공개 `PotentialPaletteId`, 읽기 전용 `potentialPalettes`, `defaultPotentialPalette`, `potentialPalette`, `potentialGradient`를 제공한다. `PotentialOptions.palette`와 `potentialColor`의 선택적 네 번째 인수로 같은 선택을 전달한다. 기존 호출은 전체 스펙트럼을 사용하고 기존 `potentialColorStops`는 기본 스펙트럼의 색상점을 가리킨다. 동일 net의 참조·범위·숫자·높이·부유 처리·저항 모델은 유지한다. 저장 형식 변경이나 마이그레이션은 없다.
+
+App은 팔레트 선택을 문서 밖 React 상태로 소유한다. 색상바의 메뉴는 실제 색상점에서 생성한 세 그라데이션과 선택 표시를 보여 주고 이름은 접근성 레이블로 유지하며 2D와 3D의 공통 `PotentialModel`을 갱신한다. 단일 전위의 현재 범례는 단색으로 남지만 선택 메뉴는 세 전체 색상표를 제공한다. 3D는 이 갱신으로 카메라를 초기화하거나 회로를 다시 해석하지 않는다. 메뉴는 portal로 화면 안에 배치해 작은 화면과 WebGL 위에서도 잘리지 않으며 키보드 초점·바깥 클릭·Escape/Tab 닫기를 제공한다. 팔레트 선택으로 문서 저장·실행 취소 기록은 바뀌지 않는다.
 
 
 ### 2026-09-24 준비 계약과 카메라 전환 (VIS-004, QLT-001)

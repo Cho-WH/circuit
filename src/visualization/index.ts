@@ -1,24 +1,12 @@
 import type { CircuitDocument, CompiledCircuit, SimulationResult } from '../domain';
 import { endpointPosition, wirePoints } from '../component-library';
+import { potentialColor, type PotentialPaletteId } from './palettes';
+export { defaultPotentialPalette, potentialPalettes, potentialPalette, potentialColorStops, potentialColor, potentialGradient, type PotentialPaletteId } from './palettes';
 
 export interface PotentialValue { netId: string; voltage?: number; color: string; height?: number; endpointIds: string[]; wireIds: string[] }
 export interface PotentialSegment { id: string; points: { x: number; y: number; z: number }[]; color: string; kind: 'wire' | 'component' }
-export interface PotentialOptions { scale?: number; range?: { min: number; max: number } }
+export interface PotentialOptions { scale?: number; range?: { min: number; max: number }; palette?: PotentialPaletteId }
 export interface PotentialModel { nets: Record<string, PotentialValue>; endpoints: Record<string, PotentialValue>; segments: PotentialSegment[]; min: number; max: number; scale: number; referenceVoltage: number; undefinedCount: number }
-// Shared thermal stops for the voltage map and its legend, from low to high.
-export const potentialColorStops = [
-  [35, 20, 90], [69, 40, 150], [126, 35, 145], [190, 38, 100],
-  [231, 65, 49], [245, 125, 21], [235, 188, 38],
-] as const;
-export function potentialColor(value: number | undefined, min: number, max: number): string {
-  if (value === undefined || !Number.isFinite(value)) return '#9aa5b3';
-  const t = max === min ? .5 : Math.max(0, Math.min(1, (value - min) / (max - min)));
-  const position = t * (potentialColorStops.length - 1);
-  const index = Math.min(Math.floor(position), potentialColorStops.length - 2);
-  const low = potentialColorStops[index], high = potentialColorStops[index + 1];
-  const blend = position - index;
-  return `rgb(${low.map((a, i) => Math.round(a + (high[i] - a) * blend)).join(',')})`;
-}
 export function buildPotentialModel(document: CircuitDocument, circuit: CompiledCircuit, result: SimulationResult, options: PotentialOptions = {}): PotentialModel {
   const values = Object.values(result.nodeVoltages).filter(Number.isFinite);
   const validRange = options.range && Number.isFinite(options.range.min) && Number.isFinite(options.range.max) && options.range.min < options.range.max;
@@ -27,7 +15,7 @@ export function buildPotentialModel(document: CircuitDocument, circuit: Compiled
   const referenceVoltage = circuit.referenceNetId ? result.nodeVoltages[circuit.referenceNetId] ?? 0 : 0;
   const nets = Object.fromEntries(circuit.nets.map(net => {
     const v = result.nodeVoltages[net.id]; const voltage = Number.isFinite(v) ? v : undefined;
-    return [net.id, { netId: net.id, voltage, color: potentialColor(voltage, min, max), height: voltage === undefined ? undefined : scale * (voltage - referenceVoltage), endpointIds: net.endpointIds, wireIds: net.wireIds }];
+    return [net.id, { netId: net.id, voltage, color: potentialColor(voltage, min, max, options.palette), height: voltage === undefined ? undefined : scale * (voltage - referenceVoltage), endpointIds: net.endpointIds, wireIds: net.wireIds }];
   })) as Record<string, PotentialValue>;
   const endpoints = Object.fromEntries(Object.entries(circuit.endpointToNet).map(([id, net]) => [id, nets[net]]));
   const segments: PotentialSegment[] = [];

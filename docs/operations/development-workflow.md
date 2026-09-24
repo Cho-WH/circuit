@@ -77,7 +77,7 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 
 GitHub Pages + Actions로 `codex/mvp`의 검증된 `dist`를 게시한다. URL은 https://cho-wh.github.io/circuit/ 이다. `GITHUB_PAGES=true`는 배포 빌드에만 적용한다. `github-pages` 환경은 이 브랜치만 허용하고 deploy job에만 `pages: write`, `id-token: write`를 부여한다. 빌드 검증 실패 시 배포 job을 실행하지 않는다. 단계 6의 학생 활동·공유 서버 기능과 별개인 현재 정적 MVP의 게시다.
 
-`codex/mvp` push 또는 수동 실행 시 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 명세 검증 → 모듈 경계 → `npm test` → `npm run build`(타입 포함)를 수행한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**를 사용한다. 게시 브랜치를 바꿀 때 push 대상·build 조건·github-pages 환경의 허용 브랜치를 함께 바꾼다.
+`codex/mvp` push 또는 수동 실행 시 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 명세 검증 → 모듈 경계 → `npm test` → Java 21 준비 → `npm run test:firestore` → `npm run build`(타입 포함)를 수행한다. 일반 테스트에서 건너뛴 Firestore 규칙 검사는 이 별도 에뮬레이터 단계에서 실행한다. 모든 검사가 성공한 산출물만 Pages에 업로드·배포한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**를 사용한다. 게시 브랜치를 바꿀 때 push 대상·build 조건·github-pages 환경의 허용 브랜치를 함께 바꾼다.
 
 배포 빌드는 `/circuit/`, 로컬 개발은 `/` 경로다. 빌드 결과만 업로드하며 소스·테스트·브라우저 저장 데이터는 배포하지 않는다. 다른 기기로 회로를 옮길 때는 JSON을 사용한다.
 

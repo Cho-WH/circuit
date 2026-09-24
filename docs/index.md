@@ -14,8 +14,8 @@
 
 ## 사용자 경험
 
-- [터치 조작 코드 점검·모바일 UX 권장안](ux/2026-09-24-touch-interaction-audit.md): 결함과 지원 공백, 이벤트 재현 근거, 권장 제스처·피드백·탭 대안과 최소 지원 수용 기준
-- [프론트엔드 디자인 검토·개선 제안](ux/2026-09-24-frontend-design-review.md): ‘한마디’를 기준으로 한 화면별 진단, 공식 디자인 사례, 문구·위계·모션·3D 개선안. 검토 당시 근거와 현재 구현 반영표 포함
+- [터치 UX 구현 결과와 점검 이력](ux/2026-09-24-touch-interaction-audit.md): 코드 반영·배포 완료, 남은 실기기 검증과 후순위. 최초 점검·권장안은 접힌 이력으로 보존
+- [프론트엔드 디자인 구현 결과와 검토 이력](ux/2026-09-24-frontend-design-review.md): 채택한 개선안 반영 완료, 변경된 결정·미반영 제안·검증 한계. 최초 진단과 계획은 접힌 이력으로 보존
 - [`ux/quick-start.md`](ux/quick-start.md): 실행, 편집, 전위·측정, 저장과 단축키
 - [`ux/overview.md`](ux/overview.md): 화면 모드와 반응형 구조
 - [`ux/interactions.md`](ux/interactions.md): 부품 배치, 배선, 값 수정, 오류 피드백
