@@ -1,4 +1,4 @@
-import { Check, X } from 'lucide-react';
+import { Check, X, Undo2, CornerDownRight, CornerRightDown } from 'lucide-react';
 import type { ContextWiring } from './useContextWiring';
 import { targetKey } from './model';
 import type { Point } from '../../domain';
@@ -7,6 +7,7 @@ export function WiringMarks({ wiring, scale, bounds }: { wiring: ContextWiring; 
   if (!wiring.active) return null;
   const center = wiring.choices.length ? {x:wiring.choices.reduce((sum,t)=>sum+t.point.x,0)/wiring.choices.length,y:wiring.choices.reduce((sum,t)=>sum+t.point.y,0)/wiring.choices.length} : null;
   return <g pointerEvents="none">
+    {wiring.corners.map((p, i) => <rect key={i} x={p.x-4/scale} y={p.y-4/scale} width={8/scale} height={8/scale} fill="white" stroke="#174895" strokeWidth={1.5/scale}/>)}
     {wiring.start && <circle aria-hidden="true" cx={wiring.start.point.x} cy={wiring.start.point.y} r={9 / scale} fill="#e4edff" stroke="#174895" strokeWidth={2 / scale} />}
     {wiring.hint && <g aria-hidden="true">
       {wiring.branchEnd && <path className="branch-ghost" d={'M'+wiring.hint.point.x+' '+wiring.hint.point.y+'L'+wiring.branchEnd.x+' '+wiring.branchEnd.y} fill="none" stroke="#174895" strokeWidth={3/scale} strokeLinecap="round" opacity=".32"/>}
@@ -32,6 +33,7 @@ export function WiringOverlay({ wiring, screenPoint, width, height, cancel }: { 
     {wiring.touch&&wiring.choices.length>0&&<div data-wiring-ui className="touch-choice-list" aria-label="겹친 연결 대상 선택"><span>연결할 위치를 선택하세요</span>{wiring.choices.map((t,i)=><button key={targetKey(t)} onClick={()=>wiring.selectChoice(t)}>{i+1}. {wiring.choiceLabel(t)}</button>)}<button onClick={cancel}>취소</button></div>}
     {p && wiring.crossingLabel && <div className="crossing-state" role="status" style={{left:Math.max(8,Math.min(width-64,p.x-28)),top:Math.max(8,Math.min(height-32,p.y-40))}}>{wiring.crossingLabel}</div>}
     {(wiring.start || wiring.choices.length>0 || (wiring.touch && wiring.action)) && <div data-wiring-ui className="wiring-icons">
+      {wiring.start && <><button aria-label={`배선 방향 전환: 현재 ${wiring.posture === 'HV' ? '가로 먼저' : '세로 먼저'}`} title="배선 방향 전환 (/)" onClick={wiring.togglePosture}>{wiring.posture === 'HV' ? <CornerRightDown size={20}/> : <CornerDownRight size={20}/>}</button><button aria-label="마지막 경유점 되돌리기" title="마지막 경유점 되돌리기 (Backspace)" disabled={!wiring.canBack} onClick={wiring.back}><Undo2 size={20}/></button></>}
       {wiring.touch && wiring.action && <button className="primary" aria-label={wiring.action.label} onClick={wiring.action.run}><Check size={20}/></button>}
       <button aria-label="배선 취소" onClick={cancel}><X size={20}/></button>
     </div>}

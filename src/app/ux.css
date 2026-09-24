@@ -67,6 +67,8 @@
 .wiring-icons{position:absolute;z-index:7;top:12px;right:12px;display:flex;gap:6px}
 .wiring-icons button{width:44px;height:44px;padding:0;border:1px solid #bed0e9;border-radius:50%;background:white;box-shadow:0 3px 10px #193e7820;color:#174895}
 .wiring-icons button.primary{background:#174895;color:white}
+.wiring-icons button:disabled{opacity:.4;cursor:default}
+.wire-segment-handles [data-wire-handle]:focus-visible .wire-segment-grip{fill:#dbeafe;stroke:#123f88;stroke-width:3}
 .wiring-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .smart-wiring .terminal[data-active=true] circle:last-of-type{r:7px;stroke:#174895;stroke-width:2;filter:drop-shadow(0 2px 3px #193e7866)}
 .smart-wiring .circuit-element:not([data-selected=true]):has(.terminal[data-active=true]) .component-lift{transform:none}

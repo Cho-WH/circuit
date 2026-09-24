@@ -177,13 +177,13 @@ describe("structural editor invariants", () => {
     expect(positionsByRole.negative.y).toBe(source.position.y);
   });
 
-  it("deleting a component removes wires, annotations, and reference nodes that target its terminals", () => {
+  it("deleting a connected component preserves wires and remaps terminal anchors to junctions", () => {
     const document = cloneDocument(fixture("FIX-01"));
     const annotation: Annotation = {
       id: "A1",
       kind: "note",
       anchor: { kind: "terminal", id: "R1.a" },
-      content: "remove with R1",
+      content: "keep this location",
       visibility: "always",
     };
     document.annotations.push(annotation);
@@ -194,16 +194,17 @@ describe("structural editor invariants", () => {
     });
 
     expect(history.present.components.map(({ id }) => id)).toEqual(["V1"]);
-    expect(history.present.wires).toEqual([]);
-    expect(history.present.annotations).toEqual([]);
-    expect(history.present.referenceNode).toBeNull();
+    expect(history.present.wires).toHaveLength(document.wires.length + 1);
+    expect(history.present.annotations).toHaveLength(1);
+    expect(history.present.annotations[0].anchor?.kind).toBe('junction');
+    expect(history.present.referenceNode?.kind).toBe('junction');
     expect(validateDocument(history.present).ok).toBe(true);
   });
 
   it.each([
     ["move", { type: "MoveComponents", positions: { R1: { x: 500, y: 200 } } }],
     ["rotate", { type: "RotateComponents", ids: ["R1"] }],
-  ] as const)("preserves endpoints and invalidates connected wire routes after %s", (_name, command) => {
+  ] as const)("preserves endpoints and repairs connected wire routes locally after %s", (_name, command) => {
     const document = cloneDocument(fixture("FIX-01"));
     document.wires[0].waypoints = [{ x: 10, y: 20 }];
     document.wires[1].waypoints = [{ x: 30, y: 40 }];
@@ -213,7 +214,12 @@ describe("structural editor invariants", () => {
     expect(history.present.wires.map(({ start, end }) => ({ start, end }))).toStrictEqual(
       originalEndpoints,
     );
-    expect(history.present.wires.map(({ waypoints }) => waypoints)).toEqual([[], []]);
+    expect(history.present.wires[0].waypoints).toContainEqual({ x: 10, y: 20 });
+    expect(history.present.wires[1].waypoints).toContainEqual({ x: 30, y: 40 });
+    for (const wire of history.present.wires) {
+      const points = wirePoints(history.present, wire);
+      expect(points.slice(1).every((p, i) => p.x === points[i].x || p.y === points[i].y)).toBe(true);
+    }
 
     const movedOrRotated = history.present.components.find(({ id }) => id === "R1")!;
     const firstTerminal = terminalPosition(movedOrRotated, 0);
@@ -349,7 +355,12 @@ describe("command previews and wire route stability (EDT-001/002/005/006)", () =
     for (const wire of document.wires) {
       const changed = [wire.start.id, wire.end.id].some(id => ["R1.a", "R1.b"].includes(id));
       const actual = committed.present.wires.find(w => w.id === wire.id)!;
-      expect(actual).toEqual({ ...wire, waypoints: changed ? [] : wire.waypoints });
+      expect(actual.start).toEqual(wire.start); expect(actual.end).toEqual(wire.end);
+      if (!changed) expect(actual).toEqual(wire);
+      else {
+        const path = wirePoints(committed.present, actual);
+        expect(path.slice(1).every((p,i) => p.x === path[i].x || p.y === path[i].y)).toBe(true);
+      }
     }
     expect(committed.present.wires.find(w => w.id === "W4")!.waypoints).toHaveLength(3);
   });

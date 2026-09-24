@@ -25,6 +25,40 @@ function setup(doc=fixture()) {
   return {api:()=>api,history:()=>history,commit,run:(f:(state:typeof api)=>void)=>act(()=>f(api)),disable:()=>act(()=>{enabled=false;render();}),reset:()=>act(()=>{resetKey++;render();})};
 }
 describe('context wiring commands and state',()=>{
+  it.each([false,true])('fixes legs in empty space, changes only the last preview and commits one undo step (touch=%s)',coarse=>{
+    const doc=emptyDocument('waypoints');doc.junctions=[{id:'A',position:{x:0,y:0}},{id:'B',position:{x:400,y:0}}];
+    const c=setup(doc);
+    c.run(a=>a.tap({x:0,y:0},1,coarse));
+    c.run(a=>a.tap({x:100,y:100},1,coarse));
+    c.run(a=>a.togglePosture());
+    c.run(a=>a.tap({x:300,y:200},1,coarse));
+    expect(c.api().corners).toEqual([{x:100,y:100},{x:300,y:200}]);
+    expect(c.history().present).toEqual(doc);expect(c.history().past).toHaveLength(0);
+    c.run(a=>a.back());expect(c.api().corners).toEqual([{x:100,y:100}]);
+    c.run(a=>a.tap({x:300,y:200},1,coarse));
+    c.run(a=>a.hover({x:400,y:0},1));const preview=c.api().previewPath;
+    c.run(a=>a.tap({x:400,y:0},1,coarse));
+    const next=c.history().present;
+    expect(wirePoints(next,next.wires[0])).toEqual(preview);
+    expect(preview).toEqual([{x:0,y:0},{x:0,y:100},{x:300,y:100},{x:300,y:200},{x:400,y:200},{x:400,y:0}]);
+    expect(c.history().past).toHaveLength(1);expect(undo(c.history()).present).toEqual(doc);
+    expect(redo(undo(c.history())).present).toEqual(next);expect(c.api().corners).toEqual([]);
+  });
+  it('preserves a custom route when both ends split an existing wire',()=>{
+    const doc=emptyDocument('routed branch');doc.junctions=[{id:'A',position:{x:0,y:0}},{id:'B',position:{x:600,y:0}}];
+    doc.wires=[{id:'W',start:{kind:'junction',id:'A'},end:{kind:'junction',id:'B'},waypoints:[]}];
+    const route=[{x:100,y:200},{x:500,y:200}];
+    const result=executeCommands(createHistory(doc),connectionCommands(doc,{kind:'wire',wireId:'W',point:{x:100,y:0}},{kind:'wire',wireId:'W',point:{x:500,y:0}},route));
+    expect(result.ok).toBe(true);if(!result.ok)return;
+    expect(result.history.present.wires.at(-1)!.waypoints).toEqual(route);
+    expect(undo(result.history).present).toEqual(doc);
+  });
+  it('discards all draft legs on cancel or mode reset and never persists them',()=>{
+    const c=setup();
+    const begin=()=>{c.run(a=>a.activate(endpointTarget(c.history().present,{kind:'terminal',id:'V1.a'})));c.run(a=>a.tap({x:40,y:40},1,false));};
+    begin();expect(c.api().canBack).toBe(true);c.run(a=>a.cancel());expect(c.api().canBack).toBe(false);
+    begin();c.reset();expect(c.api().previewPath).toEqual([]);expect(c.history().past).toHaveLength(0);expect(c.commit).not.toHaveBeenCalled();
+  });
   it('commits a branch origin with its connection in one undo step, preserving every bend',()=>{
     const doc=fixture(),before=structuredClone(doc),history=createHistory(doc);
     const commands=connectionCommands(doc,{kind:'wire',wireId:'W2',point:{x:600,y:80}},endpointTarget(doc,{kind:'terminal',id:'V1.a'}));

@@ -1,5 +1,42 @@
 import { diagnostic, type CircuitDocument, type ComponentInstance, type Diagnostic, type Point, type Wire } from '../domain';
-import { compactWirePoints, terminalPosition, wireCrossings, wirePoints } from '../component-library';
+import { compactWirePoints, endpointPosition, terminalPosition, wireCrossings, wirePoints } from '../component-library';
+import { stretchWire } from '../wire-geometry';
+
+/** Document adapter: geometry can only change waypoints, never electrical endpoint references. */
+export function preserveConnectedWirePaths(before: CircuitDocument, after: CircuitDocument): void {
+  for (const wire of after.wires) {
+    const start = endpointPosition(after, wire.start), end = endpointPosition(after, wire.end);
+    const oldStart = endpointPosition(before, wire.start), oldEnd = endpointPosition(before, wire.end);
+    if (start.x === oldStart.x && start.y === oldStart.y && end.x === oldEnd.x && end.y === oldEnd.y) continue;
+    wire.waypoints = stretchWire(wirePoints(before, wire), start, end).slice(1, -1);
+  }
+}
+
+/** Contract only the supplied degree-two junctions, preserving the full route and anchored points. */
+export function dissolveWireJunctions(document: CircuitDocument, junctionIds: Iterable<string>): void {
+  const anchored = new Set([
+    ...document.annotations.flatMap(a => a.anchor ? [a.anchor.id] : []),
+    ...(document.referenceNode ? [document.referenceNode.id] : []),
+  ]);
+  for (const id of junctionIds) {
+    if (anchored.has(id)) continue;
+    const attached = document.wires.filter(w => w.start.id === id || w.end.id === id);
+    // A self-loop has two incidences; it cannot be contracted into an endpoint-free wire.
+    if (attached.length !== 2 || attached.some(w => w.start.id === id && w.end.id === id)) continue;
+    const [keep, remove] = attached;
+    // Preserve the retained wire's direction. Orient both paths through the common junction.
+    const [incoming, outgoing] = keep.end.id === id ? [keep, remove] : [remove, keep];
+    const before = wirePoints(document, incoming), after = wirePoints(document, outgoing);
+    if (incoming.start.id === id) before.reverse();
+    if (outgoing.end.id === id) after.reverse();
+    const path = compactWirePoints([...before, ...after.slice(1)]);
+    const start = incoming.start.id === id ? incoming.end : incoming.start;
+    const end = outgoing.end.id === id ? outgoing.start : outgoing.end;
+    keep.start = start; keep.end = end; keep.waypoints = path.slice(1, -1);
+    document.wires = document.wires.filter(w => w !== remove);
+    document.junctions = document.junctions.filter(j => j.id !== id);
+  }
+}
 
 export interface InsertionCandidate { wireId: string; segment: number; position: Point; rotation: ComponentInstance['rotation']; reason?: 'space' | 'crossing' }
 export function insertionCandidates(document: CircuitDocument, point: Point, wireId?: string): InsertionCandidate[] {

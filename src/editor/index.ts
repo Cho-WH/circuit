@@ -12,14 +12,18 @@ import {
   type Point,
   type Wire,
 } from '../domain';
-import { connectCrossing, disconnectCrossing, insertComponent, splitWire } from './wire-edits';
+import { connectCrossing, disconnectCrossing, insertComponent, splitWire, preserveConnectedWirePaths } from './wire-edits';
+import { shiftWireSegment } from '../wire-geometry';
+import { wirePoints } from '../component-library';
+import { deleteElements } from './delete-elements';
 export { insertionCandidates, type InsertionCandidate } from './wire-edits';
 
 export type Command =
   | { type: 'InsertComponentOnWire'; component: ComponentInstance; wireId: string; segment: number; newWireId: string }
   | { type: 'ConnectCrossing'; point: Point; wireIds: [string,string]; junctionId: string; newWireIds: [string,string] }
   | { type: 'DisconnectCrossing'; junctionId: string }
-  | { type: 'ConnectToWire'; start: EndpointRef; wireId: string; point: Point; junctionId: string; newWireId: string; branchId: string }
+  | { type: 'ConnectToWire'; start: EndpointRef; wireId: string; point: Point; junctionId: string; newWireId: string; branchId: string; waypoints?: Point[] }
+  | { type: 'MoveWireSegment'; wireId: string; segment: number; offset: number }
   | { type: 'AddComponent'; component: ComponentInstance }
   | { type: 'MoveComponents'; positions: Record<string, Point> }
   | { type: 'RotateComponents'; ids: string[] }
@@ -72,46 +76,6 @@ function commandError(
 
 function missingTargets(ids: Iterable<string>, existingIds: Set<string>): string[] {
   return [...new Set(ids)].filter((id) => !existingIds.has(id)).sort();
-}
-
-function clearConnectedWirePaths(document: CircuitDocument, componentIds: Set<string>): void {
-  const movedTerminals = new Set(
-    document.components
-      .filter((component) => componentIds.has(component.id))
-      .flatMap((component) => component.terminals.map((terminal) => terminal.id)),
-  );
-  for (const wire of document.wires) {
-    if (movedTerminals.has(wire.start.id) || movedTerminals.has(wire.end.id)) {
-      wire.waypoints = [];
-    }
-  }
-}
-
-function applyDelete(document: CircuitDocument, ids: Set<string>): void {
-  const removedTerminalIds = new Set(
-    document.components
-      .filter((component) => ids.has(component.id))
-      .flatMap((component) => component.terminals.map((terminal) => terminal.id)),
-  );
-  const removedJunctionIds = new Set(
-    document.junctions.filter((junction) => ids.has(junction.id)).map((junction) => junction.id),
-  );
-  const removedEndpointIds = new Set([...removedTerminalIds, ...removedJunctionIds]);
-
-  document.components = document.components.filter((component) => !ids.has(component.id));
-  document.junctions = document.junctions.filter((junction) => !ids.has(junction.id));
-  document.wires = document.wires.filter(
-    (wire) =>
-      !ids.has(wire.id) &&
-      !removedEndpointIds.has(wire.start.id) &&
-      !removedEndpointIds.has(wire.end.id),
-  );
-  document.annotations = document.annotations.filter(
-    (annotation) => !ids.has(annotation.id) && (!annotation.anchor || !removedEndpointIds.has(annotation.anchor.id)),
-  );
-  if (document.referenceNode && removedEndpointIds.has(document.referenceNode.id)) {
-    document.referenceNode = null;
-  }
 }
 
 function invalidProperties(
@@ -186,7 +150,15 @@ function applyCommand(
       const wire=document.wires.find(w=>w.id===command.wireId);
       if(!wire||!splitWire(document,wire,command.point,command.junctionId,command.newWireId))return [diagnostic('WIRE_EDIT_UNAVAILABLE',[command.wireId],'error',{reason:'target'})];
       document.junctions.push({id:command.junctionId,position:command.point});
-      document.wires.push({id:command.branchId,start:command.start,end:{kind:'junction',id:command.junctionId},waypoints:[]});
+      document.wires.push({id:command.branchId,start:command.start,end:{kind:'junction',id:command.junctionId},waypoints:command.waypoints ?? []});
+      break;
+    }
+    case 'MoveWireSegment': {
+      const wire = document.wires.find(w => w.id === command.wireId);
+      if (!wire) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.wireId])];
+      const path = shiftWireSegment(wirePoints(present, wire), command.segment, command.offset);
+      if (!path) return [diagnostic('INVALID_COMMAND', [command.wireId], 'error', { command: command.type })];
+      if (command.offset) wire.waypoints = path.slice(1, -1);
       break;
     }
     case 'AddComponent':
@@ -199,15 +171,13 @@ function applyCommand(
       if (missing.length) return [diagnostic('COMMAND_TARGET_NOT_FOUND', missing)];
       const invalid = ids.filter(id => !Number.isFinite(command.positions[id].x) || !Number.isFinite(command.positions[id].y));
       if (invalid.length) return [diagnostic('INVALID_COMMAND', invalid, 'error', { command: command.type })];
-      const movedIds = new Set<string>();
       for (const component of document.components) {
         const position = command.positions[component.id];
         if (position && (position.x !== component.position.x || position.y !== component.position.y)) {
           component.position = { ...position };
-          movedIds.add(component.id);
         }
       }
-      clearConnectedWirePaths(document, movedIds);
+      preserveConnectedWirePaths(present, document);
       break;
     }
 
@@ -220,7 +190,7 @@ function applyCommand(
           component.rotation = ((component.rotation + 90) % 360) as ComponentInstance['rotation'];
         }
       }
-      clearConnectedWirePaths(document, ids);
+      preserveConnectedWirePaths(present, document);
       break;
     }
 
@@ -228,7 +198,7 @@ function applyCommand(
       const ids = new Set(command.ids);
       const missing = missingTargets(ids, allElementIds);
       if (missing.length) return [diagnostic('COMMAND_TARGET_NOT_FOUND', missing)];
-      applyDelete(document, ids);
+      deleteElements(document, ids);
       break;
     }
 
@@ -327,6 +297,7 @@ export function previewCommand(document: CircuitDocument, command: Command): Pre
 export function executeCommand(history: History, command: Command): ExecuteCommandResult {
   const preview = previewCommand(history.present, command);
   if (!preview.ok) return preview;
+  if (command.type === 'MoveWireSegment' && command.offset === 0) return { ok: true, history };
   // A click, sub-grid movement, or returning to the starting position is not an edit.
   if (command.type === 'MoveComponents' && Object.entries(command.positions).every(([id, p]) => {
     const original = history.present.components.find(c => c.id === id)!;
@@ -345,6 +316,7 @@ export function executeCommands(history: History, commands: readonly Command[]):
     if (!result.ok) return result;
     present = result.document;
   }
+  if (JSON.stringify(present) === JSON.stringify(history.present)) return { ok: true, history };
   return { ok: true, history: { past: [...history.past, cloneDocument(history.present)].slice(-HISTORY_CAPACITY), present, future: [] } };
 }
 

@@ -9,7 +9,8 @@
 | `connectivity` | 명시적 연결을 따라 `net` 구성 | 화면 색, 선택 상태, 픽셀 좌표 판정 |
 | `simulation` | `CompiledCircuit`에서 전위·전류·전력 계산 | React와 화면 좌표 |
 | `diagnostics` | 컴파일·계산 결과에서 교육적 진단 생성 | 자유 문장만 반환 |
-| `editor` | 직접 조작, 명령, 실행 취소 | 물리 계산식 구현 |
+| `editor` | 문서 편집 명령, 권한 검사, 실행 취소 | 포인터·React 상태, 물리 계산식 구현 |
+| `wire-geometry` | Point 배열의 직각 경로·국소 변형·정리 | 문서·ID·UI·렌더러·명령·저장. domain 타입 외 모듈 의존 금지 |
 | `measurement` | 측정 도구를 질의나 임시 회로 요소로 변환 | 원본 문서의 몰래 영구 변경 |
 | `visualization` | `SimulationResult`를 2D 레이어로 변환 | 재계산 수행 |
 | `potential-3d` | 2D 위치와 전위를 3D 장면으로 변환 | 회로 해석 직접 수행 |
@@ -70,6 +71,7 @@ interface DocumentMigrator {
 |---|---|
 | `AddComponent`, `MoveComponents`, `RotateComponents`, `DeleteElements`, `Paste` | 부품과 관련 요소의 구조·위치 |
 | `ConnectWire`, `AddJunction`, `ConnectToWire` | ID 연결·분기·배선 경로 |
+| `MoveWireSegment` | 끝점 ID를 유지하는 도선 한 선분의 수직 방향 이동 |
 | `InsertComponentOnWire`, `ConnectCrossing`, `DisconnectCrossing` | 직렬 삽입·교차 연결/분리 |
 | `SetProperties`, `SetLabel`, `SetReference` | 전기 속성·문제 표기·이름·기준점 |
 | `AddAnnotation`, `UpdateAnnotation`, `SetOutputScale`, `ReplaceDocument` | 출력 주석·글자 배율·문서 교체 |
@@ -77,6 +79,10 @@ interface DocumentMigrator {
 `History`는 과거·현재·미래 문서 스냅샷을 보존한다. `previewCommand`와 `executeCommand`는 같은 권한·변환·검증 경로를 사용한다. `executeCommands`는 복수 명령을 모두 검증한 뒤 한 번의 실행 취소 단위로 확정하며 실패 시 부분 변경을 남기지 않는다.
 
 문맥 배선은 `app/wiring`의 순수 대상 판정·명령 구성, 임시 상태 관리, 표시 컴포넌트로 나눈다. `useTouchNavigation`은 이동·핀치·취소 후 클릭 억제를 담당한다. App이 문서·권한·이력을 소유하고 Canvas는 포인터·키보드 이벤트를 연결한다. 후보·호버·임시 분기점은 저장 문서에 넣지 않는다. [ADR-002](../../decisions/ADR-002-state-management.md)와 [ADR-013](../../decisions/ADR-013-wire-editing-ux.md)을 따른다.
+
+도선 기하 계산은 `wire-geometry`의 순수 함수로, 문서 적용은 editor 명령으로, 조작 상태와 손잡이는 `app/wiring`으로 분리한다. 미리보기와 확정은 같은 공개 명령을 사용하며 기존 waypoints만 저장한다. 국소 보정·짧은 경로 공식·선분 이동·허용 명령은 [ADR-016](../../decisions/ADR-016-local-wire-routing.md)을 따른다.
+
+DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당한다. 두 단자 부품 자리를 도선으로 잇고 다단자는 단자별 외부 연결만 보존한다. `wire-edits.ts`의 내부 `dissolveWireJunctions`는 부품 종류와 무관하게 전달된 연결점 중 앵커 없는 두 도선의 접점을 없애고 경로를 합친다. 두 단계의 최종 결과를 한 번에 발행하며 UI는 기존 삭제 명령만 호출한다. 문맥 배선과 대체 편집의 ID는 domain의 `createDocumentIdAllocator`로 충돌 없이 예약한다. 공개 계약과 혼합 삭제 우선순위는 [ADR-017](../../decisions/ADR-017-delete-components-keep-wiring.md)을 따른다.
 
 ## 측정과 출력의 공개 계약
 

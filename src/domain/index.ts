@@ -30,6 +30,21 @@ export interface CircuitDocument {
   components: ComponentInstance[]; wires: Wire[]; junctions: Junction[];
   annotations: Annotation[]; referenceNode: EndpointRef | null; activity: ActivityDefinition | null;
 }
+/** Reserve fresh document-wide IDs without time, randomness, or mutating the source document. */
+export function createDocumentIdAllocator(document: CircuitDocument): (prefix: string) => string {
+  const taken = new Set([
+    ...document.components, ...document.components.flatMap(c => c.terminals),
+    ...document.wires, ...document.junctions, ...document.annotations,
+  ].map(item => item.id));
+  return prefix => {
+    let n = 1;
+    while (taken.has(`${prefix}${n}`)) n++;
+    const id = `${prefix}${n}`;
+    taken.add(id);
+    return id;
+  };
+}
+
 export interface Diagnostic {
   code: string; severity: 'info' | 'warning' | 'error'; affectedIds: string[];
   parameters: Record<string, string | number | boolean | null>; suggestedActions: string[];

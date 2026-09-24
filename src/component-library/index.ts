@@ -1,4 +1,6 @@
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
+import { compactWirePoints } from '../wire-geometry';
+export { compactWirePoints } from '../wire-geometry';
 import { storedFraction, notationTokens, symbolGlyphs } from '../notation';
 import type { Annotation, CircuitDocument, ComponentInstance, ComponentType, EndpointRef, Point, Wire, SimulationResult } from '../domain';
 
@@ -39,19 +41,6 @@ export function wirePoints(document: CircuitDocument, wire: Wire): Point[] {
 export const pointsAttribute = (points: Point[]) => points.map(p => `${p.x},${p.y}`).join(' ');
 export interface WireCrossing { point: Point; horizontalId: string; verticalId: string; horizontalSegment: number; verticalSegment: number }
 /** Geometry is only a hit target / drawing aid; electrical connections still use IDs. */
-export function compactWirePoints(points: Point[]): Point[] {
-  const result: Point[] = [];
-  for (const p of points) {
-    if (result.at(-1)?.x === p.x && result.at(-1)?.y === p.y) continue;
-    while (result.length >= 2) {
-      const a = result.at(-2)!, b = result.at(-1)!;
-      if ((a.x === b.x && b.x === p.x && (b.y-a.y)*(p.y-b.y)>=0) || (a.y === b.y && b.y === p.y && (b.x-a.x)*(p.x-b.x)>=0)) result.pop();
-      else break;
-    }
-    result.push(p);
-  }
-  return result;
-}
 export function wireCrossings(document: CircuitDocument): WireCrossing[] {
   const segments = document.wires.flatMap(w => {
     const points = compactWirePoints(wirePoints(document, w));

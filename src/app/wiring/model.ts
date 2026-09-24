@@ -1,4 +1,4 @@
-import type { CircuitDocument, EndpointRef, Point } from '../../domain';
+import { createDocumentIdAllocator, type CircuitDocument, type EndpointRef, type Point } from '../../domain';
 import { endpointPosition, terminalPosition, wirePoints, wireCrossings, type WireCrossing } from '../../component-library';
 import { previewCommand, type Command } from '../../editor';
 
@@ -52,15 +52,10 @@ export function wiringTargets(doc: CircuitDocument, p: Point, scale: number, dra
   }).sort((a, b) => a.d - b.d);
 }
 
-function ids(doc: CircuitDocument) {
-  const taken = new Set([...doc.components, ...doc.components.flatMap(c => c.terminals), ...doc.wires, ...doc.junctions, ...doc.annotations].map(x => x.id));
-  return (prefix: string) => { let n = 1; while (taken.has(`${prefix}${n}`)) n++; const id = `${prefix}${n}`; taken.add(id); return id; };
-}
-
 /** The provisional start junction and both ends are committed in one editor transaction. */
-export function connectionCommands(doc: CircuitDocument, start: WireAnchor, end: WireAnchor): Command[] {
+export function connectionCommands(doc: CircuitDocument, start: WireAnchor, end: WireAnchor, waypoints: Point[] = []): Command[] {
   if (targetKey(start) === targetKey(end) || distance(start.point, end.point) < 1) return [];
-  const nextId = ids(doc), commands: Command[] = [];
+  const nextId = createDocumentIdAllocator(doc), commands: Command[] = [];
   let source: EndpointRef;
   let splitId: string | undefined;
   if (start.kind === 'endpoint') source = start.ref;
@@ -68,7 +63,7 @@ export function connectionCommands(doc: CircuitDocument, start: WireAnchor, end:
     source = { kind: 'junction', id: nextId('J') }; splitId = nextId('W');
     commands.push({ type: 'AddJunction', junction: { id: source.id, position: start.point }, wireId: start.wireId, newWireId: splitId });
   }
-  if (end.kind === 'endpoint') commands.push({ type: 'ConnectWire', wire: { id: nextId('W'), start: source, end: end.ref, waypoints: [] } });
+  if (end.kind === 'endpoint') commands.push({ type: 'ConnectWire', wire: { id: nextId('W'), start: source, end: end.ref, waypoints } });
   else {
     let wireId = end.wireId;
     // A second point on the same wire can lie in either half after the provisional split.
@@ -82,14 +77,14 @@ export function connectionCommands(doc: CircuitDocument, start: WireAnchor, end:
         if (match) wireId = match.id;
       }
     }
-    commands.push({ type: 'ConnectToWire', start: source, wireId, point: end.point, junctionId: nextId('J'), newWireId: nextId('W'), branchId: nextId('W') });
+    commands.push({ type: 'ConnectToWire', start: source, wireId, point: end.point, junctionId: nextId('J'), newWireId: nextId('W'), branchId: nextId('W'), waypoints });
   }
   return commands;
 }
 
 export function crossingCommand(doc: CircuitDocument, target: CrossingTarget | EndpointTarget): Command | null {
   if (target.kind === 'endpoint') return target.ref.kind === 'junction' ? { type: 'DisconnectCrossing', junctionId: target.ref.id } : null;
-  const nextId = ids(doc);
+  const nextId = createDocumentIdAllocator(doc);
   return { type: 'ConnectCrossing', point: target.point, wireIds: [target.crossing.horizontalId, target.crossing.verticalId], junctionId: nextId('J'), newWireIds: [nextId('W'), nextId('W')] };
 }
 

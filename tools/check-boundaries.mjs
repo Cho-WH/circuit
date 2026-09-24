@@ -12,6 +12,7 @@ const coreModules = new Set([
   "connectivity",
   "simulation",
   "diagnostics",
+  "wire-geometry",
   "activity",
   "feedback",
 ]);
@@ -181,6 +182,10 @@ if (files) {
       const internalImport = describeInternalImport(filePath, specifier, sourceModules);
       if (!internalImport?.moduleName || internalImport.moduleName === importerModule) {
         continue;
+      }
+
+      if (importerModule === "wire-geometry" && internalImport.moduleName !== "domain") {
+        violations.push(`${location} wire-geometry must depend only on domain point types`);
       }
 
       addEdge(dependencyGraph, importerModule, internalImport.moduleName);

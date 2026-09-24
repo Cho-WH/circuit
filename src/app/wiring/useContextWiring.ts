@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CircuitDocument, Point } from '../../domain';
-import { endpointName, wireCrossings } from '../../component-library';
+import { compactWirePoints, endpointName, wireCrossings } from '../../component-library';
 import { previewCommand, type Command } from '../../editor';
+import { orthogonalRoute, type WirePosture } from '../../wire-geometry';
 import { branchHintEnd, connectionCommands, crossingCommand, endpointTarget, targetKey, wiringTargets, type WireAnchor, type WiringTarget } from './model';
 
 export interface WiringOptions {
@@ -13,6 +14,9 @@ export interface WiringOptions {
 export function useContextWiring(options: WiringOptions) {
   const { document: doc, enabled } = options;
   const [start, setStart] = useState<WireAnchor | null>(null);
+  // Each click fixes one leg. Keep click boundaries only in the draft for Backspace.
+  const [legs, setLegs] = useState<Point[][]>([]);
+  const [posture, setPosture] = useState<WirePosture>('VH');
   const [hint, setHint] = useState<WiringTarget | null>(null);
   const [choices, setChoices] = useState<WiringTarget[]>([]);
   const [touch, setTouch] = useState(false);
@@ -22,10 +26,10 @@ export function useContextWiring(options: WiringOptions) {
   const toggledPoint = useRef<Point | null>(null);
   const recent = useRef(false);
   const beforeCommit = useRef<Set<string> | null>(null);
-  const cancel = () => { setStart(null); setHint(null); setChoices([]); setError(''); recent.current = false; };
+  const cancel = () => { setStart(null); setLegs([]); setHint(null); setChoices([]); setError(''); recent.current = false; };
   useEffect(() => { cancel(); }, [enabled, options.tool, options.resetKey]);
   useEffect(() => {
-    setStart(null); setHint(null); setChoices([]); setError('');
+    setStart(null); setLegs([]); setHint(null); setChoices([]); setError('');
     const before = beforeCommit.current; beforeCommit.current = null;
     const toggled = toggledPoint.current; toggledPoint.current = null;
     if (toggled && enabled) {
@@ -49,7 +53,7 @@ export function useContextWiring(options: WiringOptions) {
   }
   function finish(end: WireAnchor) {
     if (!start) return;
-    const commands = connectionCommands(doc, start, end);
+    const commands = connectionCommands(doc, start, end, routeTo(end.point).slice(1, -1));
     if (!commands.length) { cancel(); return; }
     commit(commands);
   }
@@ -65,11 +69,11 @@ export function useContextWiring(options: WiringOptions) {
     }
     if (target.kind === 'endpoint') {
       if (start) finish(target);
-      else { setStart(target); setHint(target); options.onSelect(null); }
+      else { setStart(target); setPointer(target.point); setLegs([]); setHint(target); options.onSelect(null); }
     } else if (target.kind === 'crossing') setHint(target);
     else if (start) { if (coarse && (!hint || targetKey(hint)!==targetKey(target))) setHint(target); else finish(target); }
     else if (hint?.kind === 'wire' && targetKey(hint) === targetKey(target) && options.selected.includes(target.wireId)) {
-      setStart(target); setHint(null);
+      setStart(target); setPointer(target.point); setLegs([]); setHint(null);
     } else {
       options.onSelect(target.wireId); setHint(coarse ? target : null);
     }
@@ -81,7 +85,14 @@ export function useContextWiring(options: WiringOptions) {
     recent.current = false; setTouch(coarse);
     if (coarse && targets.length > 1) { setChoices(targets); setHint(null); return true; }
     if (targets[0]) { activate(targets[0], coarse); return true; }
-    setHint(null); setChoices([]); return false;
+    setHint(null); setChoices([]);
+    if (start) {
+      const end = snap(p), origin = legs.at(-1)?.at(-1) ?? start.point;
+      const leg = orthogonalRoute(origin, end, posture).slice(1);
+      if (leg.length) setLegs([...legs, leg]);
+      return true;
+    }
+    return false;
   }
   function hover(p: Point, scale: number) {
     if (!enabled || recent.current) return;
@@ -91,7 +102,7 @@ export function useContextWiring(options: WiringOptions) {
   }
   function clearHint() { recent.current = false; setHint(null); setChoices([]); }
   let action: { label: string; run: () => void } | null = null;
-  if (hint?.kind === 'wire') action = start ? { label: '여기에 연결', run: () => finish(hint) } : { label: '여기서 가지 뻗기', run: () => { setStart(hint); setHint(null); } };
+  if (hint?.kind === 'wire') action = start ? { label: '여기에 연결', run: () => finish(hint) } : { label: '여기서 가지 뻗기', run: () => { setStart(hint); setPointer(hint.point); setLegs([]); setHint(null); } };
   const crossing = useMemo(() => {
     if (!hint || hint.kind === 'wire') return null;
     const command = crossingCommand(doc, hint);
@@ -100,7 +111,18 @@ export function useContextWiring(options: WiringOptions) {
   const crossingLabel = !start && crossing ? hint?.kind === 'crossing' ? '비연결' : '연결' : null;
   const branchEnd = hint?.kind === 'wire' && !start ? branchHintEnd(doc,hint,pointer,scale) : null;
   const end = hint && hint.kind !== 'crossing' ? hint.point : null;
+  const snap = (p: Point) => ({ x: Math.round(p.x / 20) * 20, y: Math.round(p.y / 20) * 20 });
+  function routeTo(end: Point): Point[] {
+    if (!start) return [];
+    const fixed = [start.point, ...legs.flat()];
+    return compactWirePoints([...fixed, ...orthogonalRoute(fixed.at(-1)!, end, posture).slice(1)]);
+  }
+  function back() { setLegs(legs.slice(0, -1)); setHint(null); setChoices([]); }
+  const togglePosture = () => setPosture(p => p === 'HV' ? 'VH' : 'HV');
+  const cursor = end ?? snap(pointer);
+  const previewPath = routeTo(cursor);
+  const nudge = (dx: number, dy: number, scale: number) => hover({ x: pointer.x + dx, y: pointer.y + dy }, scale);
   const choiceLabel = (t: WiringTarget) => t.kind === 'endpoint' ? endpointName(doc,t.ref.id) : t.kind === 'wire' ? `도선 ${t.wireId}` : '교차 연결';
-  return { start, hint, choices, touch, error, action, crossingLabel, branchEnd, end, cancel, clearHint, activate, tap, hover, setTouch, active: enabled, choiceLabel, focusTarget: (t: WiringTarget) => { setTouch(false); setHint(t); }, selectChoice: (t: WiringTarget) => activate(t, true) };
+  return { start, hint, choices, touch, error, action, crossingLabel, branchEnd, end, cancel, clearHint, activate, tap, hover, setTouch, active: enabled, choiceLabel, previewPath, cursor, nudge, back, canBack: legs.length > 0, posture, togglePosture, corners: legs.map(leg => leg.at(-1)!), focusTarget: (t: WiringTarget) => { setTouch(false); setHint(t); }, selectChoice: (t: WiringTarget) => activate(t, true) };
 }
 export type ContextWiring = ReturnType<typeof useContextWiring>;

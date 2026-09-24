@@ -20,6 +20,29 @@ const button = (label: string) => [...host.querySelectorAll('button')].find(b =>
 const click = async (label: string) => { await act(async () => button(label).click()); };
 
 describe('workspace transitions and file actions', () => {
+  it.each(['button', 'keyboard'])('deletes a component through %s while preserving wiring, with one undo step', async input => {
+    const doc = layoutExample(examples[1].document);
+    saveLocal(doc);
+    await act(async () => root.render(createElement(App)));
+    const paths = () => [...host.querySelectorAll('[data-wire-id]')].map(e => [e.getAttribute('data-wire-id'), e.getAttribute('points')]);
+    const before = paths(), id = doc.components.find(c => c.type === 'resistor')!.id;
+    await act(async () => host.querySelector(`[data-component-id="${id}"] .component`)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    if (input === 'button') await click('삭제');
+    else await act(async () => host.querySelector('.circuit-canvas')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })));
+    expect(host.querySelector(`[data-component-id="${id}"]`)).toBeNull();
+    expect(paths()).toHaveLength(before.length - 1);
+    expect([...host.querySelectorAll('[data-endpoint-kind="junction"]')].map(e => e.getAttribute('data-endpoint-id')))
+      .toEqual(doc.junctions.map(j => j.id));
+    for (const [wireId, points] of before.filter(([wireId]) => !doc.wires.some(w => w.id === wireId && (w.start.id.startsWith(id + '.') || w.end.id.startsWith(id + '.'))))) {
+      expect(paths()).toContainEqual([wireId, points]);
+    }
+    const after = paths();
+    await click('실행 취소');
+    expect(host.querySelector(`[data-component-id="${id}"]`)).not.toBeNull();
+    expect(paths()).toEqual(before);
+    await click('다시 실행'); expect(paths()).toEqual(after);
+  });
+
   it('keeps the zoomed circuit view through mode and panel changes', async () => {
     await act(async () => root.render(createElement(App)));
     await click('확대');

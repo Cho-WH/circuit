@@ -6,7 +6,7 @@ import { CircuitCanvas, type CanvasProps } from '../src/app/CircuitCanvas';
 import { layoutExample } from '../src/app/examples';
 import { examples } from '../src/fixtures';
 import { createComponent } from '../src/component-library';
-import { createHistory, executeCommand } from '../src/editor';
+import { createHistory, executeCommand, executeCommands, type Command } from '../src/editor';
 import type { Point } from '../src/domain';
 import { emptyDocument } from '../src/domain';
 
@@ -33,12 +33,17 @@ afterEach(() => {
 function setup(overrides: Partial<CanvasProps> = {}) {
   const original = layoutExample(examples.find(e => e.document.documentId === 'fix-02')!.document);
   original.components.push(createComponent('resistor', 'R3', { x: 440, y: 400 }));
-  let history = createHistory(original);
+  let history = createHistory(overrides.document ?? original);
   const onMove = vi.fn((positions: Record<string, Point>) => {
     const result = executeCommand(history, { type: 'MoveComponents', positions });
     if (!result.ok) throw new Error('move failed');
     history = result.history;
     render({ document: history.present });
+  });
+  const commit = vi.fn((commands: readonly Command[]) => {
+    const result = executeCommands(history, commands);
+    if (!result.ok) return false;
+    history = result.history; render({ document: history.present }); return true;
   });
   let props: CanvasProps = {
     document: history.present, selected: [], tool: 'select', placement: null,
@@ -66,10 +71,64 @@ function setup(overrides: Partial<CanvasProps> = {}) {
   function pointer(target: Element, type: string, x: number, y: number, pointerId = 1, pointerType = 'mouse') {
     act(() => { target.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId, pointerType, button: 0 })); });
   }
-  return { svg, component, paths, pointer, onMove, original, history: () => history, render: (changes: Partial<CanvasProps>) => act(() => render(changes)) };
+  return { svg, component, paths, pointer, onMove, commit, original, history: () => history, render: (changes: Partial<CanvasProps>) => act(() => render(changes)) };
 }
 
 describe('live canvas drag geometry', () => {
+  it.each(['mouse','touch'])('previews and commits a local wire segment drag from its original path (%s)',pointerType=>{
+    const c=setup({selected:['W4']});c.render({onWiringCommit:c.commit});
+    const handle=host.querySelector('[data-wire-handle]')!;
+    expect(handle).not.toBeNull();const before=c.paths();
+    c.pointer(handle,'pointerdown',860,300,1,pointerType);
+    c.pointer(c.svg,'pointermove',900,340,1,pointerType);
+    const preview=c.paths();expect(preview).not.toEqual(before);expect(c.commit).not.toHaveBeenCalled();
+    c.pointer(c.svg,'pointermove',940,380,1,pointerType);
+    c.pointer(c.svg,'pointermove',900,340,1,pointerType);expect(c.paths()).toEqual(preview);
+    c.pointer(c.svg,'pointerup',900,340,1,pointerType);
+    expect(c.paths()).toEqual(preview);expect(c.history().past).toHaveLength(1);
+    expect(c.history().present.wires.map(w=>[w.start,w.end])).toEqual(c.original.wires.map(w=>[w.start,w.end]));
+    act(()=>c.svg.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:900,clientY:340})));
+    expect(host.querySelector('[data-wire-preview]')).toBeNull();
+  });
+  it.each(['Escape','blur','pointercancel','lostpointercapture','pinch','origin'])('cancels a wire segment preview without history: %s',reason=>{
+    const c=setup({selected:['W4']});c.render({onWiringCommit:c.commit});
+    const before=c.paths(),handle=host.querySelector('[data-wire-handle]')!;
+    const type=reason==='pinch'?'touch':'mouse';
+    c.pointer(handle,'pointerdown',860,300,1,type);c.pointer(c.svg,'pointermove',900,340,1,type);
+    expect(c.paths()).not.toEqual(before);
+    if(reason==='Escape')act(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})));
+    else if(reason==='blur')act(()=>window.dispatchEvent(new Event('blur')));
+    else if(reason==='origin')c.pointer(c.svg,'pointermove',860,300,1,type);
+    else if(reason==='pinch')c.pointer(c.svg,'pointerdown',500,300,2,'touch');
+    else c.pointer(c.svg,reason,900,340,1,type);
+    expect(c.paths()).toEqual(before);
+    c.pointer(c.svg,'pointerup',reason==='origin'?860:900,reason==='origin'?300:340,1,type);
+    expect(c.history().past).toHaveLength(0);expect(c.commit).not.toHaveBeenCalled();
+  });
+  it('edits a selected segment with keyboard arrows without starting a branch',()=>{
+    const c=setup({selected:['W4']});c.render({onWiringCommit:c.commit});
+    const handle=host.querySelector('[data-wire-handle]')!,before=c.paths();
+    const key=handle.getAttribute('aria-label')!.includes('위아래')?'ArrowDown':'ArrowRight';
+    act(()=>handle.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key})));
+    expect(c.paths()).not.toEqual(before);expect(c.history().past).toHaveLength(1);
+    expect(host.querySelector('[data-wire-preview]')).toBeNull();
+  });
+  it.each(['canvas','toolbar'])('creates and undoes draft waypoints from %s without leaking Backspace to document deletion',target=>{
+    const doc=emptyDocument('keyboard');doc.junctions=[{id:'A',position:{x:100,y:100}},{id:'B',position:{x:400,y:100}}];
+    const c=setup({document:doc});c.render({onWiringCommit:c.commit});
+    const key=(target:Element,key:string)=>act(()=>target.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true})));
+    const terminal=host.querySelector('[data-endpoint-id="A"]')!;
+    key(terminal,'Enter');
+    key(c.svg,'ArrowDown');key(c.svg,'ArrowDown');key(c.svg,'ArrowDown');key(c.svg,'Enter');
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="마지막 경유점 되돌리기"]')!.disabled).toBe(false);
+    const leaked=vi.fn();window.addEventListener('keydown',leaked);
+    key(target==='canvas'?c.svg:host.querySelector('[aria-label^="배선 방향 전환"]')!,'Backspace');window.removeEventListener('keydown',leaked);expect(leaked).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="마지막 경유점 되돌리기"]')!.disabled).toBe(true);
+    key(c.svg,'Enter');key(c.svg,'/');
+    key(host.querySelector('[data-endpoint-id="B"]')!,'Enter');
+    expect(c.history().present.wires).toHaveLength(1);expect(c.history().past).toHaveLength(1);
+    expect(c.history().present.wires[0].waypoints.length).toBeGreaterThan(0);
+  });
   it('previews and submits name and value together, and cancels both with Escape',()=>{
     const commit=vi.fn(()=>true);setup({onCommitComponent:commit});
     act(()=>host.querySelector('[aria-label="R_1 값 편집"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true})));
