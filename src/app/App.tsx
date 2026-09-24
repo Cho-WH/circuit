@@ -70,7 +70,7 @@ import type { ExportOptions } from '../export';
 import { parseQuantity } from '../notation';
 import { Notation } from './Notation';
 import { PotentialSettings, defaultPotentialSettings } from './PotentialSettings';
-import { useDialogFocus } from './useDialogFocus';
+import { QuickStartDialog } from './QuickStartDialog';
 import { FileMenu } from './FileMenu';
 import { FeedbackLoading } from './FeedbackLoading';
 import { PotentialWorkspace } from './PotentialWorkspace';
@@ -175,7 +175,6 @@ export function App() {
   const settingsTrigger = useRef<HTMLButtonElement>(null);
   const valueInput = useRef<HTMLInputElement>(null);
   const idCounter = useRef(1);
-  const helpDialog = useDialogFocus(help, () => setHelp(false));
   const { compilation, result } = useMemo(() => analyze(doc), [doc]);
   const potential = useMemo(
     () =>
@@ -262,7 +261,7 @@ export function App() {
   }
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (feedbackOpen) return;
+      if (feedbackOpen || help) return;
       if ((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')) return;
       if (mode === 'measure') return;
       const modifier = event.ctrlKey || event.metaKey;
@@ -1340,54 +1339,7 @@ export function App() {
           </button>
         </div>
       )}
-      {help && (
-        <div className="modal-backdrop" onClick={() => setHelp(false)}>
-          <section
-            ref={helpDialog}
-            tabIndex={-1}
-            className="help-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label="사용 도움말"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="dialog-close"
-              onClick={() => setHelp(false)}
-              aria-label="도움말 닫기"
-            >
-              <X />
-            </button>
-            <span className="eyebrow">빠른 시작</span>
-            <h2>작은 회로에서 시작하세요.</h2>
-            <ol>
-              <li>
-                부품을 선택하고 놓을 곳을 누릅니다. 터치는 길게 눌러 끌어올 수도 있습니다. 도선
-                위에서는 미리보기를 확인하고 삽입을 누릅니다.
-              </li>
-              <li>첫 번째 단자, 두 번째 단자를 눌러 도선을 연결합니다.</li>
-              <li>저항이나 전원을 선택해 값을 바꾸면 결과가 즉시 갱신됩니다.</li>
-              <li>
-                터치는 미선택 부품을 길게 눌러 옮기거나, 선택 후 이동·놓기 버튼을 사용합니다. 짧게
-                밀면 화면 이동, 두 손가락은 확대·이동입니다. 마우스 복수 선택은 Shift+클릭입니다.
-              </li>
-              <li>파일 메뉴에서 회로 파일을 저장하세요. 자동 저장은 이 브라우저에만 남습니다.</li>
-            </ol>
-            <p>
-              도선이 교차하는 것만으로는 전기적으로 연결되지 않습니다. 교차점을 누르면 연결 상태가
-              바뀌어요.
-            </p>
-            <p>
-              이 앱은 이상적인 직류 저항 회로를 다룹니다. 전위 높이와 부품의 경사는 전압 차이를 보여
-              주는 표현이며 실제 공간 높이가 아닙니다. 화살표는 관습적 전류 방향이고, 굵기는 전류
-              크기를 나타냅니다.
-            </p>
-            <button className="primary" onClick={() => setHelp(false)}>
-              닫기
-            </button>
-          </section>
-        </div>
-      )}
+      {help && <QuickStartDialog onClose={() => setHelp(false)} />}
     </div>
   );
 }
