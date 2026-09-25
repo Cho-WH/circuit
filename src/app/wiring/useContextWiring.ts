@@ -1,3 +1,4 @@
+import { snapGridPoint as snap } from '../../wire-geometry';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CircuitDocument, Point } from '../../domain';
 import { compactWirePoints, endpointName, wireCrossings } from '../../component-library';
@@ -112,7 +113,7 @@ export function useContextWiring(options: WiringOptions) {
   const crossingLabel = !start && crossing ? hint?.kind === 'crossing' ? '비연결' : '연결' : null;
   const branchEnd = hint?.kind === 'wire' && !start ? branchHintEnd(doc,hint,pointer,scale) : null;
   const end = hint && hint.kind !== 'crossing' ? hint.point : null;
-  const snap = (p: Point) => ({ x: Math.round(p.x / 20) * 20, y: Math.round(p.y / 20) * 20 });
+
   function routeTo(end: Point): Point[] {
     if (!start) return [];
     const fixed = [start.point, ...legs.flat()];

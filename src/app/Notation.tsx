@@ -1,5 +1,6 @@
 import { useEffect, useState, type SVGAttributes } from 'react';
-import { notationTokens, symbolGlyphs, parseQuantity, type QuantityUnit } from '../notation';
+import { notationTokens, notationDisplayText } from '../notation';
+import { parseQuantity, type QuantityUnit } from '../quantity';
 import { svgNotation, htmlNotation } from '../component-library';
 
 export function Notation({text,symbol=false}:{text:string;symbol?:boolean}) {
@@ -8,7 +9,7 @@ export function Notation({text,symbol=false}:{text:string;symbol?:boolean}) {
 
 /** Shares vector fraction layout with SVG and PNG export, with no foreignObject dependency. */
 export function SvgNotation({text,symbol=false,x,y,fontSize=14,textAnchor='start',fill='currentColor',fontWeight='400',...props}:SVGAttributes<SVGElement>&{text:string;x:number;y:number;fontSize?:number;textAnchor?:'start'|'middle';fill?:string;symbol?:boolean}) {
-  if(notationTokens(text).every(t=>t.kind==='text'))return <text {...props} x={x} y={y} fontSize={fontSize} textAnchor={textAnchor} fill={fill} fontWeight={fontWeight} aria-label={props['aria-label']??text}>{symbol?symbolGlyphs(text):text}</text>;
+  if(notationTokens(text).every(t=>t.kind==='text'))return <text {...props} x={x} y={y} fontSize={fontSize} textAnchor={textAnchor} fill={fill} fontWeight={fontWeight} aria-label={props['aria-label']??text}>{notationDisplayText(text,symbol)}</text>;
   return <g {...props} aria-label={props['aria-label']??text} dangerouslySetInnerHTML={{__html:svgNotation(text,{x,y,fontSize,anchor:textAnchor,fill,weight:String(fontWeight),symbol})}}/>;
 }
 

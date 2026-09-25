@@ -23,8 +23,10 @@ function allowedInMode(document: CircuitDocument, mode: WorkspaceMode, command: 
   switch (command.type) {
     case 'SetProperties':
       return Object.keys(command.properties).every((key) =>
-        /^(label|answer|voltage|current)(Text|Display|Visible|Blank|OffsetX|OffsetY)$/.test(key),
+        /^(label|answer|voltage|current)(Visible|Blank|OffsetX|OffsetY)$/.test(key),
       );
+    case 'SetLabel':
+      return true;
     case 'DeleteElements':
       return command.ids.every((id) =>
         document.annotations.some((annotation) => annotation.id === id),

@@ -1,3 +1,4 @@
+import { formatQuantity as formatSIQuantity, quantityFormatFor, defaultQuantityFormat, type QuantityFormatOptions } from '../quantity';
 // @refresh reset
 // The imperative WebGL runtime must not retain old render closures across code updates.
 import { useEffect, useRef, useState } from 'react';
@@ -6,13 +7,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
 import type { PotentialModel } from '../visualization';
-import { htmlNotation, formatQuantity, terminalPosition } from '../component-library';
+import { htmlNotation, terminalPosition } from '../component-library';
 import { exportSvg } from '../export';
 import { sceneAnchors, sceneExtent, selectedVoltage } from './model';
 import './styles.css';
 export { voltageTicks, sceneAnchors, sceneExtent, selectedVoltage } from './model';
 
 export interface Potential3DProps {
+  quantityFormat?: QuantityFormatOptions;
   document: CircuitDocument;
   potential: PotentialModel;
   referenceLabel: string;
@@ -141,6 +143,8 @@ function moveCamera(r: Runtime, preset: Preset, reset = false) {
 }
 
 export function Potential3D(props: Potential3DProps) {
+  const quantityFormat=props.quantityFormat??defaultQuantityFormat;
+  const formatQuantity=(value:number|undefined,unit:string)=>formatSIQuantity(value,unit,quantityFormat);
   const { document: circuit, potential, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors } = props;
   const host = useRef<HTMLDivElement>(null), overlay = useRef<HTMLDivElement>(null);
   const runtime = useRef<Runtime | null>(null), latest = useRef(props);
@@ -205,7 +209,8 @@ export function Potential3D(props: Potential3DProps) {
       r.ready = true;
       cameraPose(r, 'oblique', false); setPreset('oblique');
       const end = cameraState(r), view = latest.current.sourceView;
-      if (reducedMotion()) { r.render(); latest.current.onReady?.(); latest.current.onEntered?.(); return; }
+      // Always show how the 2D circuit becomes a potential height map (VIS-004).
+      // Reduced motion still applies to the separate camera preset controls.
       const center = view ? new THREE.Vector3(view.x + view.width / 2, -view.y - view.height / 2, 0) : new THREE.Vector3(end.target.x, end.target.y, 0);
       const distance = end.position.distanceTo(end.target);
       r.controls.target.copy(center); r.camera.position.copy(center).add(new THREE.Vector3(0, 0, distance));
@@ -272,7 +277,7 @@ export function Potential3D(props: Potential3DProps) {
     let cancelled = false;
     r.floorReady = false;
     const schematic = { ...circuit, components: circuit.components.map(c => ({ ...c, properties: { ...c.properties, showVoltage: false, showCurrent: false } })) };
-    const svg = exportSvg(schematic, { background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 });
+    const svg = exportSvg(schematic, { quantityFormat, background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 });
     const root = new DOMParser().parseFromString(svg,'image/svg+xml').documentElement;
     const [x,y,width,height] = root.getAttribute('viewBox')!.split(' ').map(Number);
     // Rasterize the vector source at the texture's actual pixel size, not its CSS size.
@@ -304,7 +309,7 @@ export function Potential3D(props: Potential3DProps) {
     const fontReady = fonts ? fonts.load('18px "Libertinus Math"') : Promise.resolve([]);
     fontReady.then(() => { if (!cancelled) image.src = url; }).catch(() => { if (!cancelled) latest.current.onError?.('font'); });
     return () => { cancelled = true; image.onload = null; image.onerror = null; URL.revokeObjectURL(url); };
-  }, [circuit]);
+  }, [circuit,quantityFormat]);
 
   useEffect(() => {
     const r = runtime.current, labelHost = overlay.current; if (!r || !labelHost) return;
@@ -385,13 +390,13 @@ export function Potential3D(props: Potential3DProps) {
       const x=(a.x+b.x)/2+20,y=(a.y+b.y)/2+20;
       line(r.raised,[new THREE.Vector3(x,y,a.z),new THREE.Vector3(x,y,b.z)],'#53694b');
       for(const z of [a.z,b.z]) line(r.raised,[new THREE.Vector3(x-5,y,z),new THREE.Vector3(x+5,y,z)],'#53694b');
-      if(showNumbers) addLabel(`delta:${selected.component.id}`,`ΔV ${formatQuantity(selected.difference,'V')}`,new THREE.Vector3(x,y,(a.z+b.z)/2),'delta-tag',true,8);
+      if(showNumbers) addLabel(`delta:${selected.component.id}`,`ΔV ${formatSIQuantity(selected.difference,'V',quantityFormatFor(selected.component.properties))}`,new THREE.Vector3(x,y,(a.z+b.z)/2),'delta-tag',true,8);
     }
     for (const label of existingLabels.values()) label.element.remove();
     r.labels = nextLabels;
     r.modelReady = true;
     if (!r.ready) r.begin(); else r.render();
-  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides]);
+  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat]);
 
   const choose = (value: Preset, reset = false) => { const r=runtime.current; if(r?.ready) {moveCamera(r,value,reset);setPreset(value);} };
   return <section className="potential-scene" aria-label="3D 전위 높이 보기">
@@ -402,6 +407,6 @@ export function Potential3D(props: Potential3DProps) {
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
     <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number((potential.scale/18).toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
-    {selection&&<div className="scene-selection" aria-live="polite"><strong className="notation" aria-label={selection.component.label} dangerouslySetInnerHTML={{__html:htmlNotation(selection.component.label,true)}}/><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatQuantity(selection.difference,'V')}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
+    {selection&&<div className="scene-selection" aria-live="polite"><strong className="notation" aria-label={selection.component.label} dangerouslySetInnerHTML={{__html:htmlNotation(selection.component.label,true)}}/><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatSIQuantity(selection.difference,'V',quantityFormatFor(selection.component.properties))}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
   </section>;
 }

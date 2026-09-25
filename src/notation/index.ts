@@ -1,32 +1,4 @@
-export type QuantityUnit = 'Ω' | 'V' | 'A' | '';
-export interface ParsedQuantity { value: number; fraction?: string }
-const scalar = '[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?';
-const quantityPattern = new RegExp(`^\\s*(${scalar})(?:\\s*[/⁄]\\s*(${scalar}))?\\s*([kMmuμµ]?)\\s*(Ω|ohm|V|A)?\\s*$`);
-const multipliers: Record<string,number> = {'':1,k:1e3,M:1e6,m:1e-3,u:1e-6,μ:1e-6,µ:1e-6};
-
-/** Fractions are input notation; the solver continues to receive finite SI numbers. */
-export function parseQuantity(input:string, unit:QuantityUnit): ParsedQuantity | null {
-  const match=input.match(quantityPattern);
-  if(!match)return null;
-  if(match[4] && !(unit==='Ω'?['Ω','ohm']:[unit]).includes(match[4]))return null;
-  const numerator=Number(match[1]),denominator=match[2]===undefined?1:Number(match[2]);
-  if(!Number.isFinite(numerator)||!Number.isFinite(denominator)||denominator===0)return null;
-  const value=numerator/denominator*multipliers[match[3]];
-  if(!Number.isFinite(value)||(unit==='Ω'&&value<0))return null;
-  if(match[2]===undefined)return {value};
-  const sign=denominator<0?-1:1;
-  // Preserve the written ratio, including improper fractions, rather than guessing from a decimal.
-  return {value,fraction:`${sign*numerator}/${Math.abs(denominator)}${match[3]?' '+match[3]:''}`};
-}
-
-/** Recover notation only when it still agrees with the physical property. */
-export function storedFraction(properties:Record<string,string|number|boolean>,key:string,unit:QuantityUnit):string|undefined {
-  const input=properties[key+'Fraction'];
-  if(typeof input!=='string')return undefined;
-  const parsed=parseQuantity(input,unit),value=Number(properties[key]);
-  return parsed?.fraction && parsed.value===value ? parsed.fraction : undefined;
-}
-
+import { parseQuantity, scalarPattern as scalar } from '../quantity';
 export type NotationToken = {kind:'text';text:string} | {kind:'subscript';text:string} | {kind:'fraction';numerator:string;denominator:string};
 /** Scan complete numeric ratios, excluding chained divisions, dates and zero denominators. */
 export function notationTokens(text:string):NotationToken[] {
@@ -67,4 +39,8 @@ export function symbolGlyphs(text:string):string {
     if(l>=0)return String.fromCodePoint(0x1d6fc+l);
     return c;
   }).join('');
+}
+
+export function notationDisplayText(text:string,symbol=false):string {
+  return symbol||/^[A-Za-zΑ-Ωα-ω][A-Za-zΑ-Ωα-ω0-9_{}]*\s*[=≈]/.test(text)?symbolGlyphs(text):text;
 }

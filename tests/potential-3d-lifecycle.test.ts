@@ -55,10 +55,16 @@ async function mount(strict = false) {
   await update({});
   return { ready, entered, error, circuit, compiled, update };
 }
+async function advanceFrame(now: number) {
+  const [id, frame] = [...observed.frames.entries()][0];
+  observed.frames.delete(id);
+  await act(async () => frame(now));
+}
+
 describe('3D prepared first frame and camera lifetime', () => {
   it('selects labels only on a single stationary pointer or keyboard activation',async()=>{
     reduced=true;const {update}=await mount(),select=vi.fn();await update({onSelect:select});
-    await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());
+    await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());await advanceFrame(performance.now()+2000);
     const label=host.querySelector<HTMLElement>('[data-label-key="component:R1"]')!;
     const pointer=(type:string,id:number,x=100)=>act(()=>label.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:id,pointerType:'touch',button:0,clientX:x,clientY:100})));
     pointer('pointerdown',1);pointer('pointerup',1);expect(select).toHaveBeenCalledExactlyOnceWith('R1');select.mockClear();
@@ -73,7 +79,7 @@ describe('3D prepared first frame and camera lifetime', () => {
   });
   it('cleans imperative labels on effect teardown, including StrictMode remounts',async()=>{
     reduced=true;
-    const {update}=await mount(true);await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());
+    const {update}=await mount(true);await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());await advanceFrame(performance.now()+2000);
     const labels=[...host.querySelectorAll<HTMLElement>('[data-label-key]')];
     expect(labels.length).toBeGreaterThan(0);
     expect(new Set(labels.map(e=>e.dataset.labelKey)).size).toBe(labels.length);
@@ -85,7 +91,7 @@ describe('3D prepared first frame and camera lifetime', () => {
   it('keeps labels and focus while each height change projects directly onto the current scene', async () => {
     reduced=true;
     const {circuit,compiled,update}=await mount();
-    await act(async()=>resolveFont());await act(async()=>images[0].onload!());
+    await act(async()=>resolveFont());await act(async()=>images[0].onload!());await advanceFrame(performance.now()+2000);
     const nodes=[...host.querySelectorAll<HTMLElement>('[data-label-key]')];
     const label=host.querySelector<HTMLElement>('[data-label-key="component:R1"]')!;
     label.focus();
@@ -111,7 +117,7 @@ describe('3D prepared first frame and camera lifetime', () => {
   });
   it('updates surviving labels and removes obsolete ones without replacing unrelated nodes',async()=>{
     reduced=true;
-    const {circuit,update}=await mount();await act(async()=>resolveFont());await act(async()=>images[0].onload!());
+    const {circuit,update}=await mount();await act(async()=>resolveFont());await act(async()=>images[0].onload!());await advanceFrame(performance.now()+2000);
     const component=host.querySelector<HTMLElement>('[data-label-key="component:R1"]')!,nets=[...host.querySelectorAll('.net-tag')];
     await update({selectedIds:['R1'],showColors:false});
     expect(host.querySelector('[data-label-key="component:R1"]')).toBe(component);
@@ -145,11 +151,41 @@ describe('3D prepared first frame and camera lifetime', () => {
     // Interruption preserves the current camera instead of snapping to the preset.
     expect(camera.position.x).toBe(350); expect(camera.position.y).toBe(-400);
   });
-  it('skips camera motion for reduced motion and leaves no scheduled frame', async () => {
-    reduced = true; const { ready, entered } = await mount();
-    await act(async () => { resolveFont(); }); await act(async () => images[0].onload!());
+  it.each([
+    { motion: false, duration: 1100 },
+    { motion: true, duration: 1100 },
+    { motion: false, duration: 900 },
+    { motion: true, duration: 900 },
+  ])('animates entry with reduced motion $motion for $duration ms', async ({ motion, duration }) => {
+    reduced = motion;
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const { ready, entered, update } = await mount();
+    await update({ entryDuration: duration });
+    await act(async () => resolveFont()); await act(async () => images[0].onload!());
+    const [scene, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
+    const raised = scene.children[1].children[0], initial = camera.position.clone();
+    expect(ready).toHaveBeenCalledOnce(); expect(entered).not.toHaveBeenCalled();
+    expect(raised.scale.z).toBe(.0001); expect(observed.frames.size).toBe(1);
+    expect(camera.position.x).toBe(350); expect(camera.position.y).toBe(-400);
+    await advanceFrame(1000 + duration / 2);
+    expect(raised.scale.z).toBeCloseTo(.5); expect(camera.position.equals(initial)).toBe(false);
+    expect(entered).not.toHaveBeenCalled(); expect(observed.frames.size).toBe(1);
+    const midway = camera.position.clone();
+    await advanceFrame(1000 + duration);
+    expect(raised.scale.z).toBe(1); expect(camera.position.equals(midway)).toBe(false);
     expect(ready).toHaveBeenCalledOnce(); expect(entered).toHaveBeenCalledOnce(); expect(observed.frames.size).toBe(0);
     expect(host.querySelector('.floor-key small sub')?.textContent).toBe('1');
+  });
+  it('still skips camera preset motion when reduced motion is enabled', async () => {
+    reduced = true; const { entered } = await mount();
+    await act(async () => resolveFont()); await act(async () => images[0].onload!());
+    await advanceFrame(performance.now() + 2000);
+    const [, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
+    const initial = camera.position.clone(); camera.zoom = 2;
+    const top = [...host.querySelectorAll('button')].find(button => button.textContent === '위에서')!;
+    await act(async () => top.click());
+    expect(camera.position.equals(initial)).toBe(false); expect(camera.zoom).toBe(2);
+    expect(observed.frames.size).toBe(0); expect(entered).toHaveBeenCalledOnce();
   });
   it('preserves zoom during presets and cancels a camera flight at its current position', async () => {
     const { entered } = await mount(); await act(async () => resolveFont()); await act(async () => images[0].onload!());

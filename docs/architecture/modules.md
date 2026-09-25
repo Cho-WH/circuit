@@ -5,6 +5,8 @@
 | 모듈 | 책임 | 금지되는 결합 |
 |---|---|---|
 | `domain` | 회로 문서·계산 계약, ID, 스키마·참조 검증, 순차 마이그레이션 | React, SVG, Three.js, 저장 API |
+| `quantity` | 소수·분수·SI 입력, 자동 단위·4자리 지수·원시 숫자 표시, 공통 축 단위 | React, 브라우저, 문서 변경 |
+| `notation` | 수식 토큰·분수·아래첨자·기울임 변환 | React, 브라우저, 계산 결과 수정 |
 | `component-library` | 단자 구성, 기본값, 표시 이름, 기호 | 행렬 계산 직접 수행 |
 | `connectivity` | 명시적 연결을 따라 `net` 구성 | 화면 색, 선택 상태, 픽셀 좌표 판정 |
 | `simulation` | `CompiledCircuit`에서 전위·전류·전력 계산 | React와 화면 좌표 |
@@ -114,4 +116,4 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ## 분수 표기
 
-`notation`은 브라우저에 의존하지 않는 입력 파싱·명시적 분수 복원·문구 토큰화를 제공한다. editor와 UI가 같은 parseQuantity를 사용하고 component-library는 componentValueInput·notationWidth·svgNotation을 공개한다. 수치 해석기는 원래 SI 숫자만 받는다. 입력 표기 저장 규칙은 ADR-012를 따른다.
+`quantity`는 입력 파싱·명시적 분수 복원·숫자 표시와 공통 축 단위를 제공하고, `notation`은 문구 토큰화·기울임을 담당한다. editor와 UI는 quantity의 parseQuantity를 사용하고 component-library는 componentValueInput·notationWidth·svgNotation을 공개한다. 수치 해석기는 원래 SI 숫자만 받는다. ADR-012와 ADR-019를 따른다.

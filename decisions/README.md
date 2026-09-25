@@ -31,3 +31,4 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-016](ADR-016-local-wire-routing.md) | 국소적인 직각 도선 편집 | accepted | 도선 UX 개선 |
 | [ADR-017](ADR-017-delete-components-keep-wiring.md) | 부품 삭제 시 도선 연결 유지 | accepted | 도선 UX 개선 |
 | [ADR-018](ADR-018-junction-lifecycle.md) | 분기점의 국소 정리와 배선 시작 | accepted | 도선 UX 개선 |
+| [ADR-019](ADR-019-quantity-input-and-display.md) | 수치 입력과 표시의 공통 모듈 | accepted | 숫자 표시 UX 개선 |

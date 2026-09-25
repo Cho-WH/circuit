@@ -16,6 +16,8 @@ const coreModules = new Set([
   'simulation',
   'diagnostics',
   'wire-geometry',
+  'quantity',
+  'notation',
   'activity',
   'feedback',
 ]);

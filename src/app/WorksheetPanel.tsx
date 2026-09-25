@@ -1,3 +1,4 @@
+import { saveBlob } from './download';
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowRight, CornerDownRight, CircleDot, MousePointer2, Type, Undo2, Redo2, Trash2, Check, LoaderCircle } from 'lucide-react';
@@ -21,7 +22,6 @@ interface Props {
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
   toolbarEnd?: ReactNode;
 }
-function saveBlob(blob: Blob, filename: string) { const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000); }
 export function WorksheetPanel(props: Props) {
   const {document:doc}=props;
   const component=doc.components.find(c=>c.id===props.selected[0]);
@@ -48,7 +48,7 @@ export function WorksheetPanel(props: Props) {
   }
   function property(values:Record<string,string|number|boolean>){if(component)props.dispatch({type:'SetProperties',id:component.id,properties:values});}
   function scaleCommit(){if(fontScale!==(doc.output?.fontScale??1))props.dispatch({type:'SetOutputScale',scale:fontScale});props.onFontPreview(null);}
-  const actual=component?componentPresentation({...component,properties:Object.fromEntries(Object.entries(component.properties).filter(([k])=>! /^(label|answer)/.test(k)))},props.result):null;
+  const actual=component?componentPresentation({...component,properties:{...component.properties,labelVisible:true,labelBlank:false,answerVisible:true,answerBlank:false}},props.result):null;
   return <section className="worksheet-panel"><h3>{component?<>{componentDefinitions[component.type].name} <Notation symbol text={component.label}/></>:annotation?annotation.kind==='point'?'점':annotation.kind==='arrow'?'화살표':'글자':'보기 설정'}</h3>
     {toolbar&&createPortal(<>
       <div className="tool-group">{([{id:'select',label:'선택',Icon:MousePointer2},{id:'point',label:'점',Icon:CircleDot},{id:'arrow',label:'전류 화살표',Icon:ArrowRight},{id:'corner-arrow',label:'직각 전류 화살표',Icon:CornerDownRight},{id:'note',label:'글자',Icon:Type}] as const).map(({id,label,Icon})=><button key={id} title={label} aria-label={label} aria-pressed={props.tool===id} className={props.tool===id?'active':''} onClick={()=>props.onTool(id)}><Icon size={18}/></button>)}</div>
@@ -57,7 +57,7 @@ export function WorksheetPanel(props: Props) {
       <div className="tool-group"><button aria-label="출력 실행 취소" disabled={!props.canUndo} onClick={props.undo}><Undo2 size={17}/></button><button aria-label="출력 다시 실행" disabled={!props.canRedo} onClick={props.redo}><Redo2 size={17}/></button></div>
       <div className="output-actions"><button disabled={busy} onClick={()=>void output('preview')}>미리보기</button><button className="primary output-copy" disabled={busy} aria-busy={busy} onClick={()=>void output('copy')}>{busy?<LoaderCircle size={16}/>:copied?<Check size={16}/>:null}<span role={copied?'status':undefined}>{copied?'복사됨':'그림 복사'}</span></button><details className="export-menu"><summary>파일 저장</summary><button disabled={busy} onClick={()=>void output('svg')}>SVG 저장</button><button disabled={busy} onClick={()=>void output('png')}>PNG 저장</button></details></div>{props.toolbarEnd}
     </>,toolbar)}
-    {component&&<OutputNotationFields properties={component.properties} label={actual?.label} value={actual?.value} onChange={property}/>}
+    {component&&<OutputNotationFields key={component.id} properties={component.properties} label={actual?.label} value={actual?.value} onChange={property} onLabelChange={label=>props.dispatch({type:'SetLabel',id:component.id,label})}/>}
     {annotation&&<div className="annotation-edit">{annotation.kind==='arrow'?<OutputNotationFields key={annotation.id} properties={annotation.presentation??{}} label={annotation.content} value="" onChange={values=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{presentation:{...annotation.presentation,...values}}})}/>:<input aria-label="주석 내용 편집" value={annotation.content} maxLength={240} onChange={e=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{content:e.target.value}})}/>}<button aria-label="선택한 장식 삭제" onClick={()=>props.dispatch({type:'DeleteElements',ids:[annotation.id]})}><Trash2 size={16}/>삭제</button></div>}
     {doc.annotations.some(a=>a.visibility!=='hidden')&&<details className="output-decoration-list"><summary>출력 장식</summary><div className="annotation-list">{doc.annotations.filter(a=>a.visibility!=='hidden').map(a=><button key={a.id} className={annotation?.id===a.id?'active':''} onClick={()=>props.onSelect(a.id)}>{a.kind==='point'?'● ':a.kind==='arrow'?'→ ':''}<Notation symbol={a.kind==='point'||a.kind==='arrow'} text={String(a.presentation?.labelText??a.content)||'□'}/></button>)}</div></details>}
     <fieldset className="output-export-options"><legend>그림 설정</legend>

@@ -69,3 +69,6 @@ export function shiftWireSegment(points: Point[], segment: number, offset: numbe
     ...path.slice(segment + 2),
   ]);
 }
+
+export const snapGridValue=(value:number):number=>Math.round(value/20)*20;
+export const snapGridPoint=(point:Point):Point=>({x:snapGridValue(point.x),y:snapGridValue(point.y)});

@@ -1,6 +1,7 @@
+import { formatQuantity } from '../quantity';
 import type { CircuitDocument } from '../domain';
 import type { PotentialModel } from '../visualization';
-import { endpointName, formatQuantity } from '../component-library';
+import { endpointName } from '../component-library';
 import { Notation, QuantityInput } from './Notation';
 
 export interface PotentialSettingsValue {

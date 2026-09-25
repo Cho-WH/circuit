@@ -6,11 +6,11 @@
 
 ## 결정
 
-회로도 출력은 시험지·수업 자료용 그림 편집 화면이다. 출력 문구와 배치를 CircuitDocument에 저장하고 물리 속성과 계산 결과는 변경하지 않는다. 실제 회로 편집은 CircuitCanvas, 출력 편집은 OutputCanvas가 담당한다. OutputCanvas는 export의 createSvgExport가 생성한 SVG 내용을 사용하므로 편집 화면·SVG·PNG의 배치가 일치한다. 선택·드래그 손잡이·화면 배율은 출력에 포함하지 않는다.
+회로도 출력은 시험지·수업 자료용 그림 편집 화면이다. 부품의 실제 이름과 출력 배치를 CircuitDocument에 저장한다. 출력에서 이름 수정은 실제 이름을 갱신하며 부품값과 계산 결과는 읽기 전용이다. 실제 회로 편집은 CircuitCanvas, 출력 편집은 OutputCanvas가 담당한다. OutputCanvas는 export의 createSvgExport가 생성한 SVG 내용을 사용하므로 편집 화면·SVG·PNG의 배치가 일치한다. 선택·드래그 손잡이·화면 배율은 출력에 포함하지 않는다.
 
 ## 표기와 배치
 
-부품 properties의 labelText/answerText는 출력용 이름/값이다. 기존 labelDisplay/answerDisplay(value, hidden, ?, blank, custom)를 읽으며, 이름과 값의 Visible·Blank 불리언을 독립적으로 저장한다. Visible=false가 빈칸보다 우선한다. 빈칸은 밑줄 대신 사각형으로 그린다. 이름과 값의 OffsetX/OffsetY는 회전별 기본 표기 위치에 더하는 문서 좌표다. 부품과 도선 자체는 출력 화면에서 이동하지 않는다.
+부품 이름은 component.label, 값은 물리 속성 및 계산 결과에서 읽는다. 별도의 출력용 Text·Display 속성은 사용하지 않는다. 이름과 값의 Visible·Blank 불리언을 독립적으로 저장한다. Visible=false가 빈칸보다 우선한다. 빈칸은 밑줄 대신 사각형으로 그린다. 이름과 값의 OffsetX/OffsetY는 회전별 기본 표기 위치에 더하는 문서 좌표다. 부품과 도선 자체는 출력 화면에서 이동하지 않는다.
 
 output.fontScale은 0.5~2의 문서 설정이다. 글자 및 사각 빈칸의 크기에 적용하고 출력 경계에도 반영한다. 드래그는 임시 문서로 미리 보며 놓을 때 한 명령으로 기록한다. Escape, 포인터 취소, 캡처 상실, 창 초점·문서·도구 변경은 미리보기를 취소한다. 화살표는 본체 전체를 드래그하고 선택 시 양 끝 원형 손잡이를 드래그해 길이를 조절한다. 드래그는 해당 변의 축으로 투영하여 회전·직각·반대편 끝을 유지한다. 상단 아이콘 도구는 회전 각도·90° 회전·방향 반전을 조절한다. 직각 화살표의 두 변 길이는 독립적이고 직각을 유지한다. 반전은 경로를 바꾸지 않고 화살촉 끝만 바꾼다. 빈 공간 드래그와 확대·축소·전체 맞춤은 화면만 바꾼다.
 
@@ -24,13 +24,13 @@ validateDocument는 v1 입력을 이전 스키마로 검증한 뒤 복제하여 
 
 exportSvg(document, options?, result?)와 createSvgExport는 동일한 문서 좌표를 사용한다. createSvgExport는 svg, 내부 content, bounds, 정규화 options를 반환한다. componentPresentation(component, result?)과 annotationPlacements(document)는 공통 표기를 제공한다. exportPng는 SVG를 래스터화하고 copyPng는 복사 여부와 PNG Blob을 반환한다.
 
-사용자 옵션은 접지 표시·투명 배경·고해상도 출력 토글이다. 접지는 기본으로 숨기며 showGround=true이면 접지 기호만 그린다. 출력 접지에는 0 V 문자를 붙이지 않는다. 이 설정은 회로 연결과 기준 전위에 영향을 주지 않으며 3D 바닥 회로의 기준점 표시는 유지한다. 숫자는 기본 단위로 소수점 최대 두 자리까지 반올림하고 끝자리 0을 생략한다. 기본 출력은 검은색, 여백 16 문서 단위, PNG 1배다. highResolution=true이면 기본 PNG의 정수 픽셀 가로·세로를 정확히 두 배로 생성한다. 저수준 렌더러의 monochrome·margin은 3D 바닥 회로 등의 호출에만 사용한다. 3D 바닥 회로가 사용하는 circuitOnly=true는 출력 장식·문구·배율 없이 실제 회로 기호와 이름·값을 그린다. 기본 출력에서는 단자와 분기점 점을 생략하며 비연결 교차의 아치를 유지한다. 점 도구로 추가한 점만 별도로 그린다. 사용자 문구와 식별자는 XML escape한다.
+사용자 옵션은 접지 표시·투명 배경·고해상도 출력 토글이다. 접지는 기본으로 숨기며 showGround=true이면 접지 기호만 그린다. 출력 접지에는 0 V 문자를 붙이지 않는다. 이 설정은 회로 연결과 기준 전위에 영향을 주지 않으며 3D 바닥 회로의 기준점 표시는 유지한다. 숫자는 ADR-019의 공통 표시 옵션을 적용하며 기본값은 자동 단위다. 기본 출력은 검은색, 여백 16 문서 단위, PNG 1배다. highResolution=true이면 기본 PNG의 정수 픽셀 가로·세로를 정확히 두 배로 생성한다. 저수준 렌더러의 monochrome·margin은 3D 바닥 회로 등의 호출에만 사용한다. 3D 바닥 회로가 사용하는 circuitOnly=true는 출력 장식·문구·배율 없이 실제 회로 기호와 이름·값을 그린다. 기본 출력에서는 단자와 분기점 점을 생략하며 비연결 교차의 아치를 유지한다. 점 도구로 추가한 점만 별도로 그린다. 사용자 문구와 식별자는 XML escape한다.
 
 회로 기호·이름·숫자·단위는 Libertinus Math를 사용한다. 부품 이름과 점·전류 화살표 기호는 수학 이탤릭 글리프로 표시하고 숫자·첨자 숫자·물리 단위는 정자로 둔다. I = 3/4 A 같은 표기는 등호 왼쪽 기호만 기울인다. 표기 변환은 렌더링에만 적용하여 저장 문자열과 입력값을 유지한다. 일반 앱 버튼·메뉴·설명은 기존 UI 글꼴을 유지한다. 공식 v7.051 WOFF2와 OFL 라이선스를 typography에 포함하며 독립 SVG에는 폰트 데이터를 내장하여 PNG·미리보기·외부 SVG에서도 같은 글꼴을 사용한다.
 
 ## 입력한 분수
 
-notation의 parseQuantity는 분수·부호·SI 접두어를 파싱하여 계산용 value와 선택적 fraction 문자열을 반환한다. 부품 properties의 resistanceOhm/voltageV는 계속 숫자이며 resistanceOhmFraction/voltageVFraction에 명시적으로 입력한 비율을 저장한다. 기존 v2의 확장 속성이므로 스키마 변경이나 마이그레이션은 없다. 표기가 현재 수치와 일치할 때만 표시하고 숫자만 바꾸는 편집 명령은 이전 표기를 삭제한다. 저장·복사·실행 취소는 두 속성을 함께 보존한다.
+quantity의 parseQuantity는 분수·부호·SI 접두어를 파싱하여 계산용 value와 선택적 fraction 문자열을 반환한다. 부품 properties의 resistanceOhm/voltageV는 계속 숫자이며 resistanceOhmFraction/voltageVFraction에 명시적으로 입력한 비율을 저장한다. 기존 v2의 확장 속성이므로 스키마 변경이나 마이그레이션은 없다. 표기가 현재 수치와 일치할 때만 표시하고 숫자만 바꾸는 편집 명령은 이전 표기를 삭제한다. 저장·복사·실행 취소는 두 속성을 함께 보존한다.
 
 이름·출력 값·주석의 숫자 비율은 공통 notationTokens와 svgNotation으로 분자·가로선·분모를 그리며 분자와 분모는 주변 숫자와 같은 폰트 크기를 사용한다. 이름·값 사이의 기본 간격과 출력 경계에 증가한 높이를 반영한다. 라이브 회로와 독립 SVG·PNG가 같은 벡터 배치를 사용하고 출력 경계는 분수 높이를 포함한다. 일반 소수와 자동 계산 결과는 소수 표기를 유지한다.
 
@@ -56,8 +56,19 @@ component-library의 arrowGeometry가 경로·화살촉을 계산한다. 편집 
 
 ## 화살표 기호·값과 저장 v4
 
-Annotation.presentation은 부품과 동일한 label/answer Text·Display·Visible·Blank·OffsetX/OffsetY 출력 속성을 가진다. 기존 content는 기본 기호 이름으로 사용하고 기본 값 문구는 비워 둔다. OutputNotationFields와 presentationText를 부품·화살표가 공유한다. 이름은 이탤릭 기호 표기, 값의 숫자·단위는 정자이며 분수·첨자를 지원한다.
+Annotation.presentation은 화살표 주석 전용 label/answer Text·Display·Visible·Blank·OffsetX/OffsetY 출력 속성을 가진다. 기존 content는 기본 기호 이름으로 사용하고 기본 값 문구는 비워 둔다. OutputNotationFields는 부품의 실제 이름 편집·값 읽기 전용과 화살표의 자유 문구 편집을 구분한다. presentationText는 화살표 주석에 사용하며 부품은 실제 이름·값에 표시·빈칸 설정만 적용한다. 이름은 이탤릭 기호 표기, 값의 숫자·단위는 정자이며 분수·첨자를 지원한다.
 
 기호·값 SVG 그룹을 나누어 각각 드래그하고, 오프셋은 기본 배치에 더하는 문서 좌표다. 글자 이동은 화살표 위치·길이·회전·방향을 바꾸지 않는다. 본체 이동은 글자도 함께 이동하고 독립 오프셋은 유지한다. 출력 경계는 두 표기의 최종 위치를 포함한다. 이 표기는 출력에만 보이고 계산에 영향을 주지 않는다.
 
 v3 스키마를 보존하고 v3 검증 후 복제하여 v4로 승격한다. 기존 content·arrow·end는 그대로 유지하고 새 presentation은 편집할 때만 추가하므로 기존 이름과 배치를 보존한다.
+
+
+## 2026-09-26 실제 부품 이름·값 통일 (TCH-001~003)
+
+출력에서 숫자를 고쳐 실제 회로값도 바뀌었다고 오해하는 문제를 막기 위해 부품 값 편집을 제거한다. 이름은 SetLabel 명령으로 실제 component.label을 갱신한다. 출력 명령은 부품의 Visible·Blank·OffsetX/Y와 실제 이름 변경만 허용하며 물리값·출력용 Text·Display 변경을 차단한다. 화살표 주석은 별도 계산값이 없으므로 기호·값 문구 편집을 유지한다.
+
+사용자 결정에 따라 부품의 출력 전용 이름·값 및 Display 모드의 호환 처리는 제거한다. 별도 저장 형식 버전이나 변환을 추가하지 않는다. 이름·값을 화면·SVG·PNG에서 동일한 원본으로 표시하고 이름 변경의 실행 취소·저장과 물리 계산 불변성을 검증한다.
+
+## 공통 숫자 표시 개정
+
+숫자 형식과 입력 정밀도는 [ADR-019](ADR-019-quantity-input-and-display.md)를 따른다. 기존 출력 전용 숫자 포맷터는 제거하고 편집·출력·3D에 같은 옵션을 전달한다. 지수 표기는 유효숫자 4자리이며 원래 숫자 모드도 저장된 분수 원문을 변경하지 않는다.

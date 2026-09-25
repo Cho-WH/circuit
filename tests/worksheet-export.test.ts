@@ -1,3 +1,4 @@
+import { formatQuantity } from '../src/quantity';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +8,6 @@ import {
   annotationPlacements,
   annotationPresentation,
   componentPresentation,
-  formatDisplayQuantity,
 } from '../src/component-library';
 import { compileCircuit } from '../src/connectivity';
 import {
@@ -43,49 +43,46 @@ function solve(document: CircuitDocument) {
 }
 
 describe('worksheet component presentation', () => {
-  it('applies output text, hidden, unknown and rectangular blank rules', () => {
+  it('uses actual component values with visibility and rectangular blank controls', () => {
     const document = fixture();
     const { result } = solve(document);
     const resistor = document.components.find((item) => item.id === 'R1')!;
     resistor.properties = {
       ...resistor.properties,
-      labelDisplay: 'blank',
-      answerDisplay: '?',
+      labelBlank: true,
+      answerBlank: false,
       showVoltage: true,
-      voltageDisplay: 'custom',
-      voltageText: 'U_R',
       showCurrent: true,
-      currentDisplay: 'hidden',
+      currentVisible: false,
     };
 
     expect(componentPresentation(resistor, result)).toEqual({
       label: '□',
-      value: '?',
-      voltage: 'U_R',
+      value: '3 Ω',
+      voltage: formatQuantity(result.componentVoltages[resistor.id], 'V'),
       current: null,
     });
 
-    const expected = new Map<string, string | null>([
-      ['value', '3 Ω'],
-      ['hidden', null],
-      ['?', '?'],
-      ['blank', '□'],
-      ['custom', 'R_x'],
-    ]);
-    for (const [rule, text] of expected) {
-      resistor.properties.answerDisplay = rule;
-      resistor.properties.answerText = 'R_x';
-      expect(componentPresentation(resistor, result).value).toBe(text);
-    }
+    resistor.properties.answerBlank = true;
+    expect(componentPresentation(resistor, result).value).toBe('□');
+    resistor.properties.answerVisible = false;
+    expect(componentPresentation(resistor, result).value).toBeNull();
+    resistor.properties.answerVisible = true;
+    resistor.properties.answerBlank = false;
+    resistor.properties.resistanceOhm = 12;
+    resistor.label = 'R_new';
+    expect(componentPresentation(resistor, result)).toMatchObject({ label: '□', value: '12 Ω' });
+    resistor.properties.labelBlank = false;
+    expect(componentPresentation(resistor, result).label).toBe('R_new');
   });
 
   it('rounds output numbers to at most two decimals without trailing zeroes or negative zero', () => {
-    expect(formatDisplayQuantity(12345.6789,'Ω')).toBe('12345.68 Ω');
-    expect(formatDisplayQuantity(3,'V')).toBe('3 V');
-    expect(formatDisplayQuantity(1.5,'V')).toBe('1.5 V');
-    expect(formatDisplayQuantity(1.236,'A')).toBe('1.24 A');
-    expect(formatDisplayQuantity(-0.001,'A')).toBe('0 A');
-    expect(formatDisplayQuantity(undefined,'V')).toBe('— V');
+    expect(formatQuantity(12345.6789,'Ω')).toBe('12.35 kΩ');
+    expect(formatQuantity(3,'V')).toBe('3 V');
+    expect(formatQuantity(1.5,'V')).toBe('1.5 V');
+    expect(formatQuantity(1.236,'A')).toBe('1.24 A');
+    expect(formatQuantity(-0.001,'A')).toBe('-1 mA');
+    expect(formatQuantity(undefined,'V')).toBe('— V');
   });
 
   it('keeps connectivity and physics byte-equivalent when only worksheet metadata changes', () => {
@@ -93,12 +90,10 @@ describe('worksheet component presentation', () => {
     const decorated = cloneDocument(original);
     decorated.components[1].properties = {
       ...decorated.components[1].properties,
-      answerDisplay: 'blank',
-      answerText: 'R?',
-      labelDisplay: 'custom',
-      labelText: '저항 A',
-      voltageDisplay: '?',
-      currentDisplay: 'hidden',
+      answerBlank: true,
+      labelVisible: false,
+      voltageBlank: true,
+      currentVisible: false,
       showVoltage: true,
       showCurrent: true,
     };
@@ -257,19 +252,17 @@ describe('independent worksheet SVG export', () => {
     const resistor = document.components.find((item) => item.id === 'R1')!;
     resistor.properties = {
       ...resistor.properties,
-      answerDisplay: '?',
-      labelDisplay: 'custom',
-      labelText: '가',
+      answerBlank: false,
       showVoltage: true,
-      voltageDisplay: 'blank',
+      voltageBlank: true,
       showCurrent: true,
-      currentDisplay: 'hidden',
+      currentVisible: false,
     };
     const snapshot = cloneDocument(document);
 
     const problem = exportSvg(document, {}, result);
-    expect(problem).toContain('>?</text>');
-    expect(problem).toContain('>가</text>');
+    expect(problem).toContain('>3 Ω</text>');
+    expect(problem).toContain('>𝑅1</text>');
     expect(problem).toContain('width="84" height="36"');
     expect(problem).not.toContain('>I = 1.00 A</text>');
     expect(document).toEqual(snapshot);
@@ -279,9 +272,7 @@ describe('independent worksheet SVG export', () => {
   it('escapes every user-controlled text field and removes forbidden XML controls', () => {
     const document = fixture();
     document.title = '</title><script>alert("title")</script>&';
-    document.components[1].label = '<img src=x onerror="label">&\'';
-    document.components[1].properties.labelDisplay = 'custom';
-    document.components[1].properties.labelText = '<b>custom</b>\u0000';
+    document.components[1].label = '<img src=x onerror="label">&\'\u0000';
     document.annotations = [{
       id: 'unsafe',
       kind: 'note',
@@ -296,7 +287,7 @@ describe('independent worksheet SVG export', () => {
     expect(svg).not.toContain('<b>');
     expect(svg).not.toContain('\u0000');
     expect(svg).toContain('&lt;script&gt;alert(&quot;title&quot;)&lt;/script&gt;&amp;');
-    expect(svg).toContain('&lt;𝑏&gt;𝑐𝑢𝑠𝑡𝑜𝑚&lt;/𝑏&gt;�');
+    expect(svg).toContain('&lt;𝑖𝑚𝑔'); expect(svg).toContain('�');
     expect(svg).toContain('&lt;script&gt;alert(&quot;note&quot;)&lt;/script&gt;&amp;&apos;');
   });
 
@@ -464,7 +455,8 @@ describe('free output layout', () => {
     expect(redo(undo(history)).present).toEqual(history.present);
     apply(outputMoveCommand(history.present,{id:'R1',part:'label'},{x:80,y:-120})!);
     apply(outputMoveCommand(history.present,{id:'R1',part:'value'},{x:-50,y:90})!);
-    apply({type:'SetProperties',id:'R1',properties:{labelText:'Rₓ',labelDisplay:'custom',answerBlank:true}});
+    apply({type:'SetLabel',id:'R1',label:'Rₓ'});
+    apply({type:'SetProperties',id:'R1',properties:{answerBlank:true}});
     apply({type:'SetOutputScale',scale:1.5});
     const doc=history.present;
     expect(solve(doc)).toEqual(before);

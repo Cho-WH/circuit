@@ -1,13 +1,13 @@
 {
   "$schema": "../schemas/fixture.schema.json",
   "id": "FIX-09",
-  "title": "균형 휘트스톤 브리지",
+  "title": "휘트스톤 브릿지",
   "purpose": "대칭 절점 전위와 중앙 전류 0 조건 검증",
   "document": {
     "format": "edu-circuit",
     "version": 1,
     "documentId": "fix-09",
-    "title": "균형 브리지",
+    "title": "휘트스톤 브릿지",
     "components": [
       {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":0,"y":0},"rotation":0,"properties":{"voltageV":10},"terminals":[{"id":"V1.p","role":"positive"},{"id":"V1.n","role":"negative"}]},
       {"id":"R1","type":"resistor","label":"R1","position":{"x":160,"y":-90},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R1.a","role":"a"},{"id":"R1.b","role":"b"}]},

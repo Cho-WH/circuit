@@ -129,6 +129,29 @@ describe('committed circuit session', () => {
     expect(session.history.present.output?.fontScale).toBe(1.5);
   });
 
+  it('renames the actual component in output mode, permits masks and blocks value overrides', () => {
+    const doc = emptyDocument('output-name');
+    doc.components = [createComponent('resistor', 'R1', { x: 100, y: 100 })];
+    saveLocal(doc); render('worksheet');
+    act(() => { expect(session.execute({ type: 'SetLabel', id: 'R1', label: 'R_load' }).ok).toBe(true); });
+    expect(session.history.present.components[0].label).toBe('R_load');
+    act(() => session.undo()); expect(session.history.present.components[0].label).toBe('R1');
+    act(() => session.redo()); expect(session.history.present.components[0].label).toBe('R_load');
+    const before = session.history;
+    act(() => {
+      const blocked: Record<string, string | number | boolean>[] = [{ resistanceOhm: 50 }, { answerText: '50 Ω' }, { labelText: 'Alias' }, { answerDisplay: 'custom' }];
+      for (const properties of blocked) {
+        expect(session.execute({ type: 'SetProperties', id: 'R1', properties }).ok).toBe(false);
+      }
+    });
+    expect(session.history).toBe(before);
+    act(() => { expect(session.execute({ type: 'SetProperties', id: 'R1', properties: { answerBlank: true, labelVisible: false, answerOffsetX: 20 } }).ok).toBe(true); });
+    expect(session.history.present.components[0].properties.resistanceOhm).toBe(10);
+    act(() => vi.advanceTimersByTime(450));
+    const saved = loadLocal(); expect(saved?.ok && saved.document.components[0].label).toBe('R_load');
+    render('build'); expect(session.history.present.components[0].label).toBe('R_load');
+  });
+
   it('blocks editing and undo in measurement mode while allowing document replacement', () => {
     render();
     act(() =>

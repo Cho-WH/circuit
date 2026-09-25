@@ -103,3 +103,7 @@ interface SimulationResult {
 출력 화살표의 v3 `Annotation.arrow`는 직선/직각 형태, 두 변 길이, 회전 각도, 방향 반전을 저장한다. 기존 v2 `end`는 호환용이며 공통 표기 모듈이 원래 선분을 복원한다. v1~v3 파일의 순차 변환은 ADR-012를 따른다.
 
 저장 v4의 선택적 `Annotation.presentation`은 출력 전용 기호·값 표시 속성이다. 기호의 기본값은 기존 content이며 이름·값 이동은 label/answerOffsetX/Y로 기록한다. v3→v4 복제 변환에서 기존 주석을 보존한다.
+
+## 부품별 숫자 표시
+
+ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성이며 미설정 기본은 auto다. 문서에 저장할 부품 표기 속성으로 위치·이름과 함께 저장·복사·실행 취소한다. 숫자값·Fraction 원문·연결·계산식은 바꾸지 않는다. v4 properties 확장 계약을 사용하며 ADR-019를 따른다.

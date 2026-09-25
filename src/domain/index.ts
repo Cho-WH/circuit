@@ -120,3 +120,8 @@ export const documentMigrator: DocumentMigrator = {
 export function emptyDocument(id = 'untitled'): CircuitDocument {
   return { format: 'edu-circuit', version: 4, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
 }
+
+export function normalizeComponentLabel(input:string):string|null {
+  const label=input.trim();
+  return label.length>0&&label.length<=160?label:null;
+}

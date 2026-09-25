@@ -1,3 +1,4 @@
+import { snapGridPoint, snapGridValue } from '../wire-geometry';
 import { useMemo, useRef, useState, type RefObject } from 'react';
 import type { CircuitDocument, ComponentType, Point } from '../domain';
 import { previewCommand, type Command } from '../editor';
@@ -18,10 +19,7 @@ interface WireDrag extends DragBase {
   horizontal: boolean;
 }
 
-export const snapCanvasPoint = (point: Point): Point => ({
-  x: Math.round(point.x / 20) * 20,
-  y: Math.round(point.y / 20) * 20,
-});
+export const snapCanvasPoint = snapGridPoint;
 
 export function dragPositions(session: ComponentDrag, current: Point): Record<string, Point> {
   const delta = snapCanvasPoint({ x: current.x - session.start.x, y: current.y - session.start.y });
@@ -46,7 +44,7 @@ export function wireDragCommand(
     type: 'MoveWireSegment',
     wireId: session.wireId,
     segment: session.segment,
-    offset: Math.round(delta / 20) * 20,
+    offset: snapGridValue(delta),
   };
 }
 

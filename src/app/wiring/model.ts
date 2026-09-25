@@ -1,3 +1,4 @@
+import { snapGridValue } from '../../wire-geometry';
 import { createDocumentIdAllocator, type CircuitDocument, type EndpointRef, type Point } from '../../domain';
 import { endpointPosition, terminalPosition, wirePoints, wireCrossings, type WireCrossing } from '../../component-library';
 import { previewCommand, type Command } from '../../editor';
@@ -45,7 +46,7 @@ export function wiringTargets(doc: CircuitDocument, p: Point, scale: number, dra
       const axis = vertical ? p.y : p.x, clamped = Math.max(low, Math.min(high, axis));
       const projected = vertical ? { x: a.x, y: clamped } : { x: clamped, y: a.y };
       if (distance(projected, p) * scale > 16 || high - low <= 2) return [];
-      const snapped = Math.max(low + 1, Math.min(high - 1, Math.round(clamped / 20) * 20));
+      const snapped = Math.max(low + 1, Math.min(high - 1, snapGridValue(clamped)));
       return [{ point: vertical ? { x: a.x, y: snapped } : { x: snapped, y: a.y }, d: distance(projected, p) }];
     }).sort((a, b) => a.d - b.d);
     return candidates.length ? [{ kind: 'wire' as const, wireId: w.id, point: candidates[0].point, d: candidates[0].d }] : [];

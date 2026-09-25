@@ -24,3 +24,6 @@ section.worksheet-panel>h3{font-size:15px;margin:0 0 16px;line-height:1.6}
 .worksheet-topbar .arrow-controls{background:none;border-radius:0;border-left:1px solid var(--line,#deded5);padding:0 0 0 8px}
 .worksheet-topbar .arrow-controls input{border-color:var(--line,#deded5)}
 @media(max-width:640px){.worksheet-topbar .output-actions{flex-wrap:wrap;gap:6px}.worksheet-topbar .output-copy{min-width:84px}}
+
+.worksheet-panel .output-notation>output{display:block;padding:8px 0;font-variant-numeric:tabular-nums}
+.worksheet-panel .output-notation>small{display:block;color:var(--muted);margin-bottom:8px}

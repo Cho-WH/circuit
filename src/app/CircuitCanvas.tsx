@@ -29,6 +29,7 @@ import {
   componentDefinitions,
   circuitTextScale,
   componentNotationLayout,
+  componentValueFontSize,
   createComponent,
   wireCrossings,
   wirePath,
@@ -68,7 +69,7 @@ export interface CanvasProps {
   onEndpoint: (endpoint: EndpointRef) => void;
   onWire: (id: string, point: Point) => void;
   onValue: (id: string) => void;
-  onSwitch: (id: string) => void;
+  onSwitch: (id: string) => boolean | void;
   onBackground: (point: Point) => void;
   endpointColors?: Record<string, string>;
   endpointLabels?: Record<string, string>;
@@ -111,9 +112,11 @@ export function CircuitCanvas(props: CanvasProps) {
     setChoosingInsertion(false);
     setPlacementFailure(previous => ({ point, attempt: (previous?.attempt ?? 0) + 1 }));
   }
+  const keepSwitchEditor=useRef(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   useEffect(() => {
-    setEditingId(null);
+    if(!keepSwitchEditor.current)setEditingId(null);
+    keepSwitchEditor.current=false;
     setInsertionWire(undefined);
     setChoosingInsertion(false);
     setPlacementMessage('');
@@ -928,6 +931,7 @@ export function CircuitCanvas(props: CanvasProps) {
             14 * labelScale,
           );
           const value = presentation.value;
+          const valueFontSize=componentValueFontSize(effective.components,c,value,14*labelScale);
           return (
             <g
               key={c.id}
@@ -1049,13 +1053,13 @@ export function CircuitCanvas(props: CanvasProps) {
                 x={textLayout.value.x}
                 y={textLayout.value.y}
                 textAnchor={textLayout.value.anchor}
-                fontSize={14 * labelScale}
+                fontSize={valueFontSize}
                 fill="#52647b"
                 onClick={() => {
                   if (!props.readOnly && !placement) editValue(c.id);
                 }}
                 onKeyDown={(e) => {
-                  if (!props.readOnly && e.key === 'Enter') editValue(c.id);
+                  if (!props.readOnly && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); editValue(c.id); }
                 }}
                 text={value}
               />
@@ -1386,6 +1390,7 @@ export function CircuitCanvas(props: CanvasProps) {
           drawingScale={drawingScale}
           labelScale={labelScale}
           onCommit={props.onCommitComponent}
+          onToggleSwitch={()=>{const applied=props.onSwitch(editingComponent.id);keepSwitchEditor.current=applied===true;return applied!==false;}}
           onClose={closeEditor}
         />
       )}

@@ -1,7 +1,8 @@
+import { storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
 import { compactWirePoints } from '../wire-geometry';
 export { compactWirePoints } from '../wire-geometry';
-import { storedFraction, notationTokens, symbolGlyphs } from '../notation';
+import { notationTokens, notationDisplayText } from '../notation';
 import type { Annotation, CircuitDocument, ComponentInstance, ComponentType, EndpointRef, Point, Wire, SimulationResult } from '../domain';
 
 export const componentDefinitions: Record<ComponentType, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | ''; property?: string }> = {
@@ -81,18 +82,12 @@ export function endpointName(document: CircuitDocument, id: string): string {
   return document.junctions.some(j=>j.id===id) ? `분기점 ${id}` : id;
 }
 export const escapeXml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
-export function formatQuantity(value: number | undefined, unit: string): string {
-  if (value === undefined || !Number.isFinite(value)) return `— ${unit}`;
-  if (Object.is(value, -0)) value = 0;
-  const abs = Math.abs(value);
-  const [scale, prefix] = abs >= 1e6 ? [1e6, 'M'] : abs >= 1e3 ? [1e3, 'k'] : abs > 0 && abs < 1e-9 ? [1e-12, 'p'] : abs > 0 && abs < 1e-6 ? [1e-9, 'n'] : abs > 0 && abs < 1e-3 ? [1e-6, 'μ'] : abs > 0 && abs < 1 ? [1e-3, 'm'] : [1, ''];
-  return `${value === 0 ? '0' : Number((value / Number(scale)).toFixed(2))} ${prefix}${unit}`;
-}
-export function componentValue(component: ComponentInstance): string {
+export function componentValue(component: ComponentInstance, options?: QuantityFormatOptions): string {
+  options=quantityFormatFor(component.properties,options);
   const def = componentDefinitions[component.type];
   if (component.type === 'switch') return component.properties.state === 'closed' ? '닫힘' : '열림';
   const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
-  return fraction ? `${fraction} ${def.unit}` : def.property ? formatQuantity(Number(component.properties[def.property]), def.unit) : def.name;
+  return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(Number(component.properties[def.property]), def.unit, options) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
 export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean } = {}): string {
@@ -111,26 +106,20 @@ export function documentBounds(document: CircuitDocument, margin = 80) {
   return { x: minX - margin, y: minY - margin, width: Math.max(200, Math.max(...points.map(p => p.x)) - minX + 2 * margin), height: Math.max(200, Math.max(...points.map(p => p.y)) - minY + 2 * margin) };
 }
 
-/** Output numbers use base units, at most two decimal places, and no trailing zeroes. */
-export function formatDisplayQuantity(value: number | undefined, unit: string): string {
-  if (value === undefined || !Number.isFinite(value)) return `— ${unit}`;
-  return `${Number(value.toFixed(2))} ${unit}`;
-}
 export function presentationText(properties:Record<string,string|number|boolean>,actual:string,prefix:string):string|null {
     const display = properties[`${prefix}Display`] ?? 'value';
     if (properties[`${prefix}Visible`] === false || display === 'hidden') return null;
     if (properties[`${prefix}Blank`] === true) return '□';
     return display === 'hidden' ? null : display === '?' ? '?' : display === 'blank' ? '□' : display === 'custom' ? String(properties[`${prefix}Text`] ?? 'x') : actual;
 }
-export function componentPresentation(component: ComponentInstance, result?: SimulationResult): { label: string | null; value: string | null; voltage: string | null; current: string | null } {
-  const def = componentDefinitions[component.type];
-  const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
-  const value = fraction ? `${fraction} ${def.unit}` : def.property ? formatDisplayQuantity(Number(component.properties[def.property]), def.unit) : componentValue(component);
-  const rule=(actual:string,prefix:string)=>presentationText(component.properties,actual,prefix);
+export function componentPresentation(component: ComponentInstance, result?: SimulationResult, options?: QuantityFormatOptions): { label: string | null; value: string | null; voltage: string | null; current: string | null } {
+  options=quantityFormatFor(component.properties,options);
+  const value = componentValue(component, options);
+  const rule=(actual:string,prefix:string)=>component.properties[prefix+'Visible']===false ? null : component.properties[prefix+'Blank']===true ? '□' : actual;
   return {
     label: rule(component.label, 'label'), value: rule(value, 'answer'),
-    voltage: component.properties.showVoltage === true ? rule(formatDisplayQuantity(result?.componentVoltages[component.id], 'V'), 'voltage') : null,
-    current: component.properties.showCurrent === true ? rule(formatDisplayQuantity(result?.branchCurrents[component.id], 'A'), 'current') : null,
+    voltage: component.properties.showVoltage === true ? rule(formatQuantity(result?.componentVoltages[component.id], 'V', options), 'voltage') : null,
+    current: component.properties.showCurrent === true ? rule(formatQuantity(result?.branchCurrents[component.id], 'A', options), 'current') : null,
   };
 }
 export function annotationPresentation(annotation: Annotation): string | null {
@@ -162,16 +151,20 @@ export function svgNotation(text:string,options:{x:number;y:number;fontSize:numb
   const {x,y,fontSize,anchor='start',fill='currentColor',weight='400'}=options;
   const clean=(value:string)=>escapeXml(value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g,'�'));
   const tokens=notationTokens(text);
-  const written=(value:string)=>clean(options.symbol||/^[A-Za-zΑ-Ωα-ω][A-Za-zΑ-Ωα-ω0-9_]*\s*[=≈]/.test(value)?symbolGlyphs(value):value);
-  if(tokens.every(t=>t.kind==='text'))return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-weight="${weight}" fill="${fill}">${written(text)}</text>`;
+  const display=notationDisplayText(text,options.symbol);
+  const displayed=notationTokens(display);
+  const written=clean;
+  if(tokens.every(t=>t.kind==='text'))return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${fontSize}" font-weight="${weight}" fill="${fill}">${written(display)}</text>`;
   let cursor=x-(anchor==='middle'?notationWidth(text,fontSize)/2:0);
   const parts:string[]=[];
-  for(const token of tokens){
+  for(const [index,token] of tokens.entries()){
+    const shown=displayed[index];
+    const shownText=shown.kind!=='fraction'?shown.text:'';
     if(token.kind==='text'){
-      parts.push(`<text x="${cursor}" y="${y}" font-size="${fontSize}" font-weight="${weight}" fill="${fill}" xml:space="preserve">${written(token.text)}</text>`);
+      parts.push(`<text x="${cursor}" y="${y}" font-size="${fontSize}" font-weight="${weight}" fill="${fill}" xml:space="preserve">${written(shownText)}</text>`);
       cursor+=notationWidth(token.text,fontSize);
     }else if(token.kind==='subscript'){
-      parts.push(`<text data-notation="subscript" x="${cursor}" y="${y+.28*fontSize}" font-size="${fontSize*.7}" font-weight="${weight}" fill="${fill}">${written(token.text)}</text>`);
+      parts.push(`<text data-notation="subscript" x="${cursor}" y="${y+.28*fontSize}" font-size="${fontSize*.7}" font-weight="${weight}" fill="${fill}">${written(shownText)}</text>`);
       cursor+=notationWidth(token.text,fontSize*.7);
     }else{
       const width=(Math.max(token.numerator.length,token.denominator.length)*.64+.4)*fontSize, center=cursor+width/2;
@@ -184,8 +177,8 @@ export function svgNotation(text:string,options:{x:number;y:number;fontSize:numb
 
 /** Safe HTML counterpart for notation outside SVG, including projected 3D labels. */
 export function htmlNotation(text:string,symbol=false):string {
-  const written=(value:string)=>escapeXml(symbol?symbolGlyphs(value):value);
-  return notationTokens(text).map(t=>t.kind==='text'?written(t.text):t.kind==='subscript'?`<sub>${written(t.text)}</sub>`:`<span class="notation-fraction" aria-hidden="true"><span>${escapeXml(t.numerator)}</span><span>${escapeXml(t.denominator)}</span></span>`).join('');
+  const written=escapeXml;
+  return notationTokens(notationDisplayText(text,symbol)).map(t=>t.kind==='text'?written(t.text):t.kind==='subscript'?`<sub>${written(t.text)}</sub>`:`<span class="notation-fraction" aria-hidden="true"><span>${escapeXml(t.numerator)}</span><span>${escapeXml(t.denominator)}</span></span>`).join('');
 }
 
 export const circuitTextScale = 1.5;
@@ -204,4 +197,18 @@ export function componentNotationLayout(component:ComponentInstance,label:string
   const valueY=vertical?labelY+name.descent+gap+quantity.ascent:component.position.y+symbolHeight+horizontalGap+quantity.ascent;
   const voltageY=valueY+quantity.descent+gap+fontSize;
   return {label:{x,y:labelY,anchor},value:{x,y:valueY,anchor},voltage:{x,y:voltageY,anchor},current:{x,y:voltageY+fontSize*1.35+gap,anchor}};
+}
+
+/** Keep long value labels inside their horizontal component slot while zoomed out. */
+export function componentValueFontSize(components:readonly ComponentInstance[],component:ComponentInstance,value:string,fontSize:number):number {
+  if(component.rotation%180!==0)return fontSize;
+  const neighbours=components.filter(c=>c.id!==component.id&&c.rotation%180===0&&Math.abs(c.position.y-component.position.y)<fontSize*2&&c.position.x!==component.position.x);
+  const slot=neighbours.reduce((width,c)=>Math.min(width,Math.abs(c.position.x-component.position.x)),Infinity);
+  return Math.min(fontSize,Math.max(1,slot-12)/Math.max(1,notationWidth(value,1)));
+}
+
+/** A reading belongs to a component only for its ID or its two distinct terminals. */
+export function quantityFormatForTargets(document:CircuitDocument,ids:readonly string[]):QuantityFormatOptions {
+  const component=ids.length===1?document.components.find(c=>c.id===ids[0]):ids.length===2&&ids[0]!==ids[1]?document.components.find(c=>ids.every(id=>c.terminals.some(t=>t.id===id))):undefined;
+  return quantityFormatFor(component?.properties);
 }

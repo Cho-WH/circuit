@@ -1,3 +1,4 @@
+import { defaultQuantityFormat, type QuantityFormatOptions } from '../quantity';
 import {
   annotationPlacements,
   arrowGeometry,
@@ -30,6 +31,7 @@ import {
 export type ExportBackground = 'transparent' | 'white';
 
 export interface ExportOptions {
+  quantityFormat?: QuantityFormatOptions;
   circuitOnly?: boolean;
   monochrome?: boolean;
   background?: ExportBackground;
@@ -39,6 +41,7 @@ export interface ExportOptions {
 }
 
 interface NormalizedExportOptions {
+  quantityFormat: QuantityFormatOptions;
   circuitOnly: boolean;
   monochrome: boolean;
   background: ExportBackground;
@@ -78,7 +81,7 @@ function normalizeOptions(options: ExportOptions = {}): NormalizedExportOptions 
   if (background !== 'transparent' && background !== 'white') throw new TypeError('background must be transparent or white');
   if (typeof monochrome !== 'boolean') throw new TypeError('monochrome must be a boolean');
   if (!Number.isFinite(margin) || margin < 0) throw new RangeError('margin must be a finite non-negative number');
-  return { circuitOnly, monochrome, background, margin, pngScale, showGround: circuitOnly || (options.showGround ?? false) };
+  return { quantityFormat:options.quantityFormat??defaultQuantityFormat, circuitOnly, monochrome, background, margin, pngScale, showGround: circuitOnly || (options.showGround ?? false) };
 }
 
 function xmlText(value: string): string {
@@ -116,8 +119,9 @@ function componentTextPlacements(
   circuitOnly: boolean,
   result: SimulationResult | undefined,
   scale: number,
+  quantityFormat: QuantityFormatOptions,
 ): TextPlacement[] {
-  const presentation = componentPresentation(circuitOnly ? {...component, properties: Object.fromEntries(Object.entries(component.properties).filter(([key]) => !/^(?:(?:label|answer|voltage|current)(?:Display|Text|Visible|Blank|OffsetX|OffsetY)|showVoltage|showCurrent)$/.test(key)))} : component, result);
+  const presentation = componentPresentation(circuitOnly ? {...component, properties: Object.fromEntries(Object.entries(component.properties).filter(([key]) => !/^(?:(?:label|answer|voltage|current)(?:Visible|Blank|OffsetX|OffsetY)|showVoltage|showCurrent)$/.test(key)))} : component, result, quantityFormat);
   const layout=componentNotationLayout(component,presentation.label,presentation.value,15*scale);
   const placements: TextPlacement[] = [];
   const add = (text: string | null, tone: TextPlacement['tone']) => {
@@ -192,7 +196,7 @@ function calculateBounds(
       const terminal = terminalPosition(component, index);
       addRect(terminal.x - 5, terminal.y - 5, 10, 10);
     }
-    for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale)) addText(placement);
+    for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale, options.quantityFormat)) addText(placement);
   }
   for (const junction of document.junctions) addRect(junction.position.x - 6, junction.position.y - 6, 12, 12);
 
@@ -278,7 +282,7 @@ export function createSvgExport(
 
   for (const component of document.components) {
     chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="body" transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component)}</g>`);
-    for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale)) {
+    for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale, options.quantityFormat)) {
       chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="${placement.tone}">${renderText(placement, colors, scale)}</g>`);
     }
   }

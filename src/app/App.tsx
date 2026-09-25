@@ -1,3 +1,8 @@
+import { ExampleMenu } from './ExampleMenu';
+import { SwitchStateButton } from './SwitchStateButton';
+import { saveBlob } from './download';
+import { ComponentNameInput } from './ComponentNameInput';
+import { QuantityDisplaySelect } from './QuantityDisplay';
 import {
   anchorEndpoint,
   anchorPose,
@@ -42,7 +47,6 @@ import {
   componentValueInput,
   createComponent,
   symbolMarkup,
-  formatQuantity,
   endpointName,
 } from '../component-library';
 import { copySelection, type Command, type PastePayload } from '../editor';
@@ -67,7 +71,7 @@ import { MeasurementPanel } from './MeasurementPanel';
 import { WorksheetPanel } from './WorksheetPanel';
 import { OutputCanvas, type OutputTool } from './OutputCanvas';
 import type { ExportOptions } from '../export';
-import { parseQuantity } from '../notation';
+import { parseQuantity, formatQuantity, quantityFormatFor, type QuantityMode } from '../quantity';
 import { Notation } from './Notation';
 import { PotentialSettings, defaultPotentialSettings } from './PotentialSettings';
 import { QuickStartDialog } from './QuickStartDialog';
@@ -409,6 +413,15 @@ export function App() {
     }
     return true;
   }
+  function toggleSwitch(id: string): boolean {
+    const component = doc.components.find(c => c.id === id);
+    if (!component || component.type !== 'switch') return false;
+    return dispatch({
+      type: 'SetProperties',
+      id,
+      properties: { state: component.properties.state === 'closed' ? 'open' : 'closed' },
+    });
+  }
   function applyValue() {
     if (!component || !definition?.property) return;
     const parsed = parseQuantity(valueDraft, definition.unit);
@@ -419,6 +432,7 @@ export function App() {
       );
       return;
     }
+    if(value===component.properties[definition.property]&&(parsed?.fraction??'')===(component.properties[definition.property+'Fraction']??''))return;
     dispatch({
       type: 'SetProperties',
       id: component.id,
@@ -428,6 +442,15 @@ export function App() {
       },
     });
   }
+  function applyQuantityMode(next:QuantityMode,all=false) {
+    if(!component)return;
+    const commands:Command[]=(all?doc.components:[component]).filter(c=>quantityFormatFor(c.properties).mode!==next).map(c=>({type:'SetProperties',id:c.id,properties:{quantityMode:next}}));
+    if(!commands.length)return;
+    const applied=execute(commands);
+    if(!applied.ok)setNotice('표시 방식을 바꿀 수 없습니다.','error');
+    else if(all)setNotice('모든 부품에 표시 방식을 적용했습니다.');
+  }
+  const quantityControl=component?<QuantityDisplaySelect key={component.id} value={quantityFormatFor(component.properties).mode??'auto'} onChange={next=>applyQuantityMode(next)} onApplyAll={()=>applyQuantityMode(quantityFormatFor(component.properties).mode??'auto',true)}/>:null;
   function replace(document: CircuitDocument) {
     if (dispatch({ type: 'ReplaceDocument', document })) {
       setSelected([]);
@@ -465,12 +488,7 @@ export function App() {
     try {
       const data = serializeDocument(doc);
       const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = window.document.createElement('a');
-      a.href = url;
-      a.download = `${doc.title || '회로'}.json`;
-      a.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      saveBlob(blob, `${doc.title || '회로'}.json`);
       setNotice('회로 파일을 저장했어요');
     } catch {
       setNotice('회로 파일을 저장하지 못했어요. 다시 시도해 주세요.', 'error');
@@ -644,14 +662,7 @@ export function App() {
         setDetailsOpen(true);
         window.setTimeout(() => valueInput.current?.focus(), 0);
       }}
-      onSwitch={(id) => {
-        const c = doc.components.find((x) => x.id === id)!;
-        dispatch({
-          type: 'SetProperties',
-          id,
-          properties: { state: c.properties.state === 'closed' ? 'open' : 'closed' },
-        });
-      }}
+      onSwitch={toggleSwitch}
       onBackground={() => {}}
     />
   );
@@ -790,31 +801,11 @@ export function App() {
           <div className="section-heading">
             <h2>시작하기</h2>
           </div>
-          <button className="wide-button" onClick={() => replace(emptyDocument(newId('circuit-')))}>
-            <Plus size={16} />빈 회로 만들기
+          <button className="wide-button new-circuit-button" aria-label="빈 회로 만들기" onClick={() => replace(emptyDocument(newId('circuit-')))}>
+            <Plus size={16} aria-hidden="true"/><span className="new-circuit-desktop-label">빈 회로 만들기</span><span className="new-circuit-mobile-label">빈 회로</span>
           </button>
-          <label className="field-label">
-            예제 회로
-            <select
-              aria-label="예제 회로"
-              value={
-                examples.some((x) => x.document.documentId === doc.documentId) ? doc.documentId : ''
-              }
-              onChange={(e) => {
-                const ex = examples.find((x) => x.document.documentId === e.target.value);
-                if (ex) replace(layoutExample(ex.document));
-              }}
-            >
-              <option value="" disabled>
-                예제 선택
-              </option>
-              {examples.map((example) => (
-                <option key={example.id} value={example.document.documentId}>
-                  {example.title}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ExampleMenu documentId={doc.documentId} onSelect={replace}/>
+          <div className="palette-start-divider" aria-hidden="true"/>
         </aside>
         <main className="canvas-column">
           <div className="editor-toolbar" hidden={mode !== 'build'}>
@@ -1022,7 +1013,7 @@ export function App() {
                 >
                   {paths.map((p, i) => (
                     <option key={p.id} value={i}>
-                      {p.label}
+                      {p.steps.map(s=>doc.components.find(c=>c.id===s.elementId)?.label??s.elementId).join(' → ')}
                     </option>
                   ))}
                   {customPathIds.length > 0 && <option value="custom">직접 선택한 경로</option>}
@@ -1048,7 +1039,7 @@ export function App() {
                   </button>
                 )}
               </div>
-              <PotentialGraph
+              <PotentialGraph document={doc}
                 path={path}
                 result={result}
                 hovered={hovered ?? selected[0] ?? null}
@@ -1192,14 +1183,7 @@ export function App() {
                 <div hidden={mode !== 'build'}>
                   <label className="field-label">
                     이름
-                    <input
-                      key={`${component.id}:${component.label}`}
-                      aria-label="부품 이름"
-                      defaultValue={component.label}
-                      onBlur={(e) =>
-                        dispatch({ type: 'SetLabel', id: component.id, label: e.target.value })
-                      }
-                    />
+                    <ComponentNameInput key={component.id} label="부품 이름" value={component.label} onCommit={label=>dispatch({type:'SetLabel',id:component.id,label})}/>
                   </label>
                   {definition.property && (
                     <form
@@ -1216,13 +1200,13 @@ export function App() {
                             aria-label={`${component.label} 값`}
                             value={valueDraft}
                             onChange={(e) => setValueDraft(e.target.value)}
+                            onBlur={applyValue}
+                            onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();setValueDraft(componentValueInput(component));}}}
                           />
                           <span>{definition.unit}</span>
                         </div>
                       </label>
-                      <button className="wide-button apply-value" type="submit">
-                        값 적용
-                      </button>
+                      {quantityControl}
                       <p className="tiny-note">
                         {definition.unit === 'Ω'
                           ? '1k, 1.5 kΩ처럼 입력할 수 있어요.'
@@ -1230,22 +1214,8 @@ export function App() {
                       </p>
                     </form>
                   )}
-                  {component.type === 'switch' && (
-                    <button
-                      className="wide-button"
-                      onClick={() =>
-                        dispatch({
-                          type: 'SetProperties',
-                          id: component.id,
-                          properties: {
-                            state: component.properties.state === 'closed' ? 'open' : 'closed',
-                          },
-                        })
-                      }
-                    >
-                      스위치 {component.properties.state === 'closed' ? '열기' : '닫기'}
-                    </button>
-                  )}
+                  {!definition.property&&quantityControl}
+                  {component.type === 'switch' && <SwitchStateButton closed={component.properties.state==='closed'} onToggle={()=>toggleSwitch(component.id)}/>}
                   <div className="selection-actions">
                     <button onClick={() => dispatch({ type: 'RotateComponents', ids: selected })}>
                       <RotateCw size={17} />
@@ -1270,18 +1240,18 @@ export function App() {
                 <div className="readings">
                   <div>
                     <span>양단 전압</span>
-                    <strong>{formatQuantity(result.componentVoltages[component.id], 'V')}</strong>
+                    <strong>{formatQuantity(result.componentVoltages[component.id], 'V', quantityFormatFor(component.properties))}</strong>
                   </div>
                   <div>
                     <span>가지 전류</span>
-                    <strong>{formatQuantity(result.branchCurrents[component.id], 'A')}</strong>
+                    <strong>{formatQuantity(result.branchCurrents[component.id], 'A', quantityFormatFor(component.properties))}</strong>
                   </div>
                   <div>
                     <span>
                       {(result.componentPowers[component.id] ?? 0) < 0 ? '공급 전력' : '소비 전력'}
                     </span>
                     <strong>
-                      {formatQuantity(Math.abs(result.componentPowers[component.id] ?? NaN), 'W')}
+                      {formatQuantity(Math.abs(result.componentPowers[component.id] ?? NaN), 'W', quantityFormatFor(component.properties))}
                     </strong>
                   </div>
                 </div>

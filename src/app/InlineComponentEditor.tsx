@@ -1,3 +1,5 @@
+import { SwitchStateButton } from './SwitchStateButton';
+import { normalizeComponentLabel } from '../domain';
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentInstance, Point } from '../domain';
 import {
@@ -7,7 +9,7 @@ import {
   componentValue,
   notationMetrics,
 } from '../component-library';
-import { parseQuantity } from '../notation';
+import { parseQuantity } from '../quantity';
 import { Notation } from './Notation';
 
 export interface ComponentEdit {
@@ -23,6 +25,7 @@ interface Props {
   labelScale: number;
   onCommit?: (id: string, edit: ComponentEdit) => boolean;
   onClose: () => void;
+  onToggleSwitch?: () => boolean;
 }
 
 export function InlineComponentEditor({
@@ -32,6 +35,7 @@ export function InlineComponentEditor({
   drawingScale,
   labelScale,
   onCommit,
+  onToggleSwitch,
   onClose: closeEditor,
 }: Props) {
   const editingDefinition = componentDefinitions[editingComponent.type];
@@ -82,9 +86,9 @@ export function InlineComponentEditor({
       }}
       onSubmit={(e) => {
         e.preventDefault();
-        const label = editing.label.trim();
+        const label = normalizeComponentLabel(editing.label);
         if (!label) {
-          setEditing({ ...editing, error: '이름을 입력하세요.' });
+          setEditing({ ...editing, error: '이름을 1~160자로 입력하세요.' });
           return;
         }
         const parsed = editingDefinition.property
@@ -142,6 +146,10 @@ export function InlineComponentEditor({
           </div>
         </>
       )}
+      {editingComponent.type === 'switch' && <>
+        <label htmlFor="inline-switch-state">상태</label>
+        <div><SwitchStateButton id="inline-switch-state" closed={editingComponent.properties.state==='closed'} onToggle={()=>{const applied=onToggleSwitch?.();setEditing(current=>({...current,error:applied?'':'이 회로에서는 스위치 상태를 바꿀 수 없습니다.'}));}}/></div>
+      </>}
       <div className="inline-edit-actions">
         <button className="primary" type="submit">
           적용

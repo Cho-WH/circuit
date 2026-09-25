@@ -1,7 +1,8 @@
+import { parseQuantity,storedFraction,formatQuantity } from '../src/quantity';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseQuantity, notationTokens, storedFraction, symbolGlyphs } from '../src/notation';
-import { htmlNotation, formatQuantity, componentValueInput, componentPresentation, svgNotation } from '../src/component-library';
+import { notationTokens, symbolGlyphs } from '../src/notation';
+import { htmlNotation, componentValueInput, componentPresentation, svgNotation } from '../src/component-library';
 import { validateDocument } from '../src/domain';
 import { createHistory, executeCommand, executeCommands, undo, redo } from '../src/editor';
 import { serializeDocument, parseDocument } from '../src/persistence';
@@ -73,12 +74,11 @@ describe('explicit fraction notation',()=>{
     expect(solveCircuit(compileCircuit(doc).circuit)).toEqual(solveCircuit(compileCircuit(numeric).circuit));
     const source=doc.components.find(c=>c.type==='dc-voltage-source')!;
     source.properties.voltageV=.75;source.properties.voltageVFraction='3/4';
-    r.properties.answerText='2/3 Ω';r.properties.answerDisplay='custom';
     doc.annotations.push({id:'fraction-note',kind:'note',content:'I = 5/6 A',anchor:null,position:{x:1200,y:900},visibility:'always'});
     const output=createSvgExport(doc);
-    expect(output.svg).toContain('aria-label="2/3"');expect(output.svg).toContain('aria-label="5/6"');
+    expect(output.svg).toContain('aria-label="3/4"');expect(output.svg).toContain('aria-label="5/6"');
     expect(output.bounds.y+output.bounds.height).toBeGreaterThan(912);
     const floor=createSvgExport(doc,{circuitOnly:true}).content;
-    expect(floor).toContain('aria-label="3/4"');expect(floor).not.toContain('aria-label="2/3"');expect(floor).not.toContain('NaN');
+    expect(floor).toContain('aria-label="3/4"');expect(floor).not.toContain('NaN');
   });
 });

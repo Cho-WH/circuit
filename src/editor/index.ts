@@ -1,4 +1,5 @@
-import { parseQuantity } from '../notation';
+import { normalizeComponentLabel } from '../domain';
+import { parseQuantity, isQuantityMode } from '../quantity';
 import {
   cloneDocument,
   diagnostic,
@@ -211,6 +212,7 @@ function applyCommand(
     case 'SetProperties': {
       const component = document.components.find((item) => item.id === command.id);
       if (!component) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.id])];
+      if('quantityMode' in command.properties&&!isQuantityMode(command.properties.quantityMode))return [diagnostic('INVALID_COMPONENT_VALUE',[component.id],'error',{property:'quantityMode'})];
       const diagnostics = invalidProperties(component, command.properties);
       if (diagnostics.length) return diagnostics;
       for (const key of ['resistanceOhm','voltageV']) {
@@ -223,7 +225,9 @@ function applyCommand(
     case 'SetLabel': {
       const component = document.components.find((item) => item.id === command.id);
       if (!component) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.id])];
-      component.label = command.label;
+      const label=normalizeComponentLabel(command.label);
+      if(label===null)return [diagnostic('INVALID_COMMAND',[command.id],'error',{command:command.type,reason:'label'})];
+      component.label = label;
       break;
     }
 
