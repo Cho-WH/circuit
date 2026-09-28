@@ -78,3 +78,11 @@
 
 
 MVP 완료 후 사용자는 서브 에이전트를 전부 중지하고, 이번 3D 개선은 메인이 직접 구현·코드 검증·브라우저 검증하도록 요청했다. 새 명시적 요청 전까지 서브 에이전트를 호출하지 않는다.
+
+## 9. Git 커밋·푸시 계정
+
+- 원격 저장소: `https://github.com/Cho-WH/circuit.git` (`origin`).
+- 커밋 작성자: `Cho-WH <cwhd@naver.com>`. 작성자 설정이 필요하면 이 저장소의 로컬 Git 설정에만 적용하고 전역 설정은 바꾸지 않는다.
+- GitHub 푸시 인증 계정: `Cho-WH`. 커밋 작성자와 푸시 인증 계정은 별도로 확인한다.
+- 기본 활성 계정이 `WoongTs`이면 이 저장소의 푸시가 403으로 거절될 수 있다. `gh auth status`에서 기존 `Cho-WH` 로그인을 확인하고 해당 자격 증명을 사용한다.
+- 계정 선택은 해당 푸시 프로세스에만 한정한다. PowerShell에서 `gh auth token --hostname github.com --user Cho-WH`의 결과를 출력 없이 임시 `GH_TOKEN`에 넣고, `git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin <현재 브랜치>`를 실행한다. 기존 `GH_TOKEN`은 `finally`에서 복원한다. 토큰을 파일·문서·로그에 기록하지 않고 기본 활성 계정이나 전역 credential helper를 변경하지 않는다.
