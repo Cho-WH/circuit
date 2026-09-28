@@ -34,6 +34,8 @@ interface ComponentDefinition<TProps> {
 
 ## 계산 엔진 확장
 
+전류·소자 상태의 표시 확장은 [ADR-020](../../decisions/ADR-020-current-visualization.md)을 따른다. 새 소자는 `hasCurrentBridge`의 명시적 표시 정책을 정의해야 한다. 축전기·다이오드에 저항의 연속 경로를 자동 적용하지 않는다. 과도 해석의 전류·전압·축적 전하는 같은 물리 시각의 결과이며 표시용 애니메이션에서 적분하지 않는다. 현재 구현에는 과도 엔진이나 미지원 소자 타입을 미리 추가하지 않는다.
+
 UI는 `SimulationEngine`만 사용한다.
 
 ```ts

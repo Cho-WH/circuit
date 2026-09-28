@@ -27,6 +27,7 @@ const uiAndBrowserModules = new Set([
   'measurement',
   'visualization',
   'potential-3d',
+  'current-view',
   'export',
   'persistence',
   'shared-ui',

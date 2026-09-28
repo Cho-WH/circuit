@@ -277,7 +277,7 @@ export function createSvgExport(
 
   const crossings=wireCrossings(document);
   for (const wire of document.wires) {
-    chunks.push(`<path d="${wirePath(document, wire, crossings)}" fill="none" stroke="${colors.ink}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`);
+    chunks.push(`<path d="${wirePath(document, wire, crossings)}" data-export-wire="${escapeXml(wire.id)}" fill="none" stroke="${colors.ink}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`);
   }
 
   for (const component of document.components) {

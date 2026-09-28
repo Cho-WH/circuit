@@ -5,6 +5,7 @@ import './potential-workspace.css';
 export type PotentialWorkspaceStatus = '2d' | 'preparing' | 'entering' | 'ready' | 'failed';
 export interface PotentialWorkspaceProps extends Potential3DProps {
   active: boolean;
+  overlayControls?: ReactNode;
   children: ReactNode;
   onReturnTo2D: () => void;
   onStatusChange?: (status: PotentialWorkspaceStatus) => void;
@@ -40,7 +41,7 @@ function SceneAttempt({ onState, ...props }: Potential3DProps & { onState: (stat
     onEntered={() => { if (live.current) latest.current('ready'); }} onError={failure}/>}</SceneBoundary>;
 }
 
-export function PotentialWorkspace({ active, children, onReturnTo2D, onStatusChange, ...scene }: PotentialWorkspaceProps) {
+export function PotentialWorkspace({ active, children, overlayControls, onReturnTo2D, onStatusChange, ...scene }: PotentialWorkspaceProps) {
   const [state, setState] = useState<{ document: Potential3DProps['document']; status: PotentialWorkspaceStatus }>({ document: scene.document, status: 'preparing' });
   const [attempt, setAttempt] = useState(0), [waiting, setWaiting] = useState(false);
   const documentKey = useMemo(() => ++revision, [scene.document]);
@@ -63,6 +64,7 @@ export function PotentialWorkspace({ active, children, onReturnTo2D, onStatusCha
     {active && status !== 'failed' && <div className="potential-workspace-3d" aria-hidden={!showing || undefined} inert={!showing || undefined} style={{ visibility: showing ? 'visible' : 'hidden' }}>
       <SceneAttempt key={`${documentKey}:${attempt}`} {...scene} onState={next => setState({ document: scene.document, status: next })}/>
     </div>}
+    {overlayControls}
     {active && status === 'preparing' && waiting && <div className="potential-preparation" role="status"><span>3D를 준비하고 있어요</span><button onClick={onReturnTo2D}>취소</button></div>}
     {status === 'failed' && <div className="potential-preparation potential-failure" role="status"><span>3D를 열지 못했어요</span><button onClick={() => { setState({ document: scene.document, status: 'preparing' }); setAttempt(value => value + 1); }}>다시 시도</button><button onClick={onReturnTo2D}>2D 보기</button></div>}
   </div>;

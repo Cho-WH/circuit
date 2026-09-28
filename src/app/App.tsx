@@ -60,6 +60,7 @@ import { CircuitCanvas } from './CircuitCanvas';
 import { ComponentPalette, type PaletteDrag } from './ComponentPalette';
 import {
   buildPotentialModel,
+  buildCurrentModel,
   defaultPotentialPalette,
   makePath,
   suggestPaths,
@@ -77,7 +78,8 @@ import { PotentialSettings, defaultPotentialSettings } from './PotentialSettings
 import { QuickStartDialog } from './QuickStartDialog';
 import { FileMenu } from './FileMenu';
 import { FeedbackLoading } from './FeedbackLoading';
-import { PotentialWorkspace } from './PotentialWorkspace';
+import { PotentialWorkspace, type PotentialWorkspaceStatus } from './PotentialWorkspace';
+import { CurrentControls, CurrentSettings, useCurrentDisplay } from './CurrentControls';
 import { useVisibleViewport } from './useVisibleViewport';
 import './styles.css';
 import './ux.css';
@@ -132,6 +134,7 @@ export function App() {
   const [help, setHelp] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [potentialView, setPotentialView] = useState<'2d' | '3d'>('2d');
+  const [potentialStatus, setPotentialStatus] = useState<PotentialWorkspaceStatus>('2d');
   const [showGraph, setShowGraph] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [focusIds, setFocusIds] = useState<string[]>([]);
@@ -180,6 +183,8 @@ export function App() {
   const valueInput = useRef<HTMLInputElement>(null);
   const idCounter = useRef(1);
   const { compilation, result } = useMemo(() => analyze(doc), [doc]);
+  const currents = useMemo(() => buildCurrentModel(doc, compilation, result), [doc, compilation, result]);
+  const { display: currentDisplay, setPaused: setCurrentPaused, setWidthScale: setCurrentWidthScale } = useCurrentDisplay(currents);
   const potential = useMemo(
     () =>
       buildPotentialModel(doc, compilation.circuit, result, {
@@ -382,6 +387,7 @@ export function App() {
     }
     if (mode === 'potential') {
       setSelectedNet(compilation.circuit.endpointToNet[endpoint.id]);
+      setSelected([]);
       return;
     }
   }
@@ -395,7 +401,10 @@ export function App() {
     }
     if (mode === 'potential') {
       const wire = doc.wires.find((w) => w.id === id);
-      if (wire) setSelectedNet(compilation.circuit.endpointToNet[wire.start.id]);
+      if (wire) {
+        setSelectedNet(compilation.circuit.endpointToNet[wire.start.id]);
+        setSelected([id]);
+      }
       return;
     }
     setSelected([id]);
@@ -472,6 +481,7 @@ export function App() {
       setHovered(id);
       return;
     }
+    if (mode === 'potential') setSelectedNet(null);
     if (mode === 'worksheet' && id && window.matchMedia('(min-width: 641px)').matches)
       setDetailsOpen(true);
     setSelected(
@@ -591,7 +601,7 @@ export function App() {
       }
       tool={mode === 'measure' && tool === 'select' ? 'probe' : tool}
       placement={placement}
-      currentArrows={mode === 'potential' && showCurrent ? result.branchCurrents : undefined}
+      currentDisplay={mode === 'potential' && showCurrent && !(potentialView === '3d' && (potentialStatus === 'entering' || potentialStatus === 'ready')) ? currentDisplay : undefined}
       endpointColors={
         mode === 'measure'
           ? measurementKind === 'current'
@@ -888,17 +898,13 @@ export function App() {
                 />
                 숫자
               </label>
-              <label
-                className="potential-current"
-                aria-hidden={potentialView === '3d' || undefined}
-              >
+              <label className="potential-current">
                 <input
                   type="checkbox"
-                  disabled={potentialView === '3d'}
                   checked={showCurrent}
                   onChange={(e) => setShowCurrent(e.target.checked)}
                 />
-                전류 화살표
+                전류 흐름
               </label>
               {
                 <button
@@ -954,6 +960,8 @@ export function App() {
           </div>
           {mode === 'potential' ? (
             <PotentialWorkspace
+              overlayControls={showCurrent ? <CurrentControls paused={currentDisplay.paused} onPause={setCurrentPaused}/> : undefined}
+              onStatusChange={setPotentialStatus}
               active={potentialView === '3d'}
               sourceView={
                 canvasView.current?.documentId === doc.documentId
@@ -963,6 +971,7 @@ export function App() {
               onReturnTo2D={() => setPotentialView('2d')}
               document={doc}
               potential={potential}
+              currentDisplay={showCurrent ? currentDisplay : undefined}
               selectedIds={selected}
               highlightedId={hovered}
               selectedNet={selectedNet}
@@ -1168,6 +1177,7 @@ export function App() {
             />
           )}
 
+          {mode === 'potential' && showCurrent && <CurrentSettings document={doc} display={currentDisplay} selectedId={selected[0]} onWidthScale={setCurrentWidthScale}/>}
           <div hidden={mode === 'worksheet'}>
             {component && definition ? (
               <>

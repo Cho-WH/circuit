@@ -8,7 +8,7 @@ import type { CircuitDocument } from '../src/domain';
 import { Potential3D, type Potential3DProps } from '../src/potential-3d';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
-import { buildPotentialModel } from '../src/visualization';
+import { buildCurrentModel, buildPotentialModel } from '../src/visualization';
 
 const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
 vi.mock('three', async importOriginal => {
@@ -62,6 +62,33 @@ async function advanceFrame(now: number) {
 }
 
 describe('3D prepared first frame and camera lifetime', () => {
+  it('owns the current overlay through height edits, toggle, pause, and disposal',async()=>{
+    const {circuit,compiled,update}=await mount();
+    await act(async()=>resolveFont());await act(async()=>images[0].onload!());await advanceFrame(performance.now()+2000);
+    const result=solveCircuit(compiled),model=buildCurrentModel(circuit,compileCircuit(circuit),result);
+    const currentDisplay={model,scaleAmperes:model.maxMagnitude,widthScale:1,paused:false};
+    const floorBefore = (observed.render.mock.lastCall![0] as THREE.Scene).children[0].children[0];
+    const imageCount = images.length;
+    await update({currentDisplay});expect(host.querySelectorAll('.current-flow-overlay')).toHaveLength(1);
+    const width=host.querySelector('[data-current-id="R1"] .current-flow-band')?.getAttribute('stroke-width');
+    expect(width).toBe('14');
+    const [scene] = observed.render.mock.lastCall as [THREE.Scene,THREE.Camera];
+    expect(scene.children[0].children[0]).toBe(floorBefore);
+    expect(images).toHaveLength(imageCount);
+    const wireMeshes:THREE.Mesh[]=[];
+    scene.traverse(object=>{if(object.userData.id==='W1' && (object as THREE.Mesh).isMesh)wireMeshes.push(object as THREE.Mesh);});
+    expect(wireMeshes.length).toBeGreaterThan(0);
+    expect(wireMeshes.every(mesh=>(mesh.material as THREE.Material).opacity===0)).toBe(true);
+
+    await update({potential:buildPotentialModel(circuit,compiled,result,{scale:40}),currentDisplay:{...currentDisplay,paused:true}});
+    expect(host.querySelector('[data-current-id="R1"] .current-flow-band')?.getAttribute('stroke-width')).toBe(width);
+    expect(host.querySelector('.current-flow-overlay')?.getAttribute('data-motion')).toBe('paused');
+    await update({currentDisplay:undefined});expect(host.querySelector('.current-flow-overlay')).toBeNull();
+    expect(scene.children[0].children[0]).toBe(floorBefore);
+    expect(images).toHaveLength(imageCount);
+    expect(observed.frames.size).toBe(0);
+    await update({currentDisplay});await act(async()=>root.render(null));expect(observed.frames.size).toBe(0);
+  });
   it('selects labels only on a single stationary pointer or keyboard activation',async()=>{
     reduced=true;const {update}=await mount(),select=vi.fn();await update({onSelect:select});
     await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());await advanceFrame(performance.now()+2000);

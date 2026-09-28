@@ -57,20 +57,39 @@ export function wireCrossings(document: CircuitDocument): WireCrossing[] {
   }
   return crossings.sort((a,b)=>a.point.x-b.point.x || a.point.y-b.point.y || a.horizontalId.localeCompare(b.horizontalId));
 }
-/** Horizontal wires bridge vertical wires. No opaque mask, including transparent PNG/SVG. */
-export function wirePath(document: CircuitDocument, wire: Wire, crossings = wireCrossings(document)): string {
+function wireRoute(document: CircuitDocument, wire: Wire, crossings: WireCrossing[]) {
   const points = compactWirePoints(wirePoints(document, wire));
-  let path = `M${points[0].x} ${points[0].y}`;
+  const sections: { end: Point; radius?: number; direction?: number }[] = [];
   for (let i=0;i<points.length-1;i++) {
     const a=points[i], b=points[i+1], direction=Math.sign(b.x-a.x);
     const hits = [...new Set(crossings.filter(c=>c.horizontalId===wire.id && c.horizontalSegment===i).map(c=>c.point.x))].sort((x,y)=>direction*(x-y));
     hits.forEach((x,j)=>{
       const radius=Math.min(7,Math.abs(x-a.x)/2,Math.abs(x-b.x)/2,j?Math.abs(x-hits[j-1])/3:7,j<hits.length-1?Math.abs(x-hits[j+1])/3:7);
-      path+=` L${x-direction*radius} ${a.y} A${radius} ${radius} 0 0 ${direction>0?1:0} ${x+direction*radius} ${a.y}`;
+      sections.push({end:{x:x-direction*radius,y:a.y}}, {end:{x:x+direction*radius,y:a.y},radius,direction});
     });
-    path+=` L${b.x} ${b.y}`;
+    sections.push({end:b});
   }
-  return path;
+  return {start:points[0],sections};
+}
+/** Horizontal wires bridge vertical wires. No opaque mask, including transparent PNG/SVG. */
+export function wirePath(document: CircuitDocument, wire: Wire, crossings = wireCrossings(document)): string {
+  const {start,sections}=wireRoute(document,wire,crossings);
+  return `M${start.x} ${start.y}`+sections.map(({end,radius,direction})=>radius!==undefined?` A${radius} ${radius} 0 0 ${direction!>0?1:0} ${end.x} ${end.y}`:` L${end.x} ${end.y}`).join('');
+}
+/** The same display bridges sampled for projection/flow, without inferring connectivity. */
+export function wireDisplayPoints(document:CircuitDocument,wire:Wire,crossings=wireCrossings(document)):Point[] {
+  const {start,sections}=wireRoute(document,wire,crossings), points=[start];
+  for(const section of sections) {
+    if(section.radius!==undefined) {
+      const {end,radius,direction}=section,center=end.x-direction!*radius;
+      for(let step=1;step<12;step++) {
+        const t=step/12;
+        points.push({x:center-direction!*radius*Math.cos(t*Math.PI),y:end.y-radius*Math.sin(t*Math.PI)});
+      }
+    }
+    points.push(section.end);
+  }
+  return points;
 }
 export function endpointName(document: CircuitDocument, id: string): string {
   for (const c of document.components) {

@@ -1,6 +1,8 @@
 import { InlineComponentEditor, type ComponentEdit } from './InlineComponentEditor';
 import { SvgNotation } from './Notation';
 import { PlacementFailure } from './PlacementFailure';
+import { CanvasCurrentLayer } from './CanvasCurrentLayer';
+import type { CurrentDisplay } from '../visualization';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   useCanvasDragSession,
@@ -77,7 +79,7 @@ export interface CanvasProps {
   highlightedEndpoints?: string[];
   highlightedElements?: string[];
   onHoverElement?: (id: string | null) => void;
-  currentArrows?: Record<string, number>;
+  currentDisplay?: CurrentDisplay;
   measurement?: Omit<MeasurementLayerProps, 'document' | 'scale' | 'bounds' | 'point'>;
   largeLabels?: boolean;
 }
@@ -863,6 +865,7 @@ export function CircuitCanvas(props: CanvasProps) {
           <g key={w.id} className="wire-element">
             <path
               className="wire-ink"
+              visibility={props.currentDisplay ? 'hidden' : undefined}
               d={wirePath(effective, w, crossings)}
               fill="none"
               stroke={
@@ -1014,23 +1017,6 @@ export function CircuitCanvas(props: CanvasProps) {
                   />
                 </g>
               </g>
-              {props.currentArrows?.[c.id] !== undefined && props.currentArrows[c.id] !== 0 && (
-                <g
-                  transform={`translate(${c.position.x},${c.position.y}) rotate(${c.rotation})`}
-                  stroke="#70828f"
-                  strokeWidth={Math.min(4, 1 + Math.sqrt(Math.abs(props.currentArrows[c.id])))}
-                  fill="none"
-                  pointerEvents="none"
-                >
-                  <path
-                    d={
-                      props.currentArrows[c.id] > 0
-                        ? 'M-20 24H20 M13 19L20 24 13 29'
-                        : 'M20 24H-20 M-13 19L-20 24 -13 29'
-                    }
-                  />
-                </g>
-              )}
               <SvgNotation
                 opacity={isolated ? 0.35 : undefined}
                 x={textLayout.label.x}
@@ -1311,6 +1297,7 @@ export function CircuitCanvas(props: CanvasProps) {
         )}
         {placement && placementFailure && <PlacementFailure key={placementFailure.attempt} point={placementFailure.point} scale={drawingScale}/>}
       </svg>
+      {props.currentDisplay&&<CanvasCurrentLayer document={effective} source={svg} display={props.currentDisplay} view={view} colors={props.endpointColors}/>}
       {componentChoices.length > 0 && (
         <div className="touch-choice-list" aria-label="겹친 부품 선택">
           <span>부품을 선택한 뒤 이동·이름·값을 조절하세요</span>

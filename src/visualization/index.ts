@@ -1,6 +1,10 @@
 import type { CircuitDocument, CompiledCircuit, SimulationResult } from '../domain';
 import { endpointPosition, wirePoints } from '../component-library';
 import { potentialColor, type PotentialPaletteId } from './palettes';
+export { buildCurrentModel, currentBand, currentFullWidth, type CurrentModel, type CurrentSample, type CurrentValue, type CurrentDisplay } from './current';
+export { buildCurrentPaths, hasCurrentBridge, type CurrentPath, type CurrentPoint } from './current-paths';
+export { flowMarks, flowSpeed, flowSpacing, flowLength, currentSpacing, flowJunctionOpacity, flowJunctionRadius, type FlowMark, type FlowViewport } from './flow-geometry';
+export { buildCurrentTracks, type CurrentTrack, type ProjectedCurrentPath } from './current-tracks';
 export { defaultPotentialPalette, potentialPalettes, potentialPalette, potentialColorStops, potentialColor, potentialGradient, type PotentialPaletteId } from './palettes';
 
 export interface PotentialValue { netId: string; voltage?: number; color: string; height?: number; endpointIds: string[]; wireIds: string[] }

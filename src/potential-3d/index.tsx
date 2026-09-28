@@ -1,17 +1,20 @@
 import { formatQuantity as formatSIQuantity, quantityFormatFor, defaultQuantityFormat, type QuantityFormatOptions } from '../quantity';
 // @refresh reset
 // The imperative WebGL runtime must not retain old render closures across code updates.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
-import type { PotentialModel } from '../visualization';
+import { buildCurrentPaths, type CurrentDisplay, type PotentialModel } from '../visualization';
+import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
+import { projectCurrentPaths } from './current-projection';
 import { htmlNotation, terminalPosition } from '../component-library';
 import { exportSvg } from '../export';
 import { sceneAnchors, sceneExtent, selectedVoltage } from './model';
 import './styles.css';
 export { voltageTicks, sceneAnchors, sceneExtent, selectedVoltage } from './model';
+export { projectCurrentPaths } from './current-projection';
 
 export interface Potential3DProps {
   quantityFormat?: QuantityFormatOptions;
@@ -23,6 +26,7 @@ export interface Potential3DProps {
   selectedNet?: string | null;
   showNumbers: boolean;
   showColors: boolean;
+  currentDisplay?: CurrentDisplay;
   onSelect?: (id: string) => void;
   sourceView?: { x: number; y: number; width: number; height: number };
   entryDuration?: number;
@@ -54,6 +58,7 @@ interface Runtime {
   floorReady: boolean;
   modelReady: boolean;
   ready: boolean;
+  currentOverlay: CurrentOverlay | null;
 }
 const point = (p: { x: number; y: number; z: number }) => new THREE.Vector3(p.x, -p.y, p.z);
 function dispose(group: THREE.Object3D) {
@@ -71,9 +76,9 @@ function line(group: THREE.Group, points: THREE.Vector3[], color: string, dashed
   group.add(object);
   return object;
 }
-function tube(group: THREE.Group, a: THREE.Vector3, b: THREE.Vector3, color: string, radius: number, id: string) {
+function tube(group: THREE.Group, a: THREE.Vector3, b: THREE.Vector3, color: string, radius: number, id: string, visible = true) {
   if (a.distanceTo(b) < .001) return;
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, a.distanceTo(b), 8), new THREE.MeshBasicMaterial({ color }));
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, a.distanceTo(b), 8), new THREE.MeshBasicMaterial({ color, transparent:!visible, opacity:visible?1:0, depthWrite:visible }));
   mesh.position.copy(a).add(b).multiplyScalar(.5);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
   mesh.userData.id = id;
@@ -147,6 +152,9 @@ export function Potential3D(props: Potential3DProps) {
   const formatQuantity=(value:number|undefined,unit:string)=>formatSIQuantity(value,unit,quantityFormat);
   const { document: circuit, potential, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors } = props;
   const host = useRef<HTMLDivElement>(null), overlay = useRef<HTMLDivElement>(null);
+  const currentHost = useRef<HTMLDivElement>(null);
+  const currentPaths = useMemo(() => props.currentDisplay ? buildCurrentPaths(circuit, props.currentDisplay.model, potential, showColors ? Object.fromEntries(Object.entries(potential.endpoints).map(([id,value])=>[id,value.color])) : undefined) : [], [circuit, props.currentDisplay?.model, potential, showColors]);
+  const latestCurrentPaths = useRef(currentPaths); latestCurrentPaths.current = currentPaths;
   const runtime = useRef<Runtime | null>(null), latest = useRef(props);
   latest.current = props;
   const [fallback, setFallback] = useState(false);
@@ -175,9 +183,14 @@ export function Potential3D(props: Potential3DProps) {
     controls.enableDamping = false; controls.screenSpacePanning = true; controls.minZoom = .3; controls.maxZoom = 8;
     const floor = new THREE.Group(), content = new THREE.Group(), raised = new THREE.Group();
     content.add(raised); scene.add(floor, content);
-    const r: Runtime = { scene, camera, renderer, controls, floor, content, raised, labels: [], bounds: new THREE.Box3(new THREE.Vector3(-100,-100,0), new THREE.Vector3(100,100,100)), width: 1, height: 1, frustum: 500, frame: 0, progress: 1, preset: 'oblique', floorReady: false, modelReady: false, ready: false, render: () => {}, stop: () => {}, begin: () => {} };
+    const r: Runtime = { scene, camera, renderer, controls, floor, content, raised, labels: [], bounds: new THREE.Box3(new THREE.Vector3(-100,-100,0), new THREE.Vector3(100,100,100)), width: 1, height: 1, frustum: 500, frame: 0, progress: 1, preset: 'oblique', floorReady: false, modelReady: false, ready: false, render: () => {}, stop: () => {}, begin: () => {}, currentOverlay: null };
     r.render = () => {
       renderer.render(scene, camera);
+      const current = latest.current.currentDisplay;
+      if (current && r.currentOverlay) {
+        const viewport = { width: r.width, height: r.height };
+        r.currentOverlay.update(projectCurrentPaths(latestCurrentPaths.current, camera, viewport, r.progress), viewport, current, r.ready);
+      }
       const hostRect = element.getBoundingClientRect();
       const occupied = [...(element.closest('.potential-scene')?.querySelectorAll('.scene-toolbar,.scene-footer,.scene-selection') ?? [])].map(item => {
         const rect = item.getBoundingClientRect();
@@ -267,6 +280,7 @@ export function Potential3D(props: Potential3DProps) {
       cancelAnimationFrame(r.frame); observer.disconnect(); controls.removeEventListener('change',r.render); controls.removeEventListener('start',interrupt); controls.dispose();
       controlSurface.removeEventListener('pointerdown',down); controlSurface.removeEventListener('pointermove',move); controlSurface.removeEventListener('pointercancel',cancel); controlSurface.removeEventListener('lostpointercapture',cancel); controlSurface.removeEventListener('pointerup',up); renderer.domElement.removeEventListener('webglcontextlost',lost); window.removeEventListener('blur',blur);
       dispose(r.floor); dispose(r.content); renderer.dispose(); renderer.domElement.remove();
+      r.currentOverlay?.dispose(); r.currentOverlay = null;
       labelHost?.replaceChildren(); r.labels = []; runtime.current = null;
     };
   }, []);
@@ -360,7 +374,8 @@ export function Potential3D(props: Potential3DProps) {
     for (const segment of potential.segments) {
       const active = selectedIds.includes(segment.id) || highlightedId===segment.id || Boolean(selectedNet && potential.nets[selectedNet]?.wireIds.includes(segment.id));
       const color = active ? '#53694b' : showColors ? segment.color : '#667060';
-      segment.points.slice(1).forEach((p,i) => tube(r.raised,point(segment.points[i]),point(p),color,radius*(active?1.65:1),segment.id));
+      // Transparent meshes retain hit testing while current bands own the visible path.
+      segment.points.slice(1).forEach((p,i) => tube(r.raised,point(segment.points[i]),point(p),color,radius*(active?1.65:1),segment.id,!props.currentDisplay));
     }
     for (const anchor of sceneAnchors(circuit,potential)) {
       const net = potential.nets[anchor.id];
@@ -369,6 +384,7 @@ export function Potential3D(props: Potential3DProps) {
       if (guides && anchor.z!==0) line(r.raised,[new THREE.Vector3(pos.x,pos.y,0),pos],'#929d88',true,.65);
       const dot = new THREE.Mesh(new THREE.SphereGeometry(radius*2,12,8),new THREE.MeshBasicMaterial({color:showColors?anchor.color:'#667060'}));
       dot.position.copy(pos); if(owner) dot.userData.id=owner; r.raised.add(dot);
+      if(props.currentDisplay) { dot.material.transparent=true; dot.material.opacity=0; dot.material.depthWrite=false; }
       if(showNumbers) addLabel(`net:${anchor.id}`,formatQuantity(anchor.voltage,'V'),pos,'net-tag',true,3,owner);
     }
     // All terminals remain visible, including the two disconnected ends of an open switch.
@@ -377,6 +393,7 @@ export function Potential3D(props: Potential3DProps) {
       if(net?.height===undefined) continue;
       const dot=new THREE.Mesh(new THREE.SphereGeometry(radius*1.3,8,6),new THREE.MeshBasicMaterial({color:showColors?net.color:'#667060'}));
       dot.position.copy(point({...p,z:net.height})); dot.userData.id=c.id; r.raised.add(dot);
+      if(props.currentDisplay) { dot.material.transparent=true; dot.material.opacity=0; dot.material.depthWrite=false; }
     }
     for (const c of circuit.components) {
       const ends = c.terminals.slice(0,2).map(t=>potential.endpoints[t.id]?.height);
@@ -396,14 +413,23 @@ export function Potential3D(props: Potential3DProps) {
     r.labels = nextLabels;
     r.modelReady = true;
     if (!r.ready) r.begin(); else r.render();
-  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat]);
+  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay)]);
+
+  useEffect(() => {
+    const r = runtime.current;
+    if (!r || !props.currentDisplay || !currentHost.current || fallback) return;
+    const flow = createCurrentOverlay(currentHost.current);
+    r.currentOverlay = flow; r.render();
+    return () => { flow.dispose(); if (r.currentOverlay === flow) r.currentOverlay = null; };
+  }, [Boolean(props.currentDisplay), fallback]);
+  useEffect(() => { runtime.current?.render(); }, [props.currentDisplay, currentPaths]);
 
   const choose = (value: Preset, reset = false) => { const r=runtime.current; if(r?.ready) {moveCamera(r,value,reset);setPreset(value);} };
   return <section className="potential-scene" aria-label="3D 전위 높이 보기">
     <header className="potential-scene-header"><div className="scene-toolbar" aria-label="3D 카메라 보기">
       <button aria-pressed={preset==='oblique'} onClick={()=>choose('oblique')}><MoveUpRight size={14}/>사선</button><button aria-pressed={preset==='front'} onClick={()=>choose('front')}><ScanLine size={14}/>정면</button><button aria-pressed={preset==='top'} onClick={()=>choose('top')}><Layers3 size={14}/>위에서</button><span className="scene-divider"/><button aria-label="높이 안내선" aria-pressed={guides} onClick={()=>setGuides(!guides)}>{guides?<Eye size={15}/>:<EyeOff size={15}/>}</button><button aria-label="보기 초기화" onClick={()=>choose('oblique',true)}><RotateCcw size={14}/></button>
     </div></header>
-    <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="potential-labels" ref={overlay}/>
+    <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="current-flow-host" ref={currentHost}/><div className="potential-labels" ref={overlay}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
     <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number((potential.scale/18).toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>

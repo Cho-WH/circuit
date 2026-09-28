@@ -401,18 +401,38 @@ requirements:
   state: accepted
   priority: SHOULD
   phase: 3
-  statement: 전류 방향과 크기를 화살표로 표시한다.
+  statement: 2D와 3D에서 기존 도선 대신 진한 반투명 비례 띠와 전류에 따른 밀도의 등속 흐름 무늬를 표시한다.
   acceptance:
   - 전위 표현과 시각적으로 구분된다.
-  - 애니메이션의 의미를 설명한다.
+  - 부품과 도선 구간별 전류를 공유하며 분기 전후 크기와 부호를 보존한다.
+  - 화면 투영 후 호 길이로 무늬를 등속 이동시켜 저항 경사에서 가속되지 않는다.
+  - 무늬 간격은 상대 전류에 반비례하고 속도는 일정하다. 직렬 도선·부품 경계를 연속 통과하며 실제 캐리어 밀도나 물리적 지연을 계산하지 않는다.
+  - 분기·합류 접점의 짧은 구간에서만 무늬를 페이드한다. 가지별 등간격·속도·위상은 유지하며 화면상 겹침만으로 접점을 만들지 않는다.
+  - 축척은 해석 결과의 최대 전류로 자동 조절하고 상세 설정에서 두께 배율을 조절한다. 0 A·미세 비영 전류·미정·계산 실패를 구분한다.
+  - 열린 소자와 미지원 소자에 임의 전도 경로를 만들지 않는다.
+  - 일시 정지·움직임 감소·숨겨진 화면·해제 시 애니메이션을 중지한다.
+  - 전류 띠는 기존 전위 색상·팔레트·색상 표시 토글을 유지한다.
+  - 3D 바닥 회로도는 전류 모드에서도 기존 도선을 유지한다.
+  - 상단 설명 밴드와 축척 맞춤 버튼을 두지 않고 화면 내부 왼쪽 상단에 일시 정지 버튼만 둔다.
   modules:
   - visualization
-  physics_rules: []
+  - current-view
+  - potential-3d
+  physics_rules:
+  - CV-01
+  - CV-02
+  - CV-03
+  - CV-04
+  - CV-05
   fixtures:
   - FIX-02
   - FIX-03
   - FIX-04
-  docs: []
+  - FIX-05
+  - FIX-07
+  docs:
+  - docs/physics/current-visualization.md
+  - decisions/ADR-020-current-visualization.md
 - id: VIS-007
   title: 색상 범위 전환
   state: accepted

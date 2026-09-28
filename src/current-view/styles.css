@@ -1,0 +1,39 @@
+.current-flow-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.current-flow-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+.current-flow-band {
+  fill: none;
+  stroke: #273441;
+  stroke-opacity: 0.66;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.current-flow-mark {
+  fill: #fff;
+  stroke: #273441;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+.current-flow-unknown {
+  fill: none;
+  stroke: #68747e;
+  stroke-width: 2;
+  stroke-dasharray: 2 6;
+}
+.current-flow-overflow {
+  fill: none;
+  stroke: #273441;
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+}

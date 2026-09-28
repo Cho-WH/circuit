@@ -16,6 +16,7 @@
 | `measurement` | 측정 도구를 질의나 임시 회로 요소로 변환 | 원본 문서의 몰래 영구 변경 |
 | `visualization` | `SimulationResult`를 2D 레이어로 변환 | 재계산 수행 |
 | `potential-3d` | 2D 위치와 전위를 3D 장면으로 변환 | 회로 해석 직접 수행 |
+| `current-view` | 2D·3D가 투영한 화면 경로에 비례 띠·방향 무늬를 표시하고 표시용 프레임 수명을 관리 | 회로 해석·전하 적분·React·Three.js 의존 |
 | `export` | 공통 기호 자원에서 인쇄용 SVG·PNG 생성 | 화면 캡처에 의존 |
 | `persistence` | 자동 저장, 파일 입출력, domain 검증·버전 변환 사용 | 계산 결과를 정답으로 저장 |
 | `feedback` | 후기 타입, 입력 정책, 일반·관리자 게이트웨이 계약 | React, 브라우저, Firebase SDK, 회로 문서 결합 |
@@ -97,6 +98,10 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 `component-library`의 공통 표기와 `export`의 SVG·PNG·클립보드 함수 및 옵션은 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)에 모았다. `domain`의 `Exporter<TOptions>`는 확장용 인터페이스이며 앱은 현재 `exportSvg`, `exportPng`, `copyPng` 함수를 사용한다.
 
 ## 의존성 규칙
+
+전류 표시는 [ADR-020](../../decisions/ADR-020-current-visualization.md)을 따른다. `visualization.buildCurrentModel(document, compilation, result)`은 measurement의 공개 `probeCurrent` 결과를 `CurrentModel`로 정리한다. `buildCurrentPaths(document, model, potential?, colors?)`는 별도 기하 변환이다. `current-view.createCurrentOverlay(host)`는 `update(projectedPaths, viewport, display, active?)`와 `dispose()`를 제공한다. `buildCurrentTracks`는 단자 ID를 기준으로 직렬 구간을 이어 무늬 위상을 공유한다. `CurrentDisplay`의 축척은 최대 전류에서 자동 계산하고 두께 배율·일시 정지는 문서 밖 UI 상태다. 2D는 SVG CTM, 3D는 `projectCurrentPaths`로 CSS 픽셀 경로를 만들어 같은 표시기에 전달한다. SVG 요소는 ID로 재사용하고, 시점 이동 중 점의 선분 내 위치를 재투영한다. 이동 종료 후 한 번의 교차 전환으로 화면 간격을 맞춘다. 그림의 길이나 무늬 시계가 물리 결과를 바꾸지 않는다.
+
+`CurrentTrack.startJunction`과 `endJunction`은 실제 분기·합류 끝점 ID를 선택적으로 전달한다. `flowJunctionOpacity`는 투영된 경로의 끝점까지 거리에 따른 투명도만 반환하며 점의 위치·위상을 바꾸지 않는다. 공통 표시기는 접점 DOM도 ID로 재사용하고 전위색을 적용한다. 바닥 회로도 텍스처는 전류 표시 상태와 독립적이다.
 
 - `domain`은 다른 기능 모듈을 import하지 않는다.
 - `connectivity`와 `simulation`은 UI 모듈을 import하지 않는다.
