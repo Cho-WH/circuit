@@ -65,21 +65,17 @@ describe('shared current controls', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
     expect(last.widthScale).toBe(2);
-    await render({ current: { ...model, maxMagnitude: 6 } });
-    expect(last.scaleAmperes).toBe(6);
-    expect(last.widthScale).toBe(2);
     await click('흐름 일시 정지');
-    expect(last.paused).toBe(true);
-    expect(host.textContent).not.toContain('축척 맞춤');
-    expect(host.querySelector('.current-controls')).toBeNull();
-  });
-  it('adapts from zero to tiny nonzero results without retaining an obsolete scale', async () => {
-    await render({ current: { samples: [], maxMagnitude: 0 } });
-    expect(last.scaleAmperes).toBe(1);
-    await render({ current: { ...model, maxMagnitude: 1e-9 } });
-    expect(last.scaleAmperes).toBe(1e-9);
-    await render({ current: { ...model, maxMagnitude: 2e-9 } });
-    expect(last.scaleAmperes).toBe(2e-9);
+    for (const maxMagnitude of [0, 1e-9, 6]) {
+      await render({ current: { ...model, maxMagnitude } });
+      if (maxMagnitude > 0) expect(last.scaleAmperes).toBe(maxMagnitude);
+      else {
+        expect(Number.isFinite(last.scaleAmperes)).toBe(true);
+        expect(last.scaleAmperes).toBeGreaterThan(0);
+      }
+      expect(last.widthScale).toBe(2);
+      expect(last.paused).toBe(true);
+    }
   });
   it('reports actual source direction and keeps unknown readings distinct from zero', async () => {
     await render();

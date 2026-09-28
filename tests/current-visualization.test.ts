@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { OrthographicCamera, Vector3 } from 'three';
-import type { CircuitDocument, ComponentInstance } from '../src/domain';
+import type { CircuitDocument, ComponentInstance, Point } from '../src/domain';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { wireCrossings, wireDisplayPoints } from '../src/component-library';
@@ -145,7 +145,7 @@ describe('projected flow geometry', () => {
     expect(tracks[0].points[0]).toEqual(tracks[0].points.at(-1));
     expect(buildCurrentTracks([...paths].reverse())).toEqual(tracks);
   });
-  it('keeps junction branches distinct with inverse-current spacing and equal screen speed', () => {
+  it('keeps junction branches distinct with inverse-current spacing', () => {
     const doc = fixture('FIX-03-parallel'),
       { model } = solve(doc);
     const tracks = buildCurrentTracks(
@@ -164,25 +164,12 @@ describe('projected flow geometry', () => {
       endJunction: 'JT',
     });
     expect(currentSpacing(a.amperes, 3)).toBe(2 * currentSpacing(b.amperes, 3));
-    for (const amperes of [1, 2, 3]) {
-      const points = [
-          { x: 0, y: 30 },
-          { x: 600, y: 30 },
-        ],
-        spacing = currentSpacing(amperes, 3);
-      expect(
-        flowMarks(points, 3, viewport, spacing)[0].x - flowMarks(points, 0, viewport, spacing)[0].x,
-      ).toBe(3);
-    }
   });
   it('crosses component boundaries continuously without joining unrelated overlapping endpoints', () => {
-    const doc = fixture('FIX-02-series'),
-      { model } = solve(doc);
-    const source = buildCurrentPaths(doc, model)[0];
     const path = (id: string, from: string, to: string, x: number, y: number) => ({
       path: {
-        ...source,
         id,
+        points: [],
         sample: {
           id,
           kind: 'wire' as const,
@@ -214,38 +201,12 @@ describe('projected flow geometry', () => {
     expect(disconnected).toHaveLength(2);
     expect(disconnected.every((t) => !t.startJunction && !t.endJunction)).toBe(true);
   });
-  it('fades only within a short junction region without changing geometry', () => {
-    for (const [distance, opacity] of [
-      [0, 0],
-      [3.5, 0],
-      [7.5, 0.5],
-      [11.5, 1],
-      [50, 1],
-    ]) {
-      expect(flowJunctionOpacity(distance, 100, true, false)).toBe(opacity);
-      expect(flowJunctionOpacity(100 - distance, 100, false, true)).toBe(opacity);
-      expect(flowJunctionOpacity(distance, 100, false, false)).toBe(1);
-    }
+  // Normal fade-in/out is covered through the renderer; retain the short-track edge case here.
+  it('keeps overlapping junction fades bounded on short tracks', () => {
     expect(flowJunctionOpacity(5, 10, true, true)).toBeGreaterThan(0);
     expect(flowJunctionOpacity(5, 10, true, true)).toBeLessThan(1);
   });
-  it('moves by the same number of screen pixels on horizontal and diagonal paths', () => {
-    for (const points of [
-      [
-        { x: 20, y: 20 },
-        { x: 520, y: 20 },
-      ],
-      [
-        { x: 20, y: 20 },
-        { x: 420, y: 420 },
-      ],
-    ]) {
-      const a = flowMarks(points, 0, viewport)[0],
-        b = flowMarks(points, flowSpeed * 0.2, viewport)[0];
-      expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(6, 12);
-    }
-  });
-  it('maintains speed on the actual resistor projection at every potential height scale', () => {
+  it('maintains speed across current densities on actual 2D and 3D resistor paths', () => {
     const doc = fixture('FIX-02-series'),
       { model, compilation, result } = solve(doc);
     const camera = new OrthographicCamera(-500, 500, 350, -350, 0.1, 10000);
@@ -253,6 +214,7 @@ describe('projected flow geometry', () => {
     camera.position.set(500, -1000, 800);
     camera.lookAt(new Vector3(200, -200, 70));
     camera.updateMatrixWorld(true);
+    const paths: Point[][] = [buildCurrentPaths(doc, model).find((p) => p.id === 'R1')!.points];
     for (const scale of [4, 18, 40]) {
       const potential = buildPotentialModel(doc, compilation.circuit, result, { scale });
       const raised = projectCurrentPaths(
@@ -260,11 +222,15 @@ describe('projected flow geometry', () => {
         camera,
         viewport,
       );
-      const resistor = raised.find((p) => p.path.id === 'R1')!;
-      const a = flowMarks(resistor.points, 0, viewport)[0],
-        b = flowMarks(resistor.points, flowSpeed * 0.1, viewport)[0];
-      expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(3, 10);
+      paths.push(raised.find((p) => p.path.id === 'R1')!.points);
     }
+    for (const points of paths)
+      for (const amperes of [1, 3]) {
+        const spacing = currentSpacing(amperes, 3);
+        const a = flowMarks(points, 0, viewport, spacing)[0],
+          b = flowMarks(points, flowSpeed * 0.1, viewport, spacing)[0];
+        expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(3, 10);
+      }
   });
   it('clips huge offscreen paths without spending work on invisible markers', () => {
     const marks = flowMarks(
