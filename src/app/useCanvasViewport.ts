@@ -3,18 +3,20 @@ import type { Point } from '../domain';
 
 type View = Point & {width:number;height:number};
 /** Preserve screen scale and the viewed circuit position when the available canvas changes. */
-export function useCanvasViewport(svg:RefObject<SVGSVGElement|null>, view:View, setView:Dispatch<SetStateAction<View>>, cancel:()=>void, focus?:Point, editing=false) {
+export function useCanvasViewport(svg:RefObject<SVGSVGElement|null>, view:View, setView:Dispatch<SetStateAction<View>>, cancel:()=>void, focus?:Point, editing=false, preserveExtent=false) {
   const [size,setSize]=useState({width:1000,height:620});
-  const latest=useRef({view,cancel,focus,editing}); latest.current={view,cancel,focus,editing};
+  const latest=useRef({view,cancel,focus,editing,preserveExtent}); latest.current={view,cancel,focus,editing,preserveExtent};
   useEffect(()=>{
     let previous:{width:number;height:number}|null=null;
     let temporary:{width:number;height:number;center:Point;expected:View}|null=null;
     const observer=new ResizeObserver(([entry])=>{
       const {width,height}=entry.contentRect;
       if(width<=0||height<=0||previous?.width===width&&previous.height===height)return;
-      const {view:v,cancel,focus,editing}=latest.current;
+      const {view:v,cancel,focus,editing,preserveExtent}=latest.current;
       if(previous){
         cancel();
+        // Analysis drawers keep the same world view; SVG scales it to the remaining area.
+        if(preserveExtent&&!editing){temporary=null;previous={width,height};setSize(previous);return;}
         // Restore only our automatic keyboard/editor shift. Any user navigation takes precedence.
         if(temporary&&(Math.abs(width-temporary.width)>1||(['x','y','width','height'] as const).some(k=>Math.abs(v[k]-temporary!.expected[k])>.01)))temporary=null;
         if(!temporary&&editing&&Math.abs(width-previous.width)<=1&&height<previous.height)temporary={...previous,center:{x:v.x+v.width/2,y:v.y+v.height/2},expected:v};

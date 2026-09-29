@@ -1,7 +1,7 @@
 import { snapGridPoint as snap } from '../../wire-geometry';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CircuitDocument, Point } from '../../domain';
-import { compactWirePoints, endpointName, wireCrossings } from '../../component-library';
+import { compactWirePoints, endpointName, wireName, wireCrossings } from '../../component-library';
 import { previewCommand, type Command } from '../../editor';
 import { orthogonalRoute, type WirePosture } from '../../wire-geometry';
 import { branchHintEnd, connectionCommands, crossingCommand, endpointTarget, targetKey, wiringTargets, type WireAnchor, type WiringTarget } from './model';
@@ -124,7 +124,7 @@ export function useContextWiring(options: WiringOptions) {
   const cursor = end ?? snap(pointer);
   const previewPath = routeTo(cursor);
   const nudge = (dx: number, dy: number, scale: number) => hover({ x: pointer.x + dx, y: pointer.y + dy }, scale);
-  const choiceLabel = (t: WiringTarget) => t.kind === 'endpoint' ? endpointName(doc,t.ref.id) : t.kind === 'wire' ? `도선 ${t.wireId}` : '교차 연결';
+  const choiceLabel = (t: WiringTarget) => t.kind === 'endpoint' ? endpointName(doc,t.ref.id) : t.kind === 'wire' ? wireName(doc,t.wireId) : '교차 연결';
   return { start, hint, choices, touch, error, action, crossingLabel, branchEnd, end, cancel, clearHint, activate, tap, hover, setTouch, active: enabled, choiceLabel, previewPath, cursor, nudge, back, canBack: legs.length > 0, posture, togglePosture, corners: legs.map(leg => leg.at(-1)!), focusTarget: (t: WiringTarget) => { setTouch(false); setHint(t); }, selectChoice: (t: WiringTarget) => activate(t, true) };
 }
 export type ContextWiring = ReturnType<typeof useContextWiring>;

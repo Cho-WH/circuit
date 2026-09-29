@@ -22,7 +22,7 @@ const click = async (label: string) => { await act(async () => button(label).cli
 describe('workspace transitions and file actions', () => {
   it('reads the selected wire current in potential view by mouse and keyboard',async()=>{
     saveLocal(layoutExample(examples.find(e=>e.id==='FIX-03')!.document));
-    await act(async()=>root.render(createElement(App)));await click('전위 보기');
+    await act(async()=>root.render(createElement(App)));await click('분석하기');
     const toggle=[...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(input=>input.parentElement?.textContent?.trim()==='전류 흐름')!;
     await act(async()=>toggle.click());
     expect(host.querySelector('.potential-workspace > .current-pause')).not.toBeNull();
@@ -198,7 +198,7 @@ describe('workspace transitions and file actions', () => {
     await act(async () => root.render(createElement(App)));
     await click('확대');
     const view = host.querySelector('.circuit-canvas')!.getAttribute('viewBox');
-    await click('전위 보기');
+    await click('분석하기');
     expect(host.querySelector('.circuit-canvas')!.getAttribute('viewBox')).toBe(view);
     await click('상세 설정');
     expect(host.querySelector('.circuit-canvas')!.getAttribute('viewBox')).toBe(view);

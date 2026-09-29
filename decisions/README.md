@@ -33,3 +33,5 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-018](ADR-018-junction-lifecycle.md) | 분기점의 국소 정리와 배선 시작 | accepted | 도선 UX 개선 |
 | [ADR-019](ADR-019-quantity-input-and-display.md) | 수치 입력과 표시의 공통 모듈 | accepted | 숫자 표시 UX 개선 |
 | [ADR-020](ADR-020-current-visualization.md) | 전류의 물리량과 표시용 움직임 분리 | accepted | 전류 시각화 개선 |
+| [ADR-021](ADR-021-analysis-workspace.md) | 시각화와 측정의 분석 화면 통합 | accepted | 분석 UX 1차 통합 |
+| [ADR-022](ADR-022-measurement-notebook.md) | 비교를 위한 측정표와 별도 로컬 기록 | accepted | 측정 기록 UX 개선 |

@@ -18,7 +18,7 @@
 | `potential-3d` | 2D 위치와 전위를 3D 장면으로 변환 | 회로 해석 직접 수행 |
 | `current-view` | 2D·3D가 투영한 화면 경로에 비례 띠·방향 무늬를 표시하고 표시용 프레임 수명을 관리 | 회로 해석·전하 적분·React·Three.js 의존 |
 | `export` | 공통 기호 자원에서 인쇄용 SVG·PNG 생성 | 화면 캡처에 의존 |
-| `persistence` | 자동 저장, 파일 입출력, domain 검증·버전 변환 사용 | 계산 결과를 정답으로 저장 |
+| `persistence` | 회로 자동 저장·파일 입출력, 별도 측정 기록 저장, domain 검증·버전 변환 사용 | 과거 측정 기록을 현재 해석 결과로 사용 |
 | `feedback` | 후기 타입, 입력 정책, 일반·관리자 게이트웨이 계약 | React, 브라우저, Firebase SDK, 회로 문서 결합 |
 | `feedback-firebase` | 운영 후기의 익명 인증·Firestore 읽기/쓰기·관리자 접근 | 회로 문서·물리 계산 결합 |
 | `feedback-local` | 이전 로컬 자료와 계약 검증용 어댑터 | 물리·편집 모듈 접근, 운영 백엔드로 사용 |
@@ -93,7 +93,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 `measurement`는 `probeVoltage(compilation, result, red, black)`, `probeCurrent(document, compilation, result, target)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
 
-측정 탭은 `probeCurrent`의 부호 있는 전류와 기준 방향을 읽는다. 도선은 해당 edge를 제거한 연결 그래프와 단자 전류 합으로 처리하며, 도선 고리에는 미정 진단을 반환한다. 화면의 배치·스냅은 `app/measurement-tools`에 격리한다. 기존 전류계 삽입 공개 함수는 학습·계약 호환용으로 유지하며 측정 탭에서는 호출하지 않는다. 이 함수는 선택 부품의 첫 전기 단자를 사용하되 전원은 positive 단자를 우선한다. 복제한 임시 문서·계기 ID·변경된 연결 정보를 반환하며 원본을 보존한다. 등가저항과 KCL·KVL 해석은 `simulation`의 공개 함수를 사용한다. 저항 측정 UI는 `equivalentResistance`의 `excludeSourceIds`에 모든 직류 전원 ID를 전달해 개방하며 원본 문서를 수정하지 않는다. 저수준 API의 나머지 독립원 비활성화 계약은 유지한다. `CircuitCanvas`의 측정 표시 옵션과 공통 `symbolMarkup(component, { disconnectedSource })`는 전원의 리드 단절·흐림만 표현하며 전기 계산에 관여하지 않는다. 물리 의미와 기록·실험 규칙은 [측정 규약](../physics/measurement-and-display.md)을 따른다.
+분석 화면의 측정 도구은 `probeCurrent`의 부호 있는 전류와 기준 방향을 읽는다. 도선은 해당 edge를 제거한 연결 그래프와 단자 전류 합으로 처리하며, 도선 고리에는 미정 진단을 반환한다. 화면의 배치·스냅은 `app/measurement-tools`에 격리한다. 기존 전류계 삽입 공개 함수는 학습·계약 호환용으로 유지하며 분석 화면의 측정 도구에서는 호출하지 않는다. 이 함수는 선택 부품의 첫 전기 단자를 사용하되 전원은 positive 단자를 우선한다. 복제한 임시 문서·계기 ID·변경된 연결 정보를 반환하며 원본을 보존한다. 등가저항과 KCL·KVL 해석은 `simulation`의 공개 함수를 사용한다. 저항 측정 UI는 `equivalentResistance`의 `excludeSourceIds`에 모든 직류 전원 ID를 전달해 개방하며 원본 문서를 수정하지 않는다. 저수준 API의 나머지 독립원 비활성화 계약은 유지한다. `CircuitCanvas`의 측정 표시 옵션과 공통 `symbolMarkup(component, { disconnectedSource })`는 전원의 리드 단절·흐림만 표현하며 전기 계산에 관여하지 않는다. 물리 의미와 기록·실험 규칙은 [측정 규약](../physics/measurement-and-display.md)을 따른다.
 
 `component-library`의 공통 표기와 `export`의 SVG·PNG·클립보드 함수 및 옵션은 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)에 모았다. `domain`의 `Exporter<TOptions>`는 확장용 인터페이스이며 앱은 현재 `exportSvg`, `exportPng`, `copyPng` 함수를 사용한다.
 
@@ -115,6 +115,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 - `app/useCircuitSession`: 확정 문서·이력·단일/묶음 명령의 화면 모드 제한·자동 저장을 소유한다. App은 공개 실행 함수와 undo/redo만 호출한다. 학생 활동 권한과 문서 무결성은 계속 editor가 검사한다.
 - `app/useCanvasDragSession`: 부품/도선 이동의 시작 문서·좌표·포인터 캡처·미리보기와 화면 이동 세션을 소유한다. Canvas는 실제 이벤트를 연결하고 터치·배선·측정 등 여러 조작의 취소를 함께 지시한다. 확정에는 미리보기와 같은 명령 구성 함수를 사용한다.
 - `app/InlineComponentEditor`: 이름·값 초안, 파싱 오류, 입력 초점과 입력창 배치를 소유한다. Canvas에는 편집 대상 ID만 남긴다. 화면 크기 변화는 초안을 초기화하지 않는다.
+- `app/AnalysisTools`: 부품 팔레트와 같은 스타일로 선택·측정 도구와 전지 분리 시작 안내를 표시한다. App은 도구·보기·열린 패널 상태를 연결하고 MeasurementPanel은 기존 측정·기록 계산을 재사용한다. 분석의 구조 명령 제한은 useCircuitSession에 둔다. [ADR-021](../../decisions/ADR-021-analysis-workspace.md)을 따른다.
 - `app/PotentialSettings`: 전위 범위·높이 설정 표시를 담당한다. 설정 값은 App의 문서 밖 상태이며 같은 PotentialModel로 2D/3D를 갱신한다.
 
 이 파일들은 app 내부 구현이며 별도 패키지·상태 라이브러리·범용 조작 프레임워크를 만들지 않는다. simulation 내부에서는 solver를 measurements가 사용하고 index가 두 구현의 공개 API를 재노출한다.
@@ -122,3 +123,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 ## 분수 표기
 
 `quantity`는 입력 파싱·명시적 분수 복원·숫자 표시와 공통 축 단위를 제공하고, `notation`은 문구 토큰화·기울임을 담당한다. editor와 UI는 quantity의 parseQuantity를 사용하고 component-library는 componentValueInput·notationWidth·svgNotation을 공개한다. 수치 해석기는 원래 SI 숫자만 받는다. ADR-012와 ADR-019를 따른다.
+
+측정표의 `MeasurementEntry`, `loadMeasurementNotebook`, `saveMeasurementNotebook`은 persistence의 공개 계약이다. 측정 원시 기록을 감싸 메모·전류 방향·전원 분리 조건·탐침 위치를 별도로 저장한다. MeasurementAnchor·MeasurementAnchors 타입을 app/measurement-tools와 공유하며 위치 계산은 기존 anchorPose를 재사용한다. app의 `useMeasurementRecords`, `measurement-records`, `MeasurementTable`이 상태 연결·조건별 표시·복사·당시 회로 보기를 나눈다. [ADR-022](../../decisions/ADR-022-measurement-notebook.md).
+
+`component-library.endpointName`과 `wireName`은 사용자용 위치 이름의 공통 경계다. 단자 방향·연결된 부품으로 설명하고 저장 ID는 사용자 이름의 대체값으로 사용하지 않는다. 연결 관계는 명시된 도선에서만 읽으며 좌표는 화면의 단자 방향 표현에만 사용한다.

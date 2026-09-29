@@ -1,0 +1,69 @@
+import { CurrentGlyph, ProbeGlyph } from './measurement-tools';
+
+export type MeasurementKind = 'voltage' | 'current' | 'resistance';
+export type AnalysisPanel = 'records' | 'path' | null;
+
+export function AnalysisTools({
+  kind,
+  onChoose,
+  needsIsolation,
+  onIsolate,
+  threeDimensional,
+}: {
+  kind: MeasurementKind | null;
+  onChoose: (kind: MeasurementKind | null) => void;
+  needsIsolation: boolean;
+  onIsolate: () => void;
+  threeDimensional: boolean;
+}) {
+  return (
+    <>
+      <div className="section-heading">
+        <h2>측정 도구</h2>
+      </div>
+      <div className="component-grid analysis-tools" aria-label="분석 도구">
+        {(['voltage', 'current', 'resistance'] as const).map((value) => (
+          <button
+            key={value}
+            className={`component-tile${kind === value ? ' chosen' : ''}`}
+            aria-pressed={kind === value}
+            onClick={() => onChoose(kind === value ? null : value)}
+          >
+            <span className="tile-symbol">
+              {value === 'current' ? (
+                <svg width="36" height="32" viewBox="-18 -39 36 54" aria-hidden="true">
+                  <CurrentGlyph />
+                </svg>
+              ) : value === 'voltage' ? (
+                <svg width="48" height="32" viewBox="-25 -46 50 50" aria-hidden="true">
+                  <g transform="translate(-10)">
+                    <ProbeGlyph />
+                  </g>
+                  <g transform="translate(10)">
+                    <ProbeGlyph color="black" />
+                  </g>
+                </svg>
+              ) : (
+                <span className="resistance-symbol" aria-hidden="true">
+                  Ω
+                </span>
+              )}
+            </span>
+            <span>
+              {value === 'voltage' ? '전압 탐침' : value === 'current' ? '전류 센서' : '등가저항'}
+            </span>
+          </button>
+        ))}
+      </div>
+      {needsIsolation && (
+        <div className="isolation-prompt" role="status">
+          <p>등가저항은 전지를 분리하고 측정해요.</p>
+          <button className="primary" onClick={onIsolate}>
+            전지 분리하고 측정
+          </button>
+        </div>
+      )}
+      {threeDimensional && <p className="analysis-tool-hint">측정 도구를 고르면 2D로 전환해요.</p>}
+    </>
+  );
+}

@@ -205,7 +205,7 @@ export function QuickStartDialog({ onClose }: { onClose: () => void }) {
               </p>
               <small>전위의 높이에 따라 전류가 어떻게 흐를지 예상해 볼까요?</small>
               <p className="quick-start-route">
-                <span>전위 보기</span>
+                <span>분석하기</span>
                 <ArrowRight size={14} aria-hidden="true" />
                 <span>3D</span>
               </p>

@@ -152,26 +152,21 @@ describe('committed circuit session', () => {
     render('build'); expect(session.history.present.components[0].label).toBe('R_load');
   });
 
-  it('blocks editing and undo in measurement mode while allowing document replacement', () => {
+  it('allows analysis value edits and undo while blocking structural commands', () => {
     render();
-    act(() =>
-      session.execute({
-        type: 'AddComponent',
-        component: createComponent('resistor', 'R1', { x: 100, y: 100 }),
-      }),
-    );
-    render('measure');
+    act(() => session.execute({type:'AddComponent',component:createComponent('resistor','R1',{x:100,y:100})}));
+    render('analysis');
     const before = session.history;
     act(() => {
-      expect(session.execute({ type: 'SetLabel', id: 'R1', label: '변경' }).ok).toBe(false);
-      session.undo();
+      expect(session.execute({type:'DeleteElements',ids:['R1']}).ok).toBe(false);
+      expect(session.execute({type:'MoveComponents',positions:{R1:{x:200,y:100}}}).ok).toBe(false);
     });
     expect(session.history).toBe(before);
-    act(() => {
-      expect(
-        session.execute({ type: 'ReplaceDocument', document: emptyDocument('replacement') }).ok,
-      ).toBe(true);
-    });
+    act(() => {expect(session.execute({type:'SetProperties',id:'R1',properties:{resistanceOhm:20}}).ok).toBe(true);});
+    expect(session.history.present.components[0].properties.resistanceOhm).toBe(20);
+    act(() => session.undo());
+    expect(session.history.present).toEqual(before.present);
+    act(() => {expect(session.execute({type:'ReplaceDocument',document:emptyDocument('replacement')}).ok).toBe(true);});
     expect(session.history.present.documentId).toBe('replacement');
   });
 

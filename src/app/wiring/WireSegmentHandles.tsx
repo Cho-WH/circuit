@@ -1,6 +1,6 @@
 import type { PointerEvent } from 'react';
 import type { CircuitDocument, Point } from '../../domain';
-import { wirePoints } from '../../component-library';
+import { wirePoints, wireName } from '../../component-library';
 import { orthogonalWirePoints } from '../../wire-geometry';
 
 /** Separate square handles keep segment editing distinct from clicking a wire to branch. */
@@ -18,7 +18,7 @@ export function WireSegmentHandles(props: {
         if (props.dragging && (props.dragging.wireId !== w.id || props.dragging.segment !== segment)) return [];
         const offset = props.dragging?.offset ?? 0;
         const p: Point = { x: (a.x + b.x) / 2 + (horizontal ? 0 : offset), y: (a.y + b.y) / 2 + (horizontal ? offset : 0) };
-        const label = `도선 ${w.id} ${segment + 1}번 구간 ${horizontal ? '위아래' : '좌우'} 이동`;
+        const label = `${wireName(props.document, w.id)} ${segment + 1}번 구간 ${horizontal ? '위아래' : '좌우'} 이동`;
         return [<g key={`${w.id}:${segment}`} data-wire-handle role="button" tabIndex={0} aria-label={label}
           style={{ cursor: horizontal ? 'ns-resize' : 'ew-resize' }}
           onPointerDown={e => { if (e.button === 0) { e.preventDefault(); e.stopPropagation(); props.onStart(w.id, segment, horizontal, e); } }}

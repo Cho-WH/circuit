@@ -16,7 +16,7 @@ const noop=()=>{};
 const example=(id:string)=>layoutExample(examples.find(e=>e.id===id)!.document);
 function props(document:CircuitDocument,red:string,black:string,kind:'voltage'|'resistance'='resistance') {
   const compilation=compileCircuit(document);
-  return {document,compilation,result:solveCircuit(compilation.circuit),active:true,kind,onKind:noop,branchId:'',onBranch:noop,red,black,activeProbe:'red' as const,onActiveProbe:noop,anchors:{red:null,black:null,current:null},currentReading:{ok:false as const,diagnostics:[]},onReset:noop,onSwap:noop,children:null};
+  return {document,compilation,result:solveCircuit(compilation.circuit),active:true,kind,enabled:true,isolated:kind==='resistance',onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red' as const,onActiveProbe:noop,anchors:{red:null,black:null,current:null},currentReading:{ok:false as const,diagnostics:[]},onReset:noop,onSwap:noop,children:null};
 }
 const reading=(doc:CircuitDocument,a:string,b:string)=>renderToStaticMarkup(createElement(MeasurementPanel,props(doc,a,b))).match(/<output[^>]*>(.*?)<\/output>/)?.[1];
 describe('resistance mode source disconnection',()=>{
@@ -61,19 +61,13 @@ describe('resistance mode source disconnection',()=>{
     expect(host.querySelector('[data-source-isolated]')).toBeNull();
     expect(host.querySelector('[data-component-id="V1"] .component-ink path')?.getAttribute('d')).toContain('M-44 0H-7 M7 0H44');
   });
-  it('offers a short focus/tap tooltip and records the all-source condition without a mode selector',()=>{
+  it('shows the detached state and records the all-source condition',()=>{
+    localStorage.clear();
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
     const host=globalThis.document.createElement('div');globalThis.document.body.append(host);const root=createRoot(host);
     try {
       act(()=>root.render(createElement(MeasurementPanel,props(example('FIX-02'),'R1.a','R1.b'))));
-      expect(host.querySelector('[aria-label="저항 측정 범위"]')).toBeNull();
-      expect(host.querySelector('[role="tooltip"]')).toBeNull();
-      act(()=>host.querySelector<HTMLButtonElement>('[aria-label="전원 분리 안내"]')!.focus());
-      expect(host.querySelector('[role="tooltip"]')?.textContent).toBe('실제 저항계는 전원을 분리한 회로에 작은 시험 신호를 보내 저항을 측정해요.');
-      act(()=>host.querySelector<HTMLButtonElement>('[aria-label="전원 분리 안내"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
-      expect(host.querySelector('[role="tooltip"]')).toBeNull();
-      act(()=>host.querySelector<HTMLButtonElement>('[aria-label="전원 분리 안내"]')!.click());
-      expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+      expect(host.querySelector('.isolation-state')?.textContent).toBe('전지 분리 상태');
       act(()=>host.querySelector<HTMLButtonElement>('[aria-label="측정값 기록"]')!.click());
       expect(host.querySelector('tbody')?.textContent).toContain('모든 전원 분리');
       expect(host.querySelector('tbody')?.textContent).toContain('3 Ω');

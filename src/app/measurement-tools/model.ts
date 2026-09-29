@@ -1,8 +1,9 @@
 import type { CircuitDocument, EndpointRef, Point } from '../../domain';
-import { endpointPosition, terminalPosition, wirePoints, endpointName } from '../../component-library';
+import { endpointPosition, terminalPosition, wirePoints, endpointName, wireName } from '../../component-library';
 
 export type MeasurementTool = 'red' | 'black' | 'current';
-export type MeasurementAnchor = {kind:'endpoint';id:string;endpointKind:EndpointRef['kind']} | {kind:'wire';id:string;segment:number;t:number} | {kind:'component';id:string};
+import type { MeasurementAnchor } from '../../persistence';
+export type { MeasurementAnchor } from '../../persistence';
 export interface MeasurementPose { point:Point; angle:number }
 const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y);
 export function anchorEndpoint(doc:CircuitDocument,anchor:MeasurementAnchor|null):EndpointRef|null {
@@ -29,8 +30,7 @@ export function anchorName(doc:CircuitDocument,anchor:MeasurementAnchor|null):st
   if(!anchor)return '';
   if(anchor.kind==='component')return doc.components.find(c=>c.id===anchor.id)?.label??'';
   if(anchor.kind==='endpoint')return endpointName(doc,anchor.id);
-  const wire=doc.wires.find(w=>w.id===anchor.id);
-  return wire?`${endpointName(doc,wire.start.id)} ↔ ${endpointName(doc,wire.end.id)}`:'';
+  return wireName(doc,anchor.id);
 }
 export function defaultWireAnchor(doc:CircuitDocument,id:string):MeasurementAnchor|null {
   const wire=doc.wires.find(w=>w.id===id);if(!wire)return null;

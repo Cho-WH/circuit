@@ -14,11 +14,11 @@ import { loadLocal, saveLocal } from '../persistence';
 import { examples } from '../fixtures';
 import { layoutExample } from './examples';
 
-export type WorkspaceMode = 'build' | 'measure' | 'potential' | 'worksheet';
+export type WorkspaceMode = 'build' | 'analysis' | 'worksheet';
 
 function allowedInMode(document: CircuitDocument, mode: WorkspaceMode, command: Command) {
   if (command.type === 'ReplaceDocument') return true;
-  if (mode === 'measure') return false;
+  if (mode === 'analysis') return ['SetProperties', 'SetLabel', 'SetReference'].includes(command.type);
   if (mode !== 'worksheet') return true;
   switch (command.type) {
     case 'SetProperties':
@@ -109,10 +109,10 @@ export function useCircuitSession(mode: WorkspaceMode) {
     execute,
     placeComponent,
     undo: () => {
-      if (mode !== 'measure') publish(undo(current.current));
+      publish(undo(current.current));
     },
     redo: () => {
-      if (mode !== 'measure') publish(redo(current.current));
+      publish(redo(current.current));
     },
   };
 }

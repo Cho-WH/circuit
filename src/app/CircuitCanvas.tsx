@@ -38,6 +38,8 @@ import {
   componentValue,
   documentBounds,
   endpointPosition,
+  endpointName,
+  wireName,
   pointsAttribute,
   symbolMarkup,
   terminalPosition,
@@ -50,6 +52,8 @@ export interface CanvasProps {
   viewLabel?: ReactNode;
   onViewChange?: (view: { x: number; y: number; width: number; height: number }) => void;
   readOnly?: boolean;
+  preserveViewOnResize?: boolean;
+  allowValueEditing?: boolean;
   readOnlyLabel?: string;
   onWiringCommit?: (commands: readonly Command[]) => boolean;
   wiringResetKey?: number;
@@ -84,6 +88,7 @@ export interface CanvasProps {
   largeLabels?: boolean;
 }
 export function CircuitCanvas(props: CanvasProps) {
+  const canEditValues = !props.readOnly || Boolean(props.allowValueEditing);
   const { document, selected, tool, placement } = props;
   const svg = useRef<SVGSVGElement>(null);
   const [view, setView] = useState(() => props.initialView ?? documentBounds(document, 110));
@@ -161,6 +166,7 @@ export function CircuitCanvas(props: CanvasProps) {
     },
     document.components.find((c) => c.id === (editingId ?? selected[0]))?.position,
     Boolean(editingId),
+    props.preserveViewOnResize,
   );
   const drawingScale = Math.max(
     0.01,
@@ -894,7 +900,7 @@ export function CircuitCanvas(props: CanvasProps) {
               vectorEffect="non-scaling-stroke"
               role="button"
               tabIndex={0}
-              aria-label={`도선 ${w.id}`}
+              aria-label={wireName(document, w.id)}
               onClick={(e) => {
                 e.stopPropagation();
                 if (!placement && !wiring.active)
@@ -980,7 +986,7 @@ export function CircuitCanvas(props: CanvasProps) {
                   }
                 }}
                 onDoubleClick={() => {
-                  if (!props.readOnly) editValue(c.id);
+                  if (canEditValues) editValue(c.id);
                 }}
               >
                 {/* Rotate with the symbol; keep an extra 12 screen pixels around it at every zoom. */}
@@ -1032,20 +1038,20 @@ export function CircuitCanvas(props: CanvasProps) {
               <SvgNotation
                 opacity={isolated ? 0.35 : undefined}
                 data-value-id={c.id}
-                className={props.readOnly ? 'component-value' : 'editable-value'}
-                role={props.readOnly ? undefined : 'button'}
-                tabIndex={props.readOnly ? undefined : 0}
-                aria-label={props.readOnly ? undefined : `${c.label} 값 편집`}
+                className={!canEditValues ? 'component-value' : 'editable-value'}
+                role={!canEditValues ? undefined : 'button'}
+                tabIndex={!canEditValues ? undefined : 0}
+                aria-label={!canEditValues ? undefined : `${c.label} 값 편집`}
                 x={textLayout.value.x}
                 y={textLayout.value.y}
                 textAnchor={textLayout.value.anchor}
                 fontSize={valueFontSize}
                 fill="#52647b"
                 onClick={() => {
-                  if (!props.readOnly && !placement) editValue(c.id);
+                  if ((canEditValues) && !placement) editValue(c.id);
                 }}
                 onKeyDown={(e) => {
-                  if (!props.readOnly && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); editValue(c.id); }
+                  if ((canEditValues) && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); editValue(c.id); }
                 }}
                 text={value}
               />
@@ -1074,7 +1080,7 @@ export function CircuitCanvas(props: CanvasProps) {
                     key={t.id}
                     role="button"
                     tabIndex={0}
-                    aria-label={`단자 ${t.id}`}
+                    aria-label={endpointName(document, t.id)}
                     data-endpoint-id={t.id}
                     data-endpoint-kind="terminal"
                     className="terminal"
@@ -1126,7 +1132,7 @@ export function CircuitCanvas(props: CanvasProps) {
             key={j.id}
             role="button"
             tabIndex={0}
-            aria-label={`분기점 ${j.id}`}
+            aria-label={endpointName(document, j.id)}
             data-endpoint-id={j.id}
             data-endpoint-kind="junction"
             className="terminal"
@@ -1335,7 +1341,7 @@ export function CircuitCanvas(props: CanvasProps) {
                   setPlacementMessage('');
                 }}
               >
-                {c.wireId} · 구간 {c.segment + 1}
+                {wireName(document, c.wireId)} · 구간 {c.segment + 1}
               </button>
             ))}
           <button

@@ -5,6 +5,7 @@ import {
   type CircuitDocument,
   type DocumentValidation,
 } from '../domain';
+export { loadMeasurementNotebook, saveMeasurementNotebook, type MeasurementEntry, type MeasurementAnchor, type MeasurementAnchors } from './measurement-notebook';
 
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
 type StorageKind = 'auto' | 'manual';

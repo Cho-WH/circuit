@@ -29,7 +29,6 @@ import {
   X,
   CircleHelp,
   AlignHorizontalJustifyCenter,
-  Crosshair,
   SlidersHorizontal,
   CircuitBoard,
   MessageCircle,
@@ -69,6 +68,7 @@ import {
 import { PotentialPalettePicker } from './PotentialPalettePicker';
 import { PotentialGraph } from './PotentialGraph';
 import { MeasurementPanel } from './MeasurementPanel';
+import { AnalysisTools, type MeasurementKind, type AnalysisPanel } from './AnalysisTools';
 import { WorksheetPanel } from './WorksheetPanel';
 import { OutputCanvas, type OutputTool } from './OutputCanvas';
 import type { ExportOptions } from '../export';
@@ -135,7 +135,8 @@ export function App() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [potentialView, setPotentialView] = useState<'2d' | '3d'>('2d');
   const [potentialStatus, setPotentialStatus] = useState<PotentialWorkspaceStatus>('2d');
-  const [showGraph, setShowGraph] = useState(false);
+  const [analysisPanel, setAnalysisPanel] = useState<AnalysisPanel>(null);
+  const showGraph = analysisPanel === 'path';
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [focusIds, setFocusIds] = useState<string[]>([]);
   const [showNumbers, setShowNumbers] = useState(true);
@@ -168,14 +169,32 @@ export function App() {
   const redProbe = anchorEndpoint(doc, measurementAnchors.red)?.id ?? '',
     blackProbe = anchorEndpoint(doc, measurementAnchors.black)?.id ?? '';
   const [activeProbe, setActiveProbe] = useState<'red' | 'black'>('red');
-  const [measurementKind, setMeasurementKind] = useState<'voltage' | 'current' | 'resistance'>(
-    'voltage',
-  );
-  const [measurementBranch, setMeasurementBranch] = useState('');
+  const [measurementKind, setMeasurementKind] = useState<MeasurementKind | null>(null);
+  const [measurementConsoleHost, setMeasurementConsoleHost] = useState<HTMLDivElement | null>(null);
+  const [sourcesDetached, setSourcesDetached] = useState(false);
+  const hasSources = doc.components.some((c) => c.type === 'dc-voltage-source');
+  const resistanceMode = mode === 'analysis' && measurementKind === 'resistance';
+  const needsIsolation = resistanceMode && hasSources && !sourcesDetached;
+  const isolated = resistanceMode && !needsIsolation;
+  const analysisView = resistanceMode ? '2d' : potentialView;
+  const measurementActive =
+    mode === 'analysis' && measurementKind !== null && analysisView === '2d' && !needsIsolation;
+  const showOperatingState = mode === 'analysis' && !isolated;
+  function chooseMeasurement(kind: MeasurementKind | null) {
+    setMeasurementKind(kind);
+    setSourcesDetached(false);
+    setTool('select');
+    if (kind && kind !== 'resistance') setPotentialView('2d');
+    if (kind === 'resistance') setAnalysisPanel(null);
+  }
+  function chooseView(view: '2d' | '3d') {
+    if (view === '3d') chooseMeasurement(null);
+    setPotentialView(view);
+  }
   useEffect(() => {
     setMeasurementAnchors({ red: null, black: null, current: null });
     setActiveProbe('red');
-    setMeasurementBranch('');
+    setSourcesDetached(false);
   }, [doc.documentId]);
   const [hovered, setHovered] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -183,8 +202,15 @@ export function App() {
   const valueInput = useRef<HTMLInputElement>(null);
   const idCounter = useRef(1);
   const { compilation, result } = useMemo(() => analyze(doc), [doc]);
-  const currents = useMemo(() => buildCurrentModel(doc, compilation, result), [doc, compilation, result]);
-  const { display: currentDisplay, setPaused: setCurrentPaused, setWidthScale: setCurrentWidthScale } = useCurrentDisplay(currents);
+  const currents = useMemo(
+    () => buildCurrentModel(doc, compilation, result),
+    [doc, compilation, result],
+  );
+  const {
+    display: currentDisplay,
+    setPaused: setCurrentPaused,
+    setWidthScale: setCurrentWidthScale,
+  } = useCurrentDisplay(currents);
   const potential = useMemo(
     () =>
       buildPotentialModel(doc, compilation.circuit, result, {
@@ -260,6 +286,8 @@ export function App() {
     if (dispatch({ type: 'DeleteElements', ids: selected })) setSelected([]);
   }
   function cancelTool() {
+    setMeasurementKind(null);
+    setSourcesDetached(false);
     setPaletteDrag(null);
     setOutputFontPreview(null);
     setOutputTool('select');
@@ -271,7 +299,6 @@ export function App() {
     const handler = (event: KeyboardEvent) => {
       if (feedbackOpen || help) return;
       if ((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')) return;
-      if (mode === 'measure') return;
       const modifier = event.ctrlKey || event.metaKey;
       if (modifier && event.key.toLowerCase() === 'z') {
         event.preventDefault();
@@ -279,6 +306,9 @@ export function App() {
       } else if (modifier && event.key.toLowerCase() === 'y') {
         event.preventDefault();
         redoEdit();
+      } else if (mode === 'analysis') {
+        if (event.key === 'Escape') cancelTool();
+        return;
       } else if (mode === 'worksheet') {
         if (event.key === 'Escape') {
           cancelTool();
@@ -366,16 +396,15 @@ export function App() {
   function placeMeasurement(which: MeasurementTool, anchor: MeasurementAnchor | null) {
     setMeasurementAnchors((previous) => ({ ...previous, [which]: anchor }));
     if (which === 'red' && anchor) setActiveProbe('black');
-    if (which === 'current' && anchor?.kind === 'component') setMeasurementBranch(anchor.id);
   }
   function endpoint(endpoint: EndpointRef) {
     if (tool === 'reference') {
       dispatch({ type: 'SetReference', endpoint });
       cancelTool();
-      setNotice(`${endpoint.id}를 0 V 기준점으로 지정했습니다.`);
+      setNotice(`0 V 기준점: ${endpointName(doc, endpoint.id)}`);
       return;
     }
-    if (mode === 'measure') {
+    if (measurementActive) {
       if (measurementKind !== 'current')
         placeMeasurement(activeProbe, {
           kind: 'endpoint',
@@ -384,21 +413,21 @@ export function App() {
         });
       return;
     }
-    if (mode === 'potential') {
+    if (mode === 'analysis') {
       setSelectedNet(compilation.circuit.endpointToNet[endpoint.id]);
       setSelected([]);
       return;
     }
   }
   function onWire(id: string) {
-    if (mode === 'measure') {
+    if (measurementActive) {
       placeMeasurement(
         measurementKind === 'current' ? 'current' : activeProbe,
         defaultWireAnchor(doc, id),
       );
       return;
     }
-    if (mode === 'potential') {
+    if (mode === 'analysis') {
       const wire = doc.wires.find((w) => w.id === id);
       if (wire) {
         setSelectedNet(compilation.circuit.endpointToNet[wire.start.id]);
@@ -422,7 +451,7 @@ export function App() {
     return true;
   }
   function toggleSwitch(id: string): boolean {
-    const component = doc.components.find(c => c.id === id);
+    const component = doc.components.find((c) => c.id === id);
     if (!component || component.type !== 'switch') return false;
     return dispatch({
       type: 'SetProperties',
@@ -440,7 +469,11 @@ export function App() {
       );
       return;
     }
-    if(value===component.properties[definition.property]&&(parsed?.fraction??'')===(component.properties[definition.property+'Fraction']??''))return;
+    if (
+      value === component.properties[definition.property] &&
+      (parsed?.fraction ?? '') === (component.properties[definition.property + 'Fraction'] ?? '')
+    )
+      return;
     dispatch({
       type: 'SetProperties',
       id: component.id,
@@ -450,15 +483,26 @@ export function App() {
       },
     });
   }
-  function applyQuantityMode(next:QuantityMode,all=false) {
-    if(!component)return;
-    const commands:Command[]=(all?doc.components:[component]).filter(c=>quantityFormatFor(c.properties).mode!==next).map(c=>({type:'SetProperties',id:c.id,properties:{quantityMode:next}}));
-    if(!commands.length)return;
-    const applied=execute(commands);
-    if(!applied.ok)setNotice('표시 방식을 바꿀 수 없습니다.','error');
-    else if(all)setNotice('모든 부품에 표시 방식을 적용했습니다.');
+  function applyQuantityMode(next: QuantityMode, all = false) {
+    if (!component) return;
+    const commands: Command[] = (all ? doc.components : [component])
+      .filter((c) => quantityFormatFor(c.properties).mode !== next)
+      .map((c) => ({ type: 'SetProperties', id: c.id, properties: { quantityMode: next } }));
+    if (!commands.length) return;
+    const applied = execute(commands);
+    if (!applied.ok) setNotice('표시 방식을 바꿀 수 없습니다.', 'error');
+    else if (all) setNotice('모든 부품에 표시 방식을 적용했습니다.');
   }
-  const quantityControl=component?<QuantityDisplaySelect key={component.id} value={quantityFormatFor(component.properties).mode??'auto'} onChange={next=>applyQuantityMode(next)} onApplyAll={()=>applyQuantityMode(quantityFormatFor(component.properties).mode??'auto',true)}/>:null;
+  const quantityControl = component ? (
+    <QuantityDisplaySelect
+      key={component.id}
+      value={quantityFormatFor(component.properties).mode ?? 'auto'}
+      onChange={(next) => applyQuantityMode(next)}
+      onApplyAll={() =>
+        applyQuantityMode(quantityFormatFor(component.properties).mode ?? 'auto', true)
+      }
+    />
+  ) : null;
   function replace(document: CircuitDocument) {
     if (dispatch({ type: 'ReplaceDocument', document })) {
       setSelected([]);
@@ -470,7 +514,7 @@ export function App() {
     }
   }
   function selectElement(id: string | null, additive?: boolean) {
-    if (mode === 'measure') {
+    if (measurementActive) {
       if (id && measurementKind === 'current' && doc.components.some((c) => c.id === id))
         placeMeasurement('current', { kind: 'component', id });
       return;
@@ -480,7 +524,7 @@ export function App() {
       setHovered(id);
       return;
     }
-    if (mode === 'potential') setSelectedNet(null);
+    if (mode === 'analysis') setSelectedNet(null);
     if (mode === 'worksheet' && id && window.matchMedia('(min-width: 641px)').matches)
       setDetailsOpen(true);
     setSelected(
@@ -525,14 +569,12 @@ export function App() {
     cancelTool();
     setHovered(null);
     setSelected((ids) =>
-      next === 'measure'
-        ? []
-        : next === 'worksheet'
-          ? ids.filter(
-              (id) =>
-                doc.components.some((c) => c.id === id) || doc.annotations.some((a) => a.id === id),
-            )
-          : ids.filter((id) => !doc.annotations.some((a) => a.id === id)),
+      next === 'worksheet'
+        ? ids.filter(
+            (id) =>
+              doc.components.some((c) => c.id === id) || doc.annotations.some((a) => a.id === id),
+          )
+        : ids.filter((id) => !doc.annotations.some((a) => a.id === id)),
     );
   }
   const settingsButton = (
@@ -550,6 +592,7 @@ export function App() {
   const circuitCanvas = (
     <CircuitCanvas
       paletteDrag={paletteDrag}
+      preserveViewOnResize={mode === 'analysis'}
       initialView={
         canvasView.current?.documentId === doc.documentId ? canvasView.current.view : undefined
       }
@@ -557,7 +600,7 @@ export function App() {
         canvasView.current = { documentId: doc.documentId, view };
       }}
       viewLabel={
-        mode === 'potential' ? (
+        showOperatingState ? (
           <div
             className="potential-reference"
             title={`접지(0V): ${doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'}`}
@@ -573,9 +616,9 @@ export function App() {
       document={doc}
       largeLabels={presentation}
       measurement={
-        mode === 'measure'
+        measurementActive
           ? {
-              disconnectSources: measurementKind === 'resistance',
+              disconnectSources: isolated,
               tool: measurementKind === 'current' ? 'current' : activeProbe,
               anchors: measurementAnchors,
               amperes: currentReading.ok ? currentReading.value.amperes : undefined,
@@ -586,11 +629,13 @@ export function App() {
             }
           : undefined
       }
-      readOnly={mode === 'measure'}
+      readOnly={mode === 'analysis'}
+      readOnlyLabel="분석 회로"
+      allowValueEditing={mode === 'analysis' && !measurementActive}
       onWiringCommit={mode === 'build' ? commitWiring : undefined}
       wiringResetKey={wiringResetKey}
       selected={
-        mode === 'measure'
+        measurementActive
           ? measurementKind === 'current'
             ? currentTarget
               ? [currentTarget.id]
@@ -598,23 +643,23 @@ export function App() {
             : []
           : selected
       }
-      tool={mode === 'measure' && tool === 'select' ? 'probe' : tool}
+      tool={measurementActive ? 'probe' : tool}
       placement={placement}
-      currentDisplay={mode === 'potential' && showCurrent && !(potentialView === '3d' && (potentialStatus === 'entering' || potentialStatus === 'ready')) ? currentDisplay : undefined}
+      currentDisplay={
+        showOperatingState &&
+        showCurrent &&
+        !(analysisView === '3d' && (potentialStatus === 'entering' || potentialStatus === 'ready'))
+          ? currentDisplay
+          : undefined
+      }
       endpointColors={
-        mode === 'measure'
-          ? measurementKind === 'current'
-            ? undefined
-            : { [redProbe]: '#dc4545', [blackProbe]: '#252f3c' }
-          : mode === 'potential' && showColors
-            ? Object.fromEntries(
-                Object.entries(potential.endpoints).map(([id, v]) => [id, v.color]),
-              )
-            : undefined
+        showOperatingState && showColors
+          ? Object.fromEntries(Object.entries(potential.endpoints).map(([id, v]) => [id, v.color]))
+          : undefined
       }
       endpointGroups={compilation.circuit.endpointToNet}
       endpointLabels={
-        mode === 'potential' && showNumbers
+        showOperatingState && showNumbers
           ? Object.fromEntries(
               Object.entries(potential.endpoints).map(([id, v]) => [
                 id,
@@ -624,9 +669,9 @@ export function App() {
           : undefined
       }
       highlightedEndpoints={
-        mode === 'potential' && selectedNet ? potential.nets[selectedNet]?.endpointIds : undefined
+        mode === 'analysis' && selectedNet ? potential.nets[selectedNet]?.endpointIds : undefined
       }
-      highlightedElements={mode !== 'measure' && hovered ? [hovered] : undefined}
+      highlightedElements={!measurementActive && hovered ? [hovered] : undefined}
       onHoverElement={setHovered}
       onSelect={selectElement}
       onMove={(positions) => dispatch({ type: 'MoveComponents', positions })}
@@ -637,7 +682,7 @@ export function App() {
       onCancel={cancelTool}
       onCommitComponent={(id, edit) => {
         const c = doc.components.find((c) => c.id === id);
-        if (!c || mode !== 'build') return false;
+        if (!c || mode === 'worksheet') return false;
         const commands: Command[] = [];
         if (edit.label !== c.label) commands.push({ type: 'SetLabel', id, label: edit.label });
         const property = componentDefinitions[c.type].property;
@@ -677,7 +722,7 @@ export function App() {
   );
   return (
     <div
-      className={`app-shell mode-${mode}${mode === 'potential' && potentialView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
+      className={`app-shell mode-${mode}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
     >
       <header className="topbar">
         <a className="brand" aria-label="회로 실험실" href="#" onClick={(e) => e.preventDefault()}>
@@ -688,7 +733,6 @@ export function App() {
         </a>
         <div className="document-heading">
           <input
-            readOnly={mode === 'measure'}
             aria-label="회로 제목"
             key={doc.documentId + doc.title}
             defaultValue={doc.title}
@@ -758,20 +802,12 @@ export function App() {
             회로 만들기
           </button>
           <button
-            aria-pressed={mode === 'potential'}
-            className={mode === 'potential' ? 'active' : ''}
-            onClick={() => changeMode('potential')}
+            aria-pressed={mode === 'analysis'}
+            className={mode === 'analysis' ? 'active' : ''}
+            onClick={() => changeMode('analysis')}
           >
             <Zap size={16} />
-            전위 보기
-          </button>
-          <button
-            aria-pressed={mode === 'measure'}
-            className={mode === 'measure' ? 'active' : ''}
-            onClick={() => changeMode('measure')}
-          >
-            <Crosshair size={16} />
-            측정하기
+            분석하기
           </button>
           <button
             aria-pressed={mode === 'worksheet'}
@@ -787,34 +823,57 @@ export function App() {
         </button>
       </nav>
       <div className="workspace">
-        <aside className="library-panel" hidden={mode !== 'build'}>
-          <div className="section-heading">
-            <h2>부품</h2>
-          </div>
-          <ComponentPalette
-            key={mode}
-            resetKey={doc}
-            placement={placement}
-            onChoose={(type) => {
-              setPlacement(type);
-              setTool('select');
-              setWiringResetKey((key) => key + 1);
-            }}
-            onClear={() => setPlacement(null)}
-            onDrag={(event) => {
-              setPaletteDrag(event);
-              if (event.phase === 'cancel') setPlacement(null);
-            }}
+        <aside className="library-panel" hidden={mode === 'worksheet'}>
+          {mode === 'analysis' ? (
+            <AnalysisTools
+              kind={measurementKind}
+              onChoose={chooseMeasurement}
+              needsIsolation={needsIsolation}
+              onIsolate={() => setSourcesDetached(true)}
+              threeDimensional={analysisView === '3d'}
+            />
+          ) : (
+            <>
+              <div className="section-heading">
+                <h2>부품</h2>
+              </div>
+              <ComponentPalette
+                key={mode}
+                resetKey={doc}
+                placement={placement}
+                onChoose={(type) => {
+                  setPlacement(type);
+                  setTool('select');
+                  setWiringResetKey((key) => key + 1);
+                }}
+                onClear={() => setPlacement(null)}
+                onDrag={(event) => {
+                  setPaletteDrag(event);
+                  if (event.phase === 'cancel') setPlacement(null);
+                }}
+              />
+              <div className="library-divider" />
+              <div className="section-heading">
+                <h2>시작하기</h2>
+              </div>
+              <button
+                className="wide-button new-circuit-button"
+                aria-label="빈 회로 만들기"
+                onClick={() => replace(emptyDocument(newId('circuit-')))}
+              >
+                <Plus size={16} aria-hidden="true" />
+                <span className="new-circuit-desktop-label">빈 회로 만들기</span>
+                <span className="new-circuit-mobile-label">빈 회로</span>
+              </button>
+              <ExampleMenu documentId={doc.documentId} onSelect={replace} />
+              <div className="palette-start-divider" aria-hidden="true" />
+            </>
+          )}
+          <div
+            className="analysis-console-host"
+            ref={setMeasurementConsoleHost}
+            hidden={mode !== 'analysis'}
           />
-          <div className="library-divider" />
-          <div className="section-heading">
-            <h2>시작하기</h2>
-          </div>
-          <button className="wide-button new-circuit-button" aria-label="빈 회로 만들기" onClick={() => replace(emptyDocument(newId('circuit-')))}>
-            <Plus size={16} aria-hidden="true"/><span className="new-circuit-desktop-label">빈 회로 만들기</span><span className="new-circuit-mobile-label">빈 회로</span>
-          </button>
-          <ExampleMenu documentId={doc.documentId} onSelect={replace}/>
-          <div className="palette-start-divider" aria-hidden="true"/>
         </aside>
         <main className="canvas-column">
           <div className="editor-toolbar" hidden={mode !== 'build'}>
@@ -863,20 +922,20 @@ export function App() {
             {settingsButton}
           </div>
           {mode === 'worksheet' && <div id="worksheet-actions" className="worksheet-topbar" />}
-          {mode === 'potential' && (
-            <div className="potential-controls">
+          {mode === 'analysis' && (
+            <div className={`potential-controls${isolated || !showColors ? ' no-legend' : ''}`}>
               <div className="segmented">
                 <button
-                  aria-pressed={potentialView === '2d'}
-                  className={potentialView === '2d' ? 'active' : ''}
-                  onClick={() => setPotentialView('2d')}
+                  aria-pressed={analysisView === '2d'}
+                  className={analysisView === '2d' ? 'active' : ''}
+                  onClick={() => chooseView('2d')}
                 >
                   2D
                 </button>
                 <button
-                  aria-pressed={potentialView === '3d'}
-                  className={potentialView === '3d' ? 'active' : ''}
-                  onClick={() => setPotentialView('3d')}
+                  aria-pressed={analysisView === '3d'}
+                  className={analysisView === '3d' ? 'active' : ''}
+                  onClick={() => chooseView('3d')}
                 >
                   3D
                 </button>
@@ -884,7 +943,8 @@ export function App() {
               <label>
                 <input
                   type="checkbox"
-                  checked={showColors}
+                  disabled={isolated}
+                  checked={!isolated && showColors}
                   onChange={(e) => setShowColors(e.target.checked)}
                 />
                 색상
@@ -892,7 +952,8 @@ export function App() {
               <label>
                 <input
                   type="checkbox"
-                  checked={showNumbers}
+                  disabled={isolated}
+                  checked={!isolated && showNumbers}
                   onChange={(e) => setShowNumbers(e.target.checked)}
                 />
                 숫자
@@ -900,22 +961,21 @@ export function App() {
               <label className="potential-current">
                 <input
                   type="checkbox"
-                  checked={showCurrent}
+                  disabled={isolated}
+                  checked={!isolated && showCurrent}
                   onChange={(e) => setShowCurrent(e.target.checked)}
                 />
                 전류 흐름
               </label>
-              {
-                <button
-                  className="graph-toggle"
-                  aria-pressed={showGraph}
-                  onClick={() => setShowGraph(!showGraph)}
-                >
-                  경로 그래프 {showGraph ? '접기' : '보기'}
-                </button>
-              }
+              <button
+                disabled={isolated}
+                aria-expanded={showGraph}
+                onClick={() => setAnalysisPanel(showGraph ? null : 'path')}
+              >
+                경로 그래프
+              </button>
               <div className="potential-legend-tools">
-                <div className="potential-legend">
+                <div className="potential-legend" hidden={isolated || !showColors}>
                   {potential.undefinedCount === Object.keys(potential.nets).length ? (
                     <span>전위 미정</span>
                   ) : (
@@ -935,16 +995,19 @@ export function App() {
               </div>
             </div>
           )}
-          <div hidden={mode !== 'measure'} className="measurement-workspace">
+          <div hidden={mode !== 'analysis'} className="measurement-workspace">
             <MeasurementPanel
+              consoleHost={measurementConsoleHost}
               kind={measurementKind}
-              onKind={setMeasurementKind}
-              branchId={measurementBranch}
-              onBranch={setMeasurementBranch}
+              onExit={() => chooseMeasurement(null)}
+              enabled={measurementActive}
+              isolated={isolated}
+              panel={analysisPanel}
+              onPanel={setAnalysisPanel}
               document={doc}
               compilation={compilation}
               result={result}
-              active={mode === 'measure'}
+              active={mode === 'analysis'}
               red={redProbe}
               black={blackProbe}
               activeProbe={activeProbe}
@@ -954,42 +1017,46 @@ export function App() {
               onSwap={() => setMeasurementAnchors((a) => ({ ...a, red: a.black, black: a.red }))}
               onActiveProbe={setActiveProbe}
             >
-              {mode === 'measure' ? circuitCanvas : null}
+              {mode === 'analysis' && (
+                <PotentialWorkspace
+                  overlayControls={
+                    showOperatingState && showCurrent ? (
+                      <CurrentControls paused={currentDisplay.paused} onPause={setCurrentPaused} />
+                    ) : undefined
+                  }
+                  onStatusChange={setPotentialStatus}
+                  active={analysisView === '3d'}
+                  sourceView={
+                    canvasView.current?.documentId === doc.documentId
+                      ? canvasView.current.view
+                      : undefined
+                  }
+                  onReturnTo2D={() => setPotentialView('2d')}
+                  document={doc}
+                  potential={potential}
+                  currentDisplay={showOperatingState && showCurrent ? currentDisplay : undefined}
+                  heightMultiplier={heightScale}
+                  selectedIds={selected}
+                  highlightedId={hovered}
+                  selectedNet={selectedNet}
+                  showNumbers={!isolated && showNumbers}
+                  showColors={!isolated && showColors}
+                  referenceLabel={
+                    doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'
+                  }
+                  onSelect={(id) => {
+                    setHovered(id);
+                    setSelected([id]);
+                    const wire = doc.wires.find((w) => w.id === id);
+                    setSelectedNet(wire ? compilation.circuit.endpointToNet[wire.start.id] : null);
+                  }}
+                >
+                  {circuitCanvas}
+                </PotentialWorkspace>
+              )}
             </MeasurementPanel>
           </div>
-          {mode === 'potential' ? (
-            <PotentialWorkspace
-              overlayControls={showCurrent ? <CurrentControls paused={currentDisplay.paused} onPause={setCurrentPaused}/> : undefined}
-              onStatusChange={setPotentialStatus}
-              active={potentialView === '3d'}
-              sourceView={
-                canvasView.current?.documentId === doc.documentId
-                  ? canvasView.current.view
-                  : undefined
-              }
-              onReturnTo2D={() => setPotentialView('2d')}
-              document={doc}
-              potential={potential}
-              currentDisplay={showCurrent ? currentDisplay : undefined}
-              heightMultiplier={heightScale}
-              selectedIds={selected}
-              highlightedId={hovered}
-              selectedNet={selectedNet}
-              showNumbers={showNumbers}
-              showColors={showColors}
-              referenceLabel={
-                doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'
-              }
-              onSelect={(id) => {
-                setHovered(id);
-                setSelected([id]);
-                const wire = doc.wires.find((w) => w.id === id);
-                setSelectedNet(wire ? compilation.circuit.endpointToNet[wire.start.id] : null);
-              }}
-            >
-              {circuitCanvas}
-            </PotentialWorkspace>
-          ) : mode === 'worksheet' ? (
+          {mode === 'worksheet' ? (
             <OutputCanvas
               document={
                 outputFontPreview === null
@@ -1005,10 +1072,10 @@ export function App() {
               dispatch={dispatch}
               newId={newId}
             />
-          ) : mode !== 'measure' ? (
+          ) : mode === 'build' ? (
             circuitCanvas
           ) : null}
-          {mode === 'potential' && showGraph && (
+          {showOperatingState && showGraph && (
             <section className="graph-panel">
               <div className="graph-heading">
                 <h2>경로에 따른 전위 변화</h2>
@@ -1022,7 +1089,12 @@ export function App() {
                 >
                   {paths.map((p, i) => (
                     <option key={p.id} value={i}>
-                      {p.steps.map(s=>doc.components.find(c=>c.id===s.elementId)?.label??s.elementId).join(' → ')}
+                      {p.steps
+                        .map(
+                          (s) =>
+                            doc.components.find((c) => c.id === s.elementId)?.label ?? s.elementId,
+                        )
+                        .join(' → ')}
                     </option>
                   ))}
                   {customPathIds.length > 0 && <option value="custom">직접 선택한 경로</option>}
@@ -1030,6 +1102,7 @@ export function App() {
                 <button
                   onClick={() => {
                     setCustomPathIds([]);
+                    chooseMeasurement(null);
                     setTool('path');
                     setPotentialView('2d');
                     setNotice('회로에서 경로를 따라 부품을 순서대로 선택하세요.');
@@ -1048,7 +1121,8 @@ export function App() {
                   </button>
                 )}
               </div>
-              <PotentialGraph document={doc}
+              <PotentialGraph
+                document={doc}
                 path={path}
                 result={result}
                 hovered={hovered ?? selected[0] ?? null}
@@ -1061,7 +1135,7 @@ export function App() {
               )}
             </section>
           )}
-          {result.diagnostics.length > 0 && (
+          {!isolated && result.diagnostics.length > 0 && (
             <details className="canvas-diagnostics" open={result.status === 'error'}>
               <summary>
                 {result.status === 'error'
@@ -1123,13 +1197,13 @@ export function App() {
             </details>
           )}
         </main>
-        <aside className="inspector-panel" hidden={mode === 'measure' || !detailsOpen}>
+        <aside className="inspector-panel" hidden={!detailsOpen}>
           <div className="section-heading">
             <h2>
               {mode === 'worksheet'
                 ? '표시 설정'
-                : mode === 'potential'
-                  ? '전위 설정'
+                : mode === 'analysis'
+                  ? '분석 설정'
                   : component
                     ? '선택한 부품'
                     : '선택'}
@@ -1166,19 +1240,43 @@ export function App() {
             />
           </div>
 
-          {mode === 'potential' && (
+          {showOperatingState && (
             <PotentialSettings
               document={doc}
               potential={potential}
-              selectedNet={selectedNet}
-              threeDimensional={potentialView === '3d'}
+              selectedNet={showNumbers ? selectedNet : null}
+              threeDimensional={analysisView === '3d'}
               value={potentialSettings}
               onChange={setPotentialSettings}
             />
           )}
 
-          {mode === 'potential' && showCurrent && <CurrentSettings document={doc} display={currentDisplay} selectedId={selected[0]} onWidthScale={setCurrentWidthScale}/>}
+          {showOperatingState && showCurrent && (
+            <CurrentSettings
+              document={doc}
+              display={currentDisplay}
+              selectedId={selected[0]}
+              onWidthScale={setCurrentWidthScale}
+            />
+          )}
           <div hidden={mode === 'worksheet'}>
+            {mode === 'analysis' && (
+              <label className="field-label">
+                값을 바꿀 부품
+                <select
+                  aria-label="값을 바꿀 부품"
+                  value={component?.id ?? ''}
+                  onChange={(e) => setSelected(e.target.value ? [e.target.value] : [])}
+                >
+                  <option value="">부품 선택</option>
+                  {doc.components.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {component && definition ? (
               <>
                 <div className="selected-component">
@@ -1190,10 +1288,15 @@ export function App() {
                     <p>{definition.name}</p>
                   </div>
                 </div>
-                <div hidden={mode !== 'build'}>
+                <div>
                   <label className="field-label">
                     이름
-                    <ComponentNameInput key={component.id} label="부품 이름" value={component.label} onCommit={label=>dispatch({type:'SetLabel',id:component.id,label})}/>
+                    <ComponentNameInput
+                      key={component.id}
+                      label="부품 이름"
+                      value={component.label}
+                      onCommit={(label) => dispatch({ type: 'SetLabel', id: component.id, label })}
+                    />
                   </label>
                   {definition.property && (
                     <form
@@ -1211,7 +1314,13 @@ export function App() {
                             value={valueDraft}
                             onChange={(e) => setValueDraft(e.target.value)}
                             onBlur={applyValue}
-                            onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();setValueDraft(componentValueInput(component));}}}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setValueDraft(componentValueInput(component));
+                              }
+                            }}
                           />
                           <span>{definition.unit}</span>
                         </div>
@@ -1224,9 +1333,14 @@ export function App() {
                       </p>
                     </form>
                   )}
-                  {!definition.property&&quantityControl}
-                  {component.type === 'switch' && <SwitchStateButton closed={component.properties.state==='closed'} onToggle={()=>toggleSwitch(component.id)}/>}
-                  <div className="selection-actions">
+                  {!definition.property && quantityControl}
+                  {component.type === 'switch' && (
+                    <SwitchStateButton
+                      closed={component.properties.state === 'closed'}
+                      onToggle={() => toggleSwitch(component.id)}
+                    />
+                  )}
+                  <div className="selection-actions" hidden={mode !== 'build'}>
                     <button onClick={() => dispatch({ type: 'RotateComponents', ids: selected })}>
                       <RotateCw size={17} />
                       회전
@@ -1241,28 +1355,48 @@ export function App() {
                     </button>
                   </div>
                 </div>
-                <div className="library-divider" />
-                <div className="section-heading">
-                  <h2>빠른 값 보기</h2>
-                  <span className="live-label">자동 계산</span>
-                </div>
-                <p className="tiny-note">a → b 방향 · 전원은 + → −</p>
-                <div className="readings">
-                  <div>
-                    <span>양단 전압</span>
-                    <strong>{formatQuantity(result.componentVoltages[component.id], 'V', quantityFormatFor(component.properties))}</strong>
+                <div hidden={mode === 'analysis' && (isolated || !showNumbers)}>
+                  <div className="library-divider" />
+                  <div className="section-heading">
+                    <h2>빠른 값 보기</h2>
+                    <span className="live-label">자동 계산</span>
                   </div>
-                  <div>
-                    <span>가지 전류</span>
-                    <strong>{formatQuantity(result.branchCurrents[component.id], 'A', quantityFormatFor(component.properties))}</strong>
-                  </div>
-                  <div>
-                    <span>
-                      {(result.componentPowers[component.id] ?? 0) < 0 ? '공급 전력' : '소비 전력'}
-                    </span>
-                    <strong>
-                      {formatQuantity(Math.abs(result.componentPowers[component.id] ?? NaN), 'W', quantityFormatFor(component.properties))}
-                    </strong>
+                  <p className="tiny-note">a → b 방향 · 전원은 + → −</p>
+                  <div className="readings">
+                    <div>
+                      <span>양단 전압</span>
+                      <strong>
+                        {formatQuantity(
+                          result.componentVoltages[component.id],
+                          'V',
+                          quantityFormatFor(component.properties),
+                        )}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>가지 전류</span>
+                      <strong>
+                        {formatQuantity(
+                          result.branchCurrents[component.id],
+                          'A',
+                          quantityFormatFor(component.properties),
+                        )}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>
+                        {(result.componentPowers[component.id] ?? 0) < 0
+                          ? '공급 전력'
+                          : '소비 전력'}
+                      </span>
+                      <strong>
+                        {formatQuantity(
+                          Math.abs(result.componentPowers[component.id] ?? NaN),
+                          'W',
+                          quantityFormatFor(component.properties),
+                        )}
+                      </strong>
+                    </div>
                   </div>
                 </div>
               </>

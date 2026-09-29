@@ -91,14 +91,73 @@ export function wireDisplayPoints(document:CircuitDocument,wire:Wire,crossings=w
   }
   return points;
 }
-export function endpointName(document: CircuitDocument, id: string): string {
+function terminalName(document: CircuitDocument, id: string): string | undefined {
   for (const c of document.components) {
     const i=c.terminals.findIndex(t=>t.id===id);
     if(i<0)continue;
     const t=c.terminals[i], p=terminalPosition(c,i), other=terminalPosition(c,i===0?1:0);
-    return `${c.label} · ${t.role==='positive'?'＋극':t.role==='negative'?'−극':p.x!==other.x?(p.x<other.x?'왼쪽':'오른쪽'):(p.y<other.y?'위쪽':'아래쪽')} 단자`;
+    return `${c.label} · ${t.role==='positive'?'＋극':t.role==='negative'?'−극':Math.abs(p.x-other.x)>=Math.abs(p.y-other.y)?(p.x<other.x?'왼쪽':'오른쪽'):(p.y<other.y?'위쪽':'아래쪽')} 단자`;
   }
-  return document.junctions.some(j=>j.id===id) ? `분기점 ${id}` : id;
+  return undefined;
+}
+
+/** Walk explicit wire connections only, stopping at the first layer of terminals.
+ * Coordinates describe a terminal's visible side; they never decide connectivity.
+ */
+function neighboringTerminals(document: CircuitDocument, id: string): string[] {
+  const terminalIds = new Set(document.components.flatMap(c => c.terminals.map(t => t.id)));
+  const neighbors = new Map<string, string[]>();
+  for (const wire of document.wires) {
+    for (const [a, b] of [[wire.start.id, wire.end.id], [wire.end.id, wire.start.id]]) {
+      if (!neighbors.has(a)) neighbors.set(a, []);
+      neighbors.get(a)!.push(b);
+    }
+  }
+  const visited = new Set([id]);
+  let frontier = [id];
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const point of frontier) for (const neighbor of neighbors.get(point) ?? []) {
+      if (!visited.has(neighbor)) { visited.add(neighbor); next.push(neighbor); }
+    }
+    const terminals = next.filter(point => terminalIds.has(point));
+    if (terminals.length) return terminals.sort();
+    frontier = next;
+  }
+  return [];
+}
+
+const compactTerminalName = (name: string) => name.replace(' · ', ' ').replace(' 단자', '');
+
+export function endpointName(document: CircuitDocument, id: string): string {
+  const direct = terminalName(document, id);
+  if (direct) return direct;
+  if (!document.junctions.some(j => j.id === id)) return '연결 위치';
+  const nearby = neighboringTerminals(document, id);
+  const source = nearby.find(point => document.components.some(c =>
+    c.type === 'dc-voltage-source' && c.terminals.some(t => t.id === point)));
+  if (source) return `${compactTerminalName(terminalName(document, source)!)} 쪽 연결점`;
+  if (nearby.length === 2) {
+    const components = nearby.map(point => document.components.find(c => c.terminals.some(t => t.id === point))!);
+    if (components[0].id === components[1].id) return `${components[0].label} 양단 연결점`;
+    const sides = nearby.map(point => terminalName(document, point)!.split(' · ').at(-1)!.replace(' 단자', ''));
+    return `${components.map(c => c.label).join('·')} ${sides[0] === sides[1] ? sides[0] : '사이'} 연결점`;
+  }
+  return nearby.length ? `${compactTerminalName(terminalName(document, nearby[0])!)} 연결점` : '연결점';
+}
+
+/** A wire is described by the visible component it joins, never by its storage ID. */
+export function wireName(document: CircuitDocument, id: string): string {
+  const wire = document.wires.find(w => w.id === id);
+  if (!wire) return '도선';
+  const ends = [wire.start.id, wire.end.id];
+  const direct = ends.flatMap(point => {
+    const name = terminalName(document, point);
+    return name ? [compactTerminalName(name)] : [];
+  });
+  if (direct.length) return `${direct.join(' — ')} 도선`;
+  const names = [...new Set(ends.map(point => endpointName(document, point)))];
+  return `${names.join(' — ')} 연결 도선`;
 }
 export const escapeXml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 export function componentValue(component: ComponentInstance, options?: QuantityFormatOptions): string {

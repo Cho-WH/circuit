@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pause, Play } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
-import { endpointName } from '../component-library';
+import { endpointName, wireName } from '../component-library';
 import type { CurrentDisplay, CurrentModel } from '../visualization';
 import { formatQuantity } from '../quantity';
 import { Notation } from './Notation';
@@ -81,7 +81,7 @@ export function CurrentSettings({
             <strong>
               <Notation
                 symbol
-                text={document.components.find((c) => c.id === selected.id)?.label ?? selected.id}
+                text={document.components.find((c) => c.id === selected.id)?.label ?? wireName(document, selected.id)}
               />
             </strong>
             <span>

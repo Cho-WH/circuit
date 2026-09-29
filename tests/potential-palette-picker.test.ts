@@ -62,7 +62,7 @@ it('keeps the menu inside a narrow viewport and dismisses it when the viewport c
 it('applies palette selection to the real 2D canvas and 3D input while preserving the circuit and heights',async()=>{
   await act(async()=>root.render(createElement(App)));
   const button=(text:string)=>Array.from(host.querySelectorAll('button')).find(b=>b.textContent?.trim()===text)!;
-  click(button('전위 보기'));
+  click(button('분석하기'));
   const before=host.querySelector('.circuit-canvas')!.outerHTML;
   click(trigger());click(options()[0]);
   expect(host.querySelector('.circuit-canvas')!.outerHTML).not.toBe(before);
@@ -75,6 +75,6 @@ it('applies palette selection to the real 2D canvas and 3D input while preservin
   expect(second.document).toBe(doc);
   expect(Object.values(second.potential.nets).map(n=>n.height)).toEqual(heights);
   for(const n of Object.values(second.potential.nets))expect(n.color).toBe(potentialColor(n.voltage,second.potential.min,second.potential.max,'red-yellow'));
-  click(button('2D'));click(button('회로 만들기'));click(button('전위 보기'));
+  click(button('2D'));click(button('회로 만들기'));click(button('분석하기'));
   expect(trigger().getAttribute('aria-label')).toContain('검붉은색 → 노랑');
 });

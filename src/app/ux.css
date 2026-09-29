@@ -5,7 +5,7 @@
 .mode-tabs button{min-height:52px;font-size:14px}.presentation-toggle{align-self:center}
 .brand small{letter-spacing:0;font-weight:500}
 .top-actions button{font-size:12px}
-.mode-potential .canvas-column{overflow:hidden}
+.mode-analysis .canvas-column{overflow:hidden}
 .potential-controls{min-height:48px}
 .graph-panel{max-height:210px}
 .canvas-diagnostics{flex-shrink:0;background:#f5f8fc;color:#425773;border-top:1px solid #d9e2ec;max-height:145px;overflow:auto;font-size:12px;padding:9px 18px}
@@ -33,7 +33,6 @@
 .export-menu[open] button{position:absolute;top:38px;right:0;width:130px;background:white;border:1px solid #cbd7e6;border-radius:0;box-shadow:0 4px 12px #29426122}
 .export-menu[open] button+button{top:75px}
 .record-retention{color:#4c6079;font-size:12px;line-height:1.7;padding:10px 12px;background:#edf3fa;border-radius:7px}
-.sweep-entry{font-size:12px;border:1px solid #bacde8;color:#2f5890}
 .mode-worksheet .inspector-panel>.selected-component{margin-top:10px}
 
 
@@ -90,7 +89,7 @@
   .component-tile{min-width:66px;font-size:12px;height:72px}
   .tile-symbol{height:28px}
   .canvas-column{height:600px}
-  .mode-potential .canvas-column{height:680px}
+  .mode-analysis .canvas-column{height:680px}
   .mode-worksheet .canvas-column{height:590px}
   .inspector-panel{position:static;width:100%;box-shadow:none}
   .editor-toolbar{overflow-x:auto;gap:4px;min-height:50px}
@@ -226,7 +225,7 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
  .library-panel{width:100%;padding:4px 8px;gap:4px;flex:none;min-height:66px;background:var(--surface);overflow-x:auto}
  .library-panel .component-grid{gap:2px;flex-shrink:0;width:auto}.component-tile{height:58px;min-width:64px;gap:3px;padding:4px;font-size:11px}.tile-symbol{height:27px}.tile-symbol svg{height:27px;width:54px}
  .library-panel>.wide-button{height:50px;min-width:40px;width:40px;padding:4px}.library-panel>.field-label{min-width:130px}
- .canvas-column,.mode-potential .canvas-column,.mode-worksheet .canvas-column,.presentation .canvas-column{height:auto;flex:1;min-height:0;overflow:auto}
+ .canvas-column,.mode-analysis .canvas-column,.mode-worksheet .canvas-column,.presentation .canvas-column{height:auto;flex:1;min-height:0;overflow:auto}
  .editor-toolbar{height:46px;min-height:46px;padding:0 6px;gap:2px;overflow-x:auto;overflow-y:hidden}.tool-group{gap:0}.tool-group button{min-width:40px;min-height:44px;padding:8px}.tool-group button span{display:none}
  .settings-toggle{min-height:44px;min-width:40px;padding:8px}.settings-toggle span{display:none}.canvas-shell{min-height:200px;flex:1}
  .potential-controls{padding:2px 6px;gap:3px;flex-wrap:wrap;min-height:44px}.potential-controls>label{font-size:12px;min-height:40px}.segmented button{min-height:40px;padding:4px 7px}
@@ -293,10 +292,44 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
 @keyframes placement-rejected { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .placement-failure { animation: none; } }
 
-.quantity-graph-scroll,.sweep-values{max-width:100%;overflow-x:auto}.sweep-values td{white-space:nowrap}
+.quantity-graph-scroll{max-width:100%;overflow-x:auto}
 
 .quantity-setting{display:flex;align-items:center;gap:8px;margin:12px 0 6px;min-width:0}.quantity-setting-label{flex:none;color:var(--muted,#62748c);font-size:12px}.quantity-picker{position:relative;flex:1;min-width:0}.quantity-setting .quantity-picker-trigger{width:100%;min-height:36px;padding:8px 10px;border:1px solid #dce2d6;background:#fff;box-shadow:0 1px 2px #26351c08;border-radius:9px;justify-content:space-between;gap:6px;font-size:12px;font-weight:600}.quantity-picker-trigger svg{flex:none;color:#78866f;transition:transform .15s}.quantity-picker-trigger[aria-expanded=true]{border-color:#8e9f81;box-shadow:0 0 0 3px #74866512}.quantity-picker-trigger[aria-expanded=true] svg{transform:rotate(180deg)}.quantity-picker-menu{position:absolute;top:calc(100% + 5px);left:0;right:0;min-width:124px;z-index:40;padding:5px;background:#fff;border:1px solid #e0e5db;border-radius:11px;box-shadow:0 10px 28px #23311720,0 2px 5px #23311709}.quantity-picker-menu [role=option]{display:flex;justify-content:space-between;min-height:34px;width:100%;padding:8px;font-size:12px;border-radius:6px}.quantity-picker-menu [aria-selected=true]{background:#eef2e8;color:#405a31;font-weight:650}.quantity-picker-menu [role=option]:hover,.quantity-picker-menu [role=option]:focus-visible{background:#f1f4ed;outline:2px solid #8c9d80;outline-offset:-2px}.quantity-setting .quantity-apply-all{flex:none;font-size:11px;font-weight:600;padding:8px 7px;min-height:36px;border:1px solid #e1e6da;border-radius:8px;background:#f3f5ee;color:#526745}.quantity-setting .quantity-apply-all:hover{background:#e8eddf;border-color:#c9d3bc}
 
 
 .action-menu{position:relative}.action-menu-trigger{gap:5px}.action-menu-content button{border-radius:5px}.action-menu-content [aria-checked=true]{background:#eef2e8;color:#405a31;font-weight:600}.action-menu-content [role=menuitemradio]{justify-content:space-between}.example-menu{margin-top:18px}.example-menu>.action-menu-trigger{width:100%;justify-content:space-between;font-size:13px;min-height:36px;padding:8px 4px}.new-circuit-mobile-label,.palette-start-divider{display:none}
 @media(max-width:640px){.library-panel>.new-circuit-button{order:-3;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;width:64px;min-width:64px;height:58px;gap:3px;padding:4px;font-size:11px}.new-circuit-button>svg{width:24px;height:27px}.new-circuit-desktop-label{display:none}.new-circuit-mobile-label{display:block}.library-panel>.example-menu{order:-2;flex:none;margin:0;display:flex;align-items:center;height:58px}.example-menu>.action-menu-trigger{min-height:44px;padding:6px;font-size:12px;gap:4px}.library-panel>.palette-start-divider{order:-1;display:block;flex:none;width:1px;height:34px;margin:0 7px;background:var(--line)}.library-panel>.component-grid{order:0}}
+
+/* Analysis reuses the component palette and keeps one optional panel open. */
+.analysis-tools .tile-symbol{letter-spacing:0}.resistance-symbol{font-family:'Libertinus Math',serif;font-size:30px}
+.analysis-tool-hint{font-size:12px;color:var(--muted);line-height:1.6;margin:16px 4px}
+.isolation-prompt{padding:12px 10px;margin-top:12px;border:1px solid var(--line);border-radius:6px;background:#fff;box-shadow:0 3px 12px #30382f0a;font-size:12px;line-height:1.6}
+.isolation-prompt button{margin-top:10px;width:100%;padding:8px 4px;font-size:12px;white-space:normal}
+.measure-exit{font-size:12px;gap:4px;color:var(--muted);padding:6px}.isolation-state{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--accent)}
+.measure-notebook .notebook-heading button{padding:6px}
+.mode-analysis .measure-circuit .canvas-shell{min-height:180px}
+.presentation.mode-analysis .library-panel{display:flex}
+@media(max-width:640px){
+ .mode-analysis .library-panel{flex-wrap:wrap;overflow:visible}.mode-analysis .library-panel .analysis-tools{width:100%;flex:1;justify-content:space-around}.analysis-tools .component-tile{min-width:64px;flex:1}
+ .analysis-tool-hint{margin:0 6px;font-size:11px}.isolation-prompt{display:flex;align-items:center;gap:8px;flex-basis:100%;margin:0;padding:6px 8px;box-shadow:none}.isolation-prompt button{width:auto;flex-shrink:0;margin:0;min-height:40px}
+ .potential-controls.no-legend .potential-legend-tools{flex:0 0 auto;margin-left:auto}
+ .measure-console{gap:2px 6px}.measure-exit{min-height:40px}
+ .mode-analysis .measure-circuit .canvas-shell{min-height:160px}.measure-result{flex:1}.isolation-state{font-size:11px}
+}
+
+@media(min-width:641px){
+ .analysis-console-host{min-width:0}
+ .analysis-console-host .measure-console{display:flex;flex-direction:column;align-items:stretch;gap:14px;margin-top:20px;padding:16px 0 0;border-top:1px solid var(--line);border-bottom:0}
+ .analysis-console-host .measure-connections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;flex:none}
+ .analysis-console-host .probe-pair{display:contents}
+ .analysis-console-host .probe-choice{min-width:0;min-height:76px;flex-direction:column;gap:3px;padding:6px 2px;position:relative}
+ .analysis-console-host .probe-choice i{position:absolute;right:10px;bottom:13px}
+ .analysis-console-host .measure-icon-button{min-width:0;min-height:34px;padding:6px}
+ .analysis-console-host .current-tool{grid-column:1/-1;min-width:0;gap:6px;flex-wrap:wrap;justify-content:center}
+ .analysis-console-host .isolation-state{grid-column:1/-1;justify-content:center;margin-top:6px;line-height:1.6}
+ .analysis-console-host .measure-result{width:100%;min-width:0;padding:12px 0 0;border-left:0;border-top:1px solid var(--line);flex-direction:column;gap:12px;text-align:center}
+ .analysis-console-host .measure-result output{max-width:100%;font-size:30px;white-space:normal;overflow-wrap:anywhere}
+ .analysis-console-host .record-reading{width:100%;min-height:38px}
+ .analysis-console-host .measure-exit{width:100%;min-height:34px}
+ .analysis-console-host .measure-diagnostics{flex-basis:auto}
+}

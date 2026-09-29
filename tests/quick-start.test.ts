@@ -27,7 +27,7 @@ const button = (label: string) =>
 
 it('contains keyboard focus and restores the help trigger without changing the circuit or active mode', async () => {
   await act(async () => root.render(createElement(App)));
-  await act(async () => button('전위 보기').click());
+  await act(async () => button('분석하기').click());
   const canvas = host.querySelector('.circuit-canvas')!;
   const before = canvas.outerHTML;
   const trigger = button('사용 도움말');
@@ -57,7 +57,7 @@ it('contains keyboard focus and restores the help trigger without changing the c
   );
   expect(host.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(trigger);
-  expect(button('전위 보기').getAttribute('aria-pressed')).toBe('true');
+  expect(button('분석하기').getAttribute('aria-pressed')).toBe('true');
   expect(canvas.outerHTML).toBe(before);
 });
 
