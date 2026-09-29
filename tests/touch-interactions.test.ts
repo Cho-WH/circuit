@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { wireName } from '../src/component-library';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
@@ -151,7 +152,7 @@ it('records a touch insertion once and restores topology with undo/redo',()=>{
 it('offers every screen-near wire at low zoom and inserts on the chosen segment',()=>{
   const doc=fixture();doc.junctions=[{id:'J1',position:{x:244,y:440}},{id:'J2',position:{x:756,y:440}}];doc.wires.push({id:'W2',start:{kind:'junction',id:'J1'},end:{kind:'junction',id:'J2'},waypoints:[]});
   const c=canvas({document:doc,placement:'resistor',initialView:{x:0,y:0,width:5000,height:3100}});tap(c.svg,c.svg,500,400);
-  expect(c.props.onPlace).not.toHaveBeenCalled();click([...host.querySelectorAll('button')].find(b=>b.textContent==='W2 · 구간 1')!);
+  expect(c.props.onPlace).not.toHaveBeenCalled();click([...host.querySelectorAll('button')].find(b=>b.textContent===`${wireName(doc,'W2')} · 구간 1`)!);
   click([...host.querySelectorAll('button')].find(b=>b.textContent==='삽입')!);
   expect(c.props.onPlace).toHaveBeenCalledExactlyOnceWith('resistor',{x:500,y:440},{wireId:'W2',segment:0});
 });

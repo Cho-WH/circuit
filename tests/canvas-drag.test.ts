@@ -67,7 +67,7 @@ function setup(overrides: Partial<CanvasProps> = {}) {
     },
   });
   const component = (id: string) => host.querySelector(`[data-component-id="${id}"] .component`)!;
-  const paths = () => [...host.querySelectorAll('polyline[aria-label^="도선 "]')].map(el => el.getAttribute('points'));
+  const paths = () => [...host.querySelectorAll('polyline[data-wire-id]')].map(el => el.getAttribute('points'));
   function pointer(target: Element, type: string, x: number, y: number, pointerId = 1, pointerType = 'mouse') {
     act(() => { target.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId, pointerType, button: 0 })); });
   }

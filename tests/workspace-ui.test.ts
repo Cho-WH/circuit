@@ -30,8 +30,9 @@ describe('workspace transitions and file actions', () => {
     await click('상세 설정');
     expect(host.querySelector('[aria-label="전류 두께 배율"]')).not.toBeNull();
     for(const [id,value,key] of [['W1','3 A',false],['W2','1 A',true],['W3','2 A',true]] as const) {
-      await act(async()=>host.querySelector(`[data-wire-id="${id}"]`)!.dispatchEvent(key?new KeyboardEvent('keydown',{key:'Enter',bubbles:true}):new MouseEvent('click',{bubbles:true})));
-      expect(host.querySelector('.current-readout strong .notation')?.getAttribute('aria-label')).toBe(id);
+      const wire = host.querySelector(`[data-wire-id="${id}"]`)!;
+      await act(async()=>wire.dispatchEvent(key?new KeyboardEvent('keydown',{key:'Enter',bubbles:true}):new MouseEvent('click',{bubbles:true})));
+      expect(host.querySelector('.current-readout strong .notation')?.getAttribute('aria-label')).toBe(wire.getAttribute('aria-label'));
       expect(host.querySelector('.current-readout')?.textContent).toContain(value);
     }
     expect(button('3D').disabled).toBe(false);
