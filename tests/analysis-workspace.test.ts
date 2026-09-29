@@ -5,13 +5,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { App } from '../src/app/App';
 import { examples } from '../src/fixtures';
 import { layoutExample } from '../src/app/examples';
-import { saveLocal, loadLocal } from '../src/persistence';
+import { saveLocal, loadLocal, loadMeasurementNotebook } from '../src/persistence';
 import type { Potential3DProps } from '../src/potential-3d';
 
-const observed = vi.hoisted(() => ({ document: null as Potential3DProps['document'] | null }));
+const observed = vi.hoisted(() => ({ document: null as Potential3DProps['document'] | null, measurement: undefined as Potential3DProps['voltageMeasurement'], selections: [] as string[][] }));
 vi.mock('../src/potential-3d', () => ({
   Potential3D: (props: Potential3DProps) => {
     observed.document = props.document;
+    observed.measurement = props.voltageMeasurement;
+    observed.selections.push(props.selectedIds);
     useEffect(() => {
       props.onReady?.();
       props.onEntered?.();
@@ -187,4 +189,42 @@ it('starts resistance measurement immediately on a source-free circuit', async (
   expect(button('전지 분리하고 측정')).toBeUndefined();
   await probeResistor();
   expect(value()).toBe('3 Ω');
+});
+
+
+it('keeps voltage probes, polarity, display preferences and recording across 2D/3D', async () => {
+  const doc = await mount();
+  await click('전압 탐침');
+  await probeResistor();
+  await act(async () => { toggle('숫자').click(); toggle('색상').click(); });
+  const view = host.querySelector('.circuit-canvas')!.getAttribute('viewBox');
+  observed.selections = [];
+  await click('3D');
+  // Ready/status updates must not rebuild the scene and interrupt its entry animation.
+  expect(new Set(observed.selections).size).toBe(1);
+  expect(observed.measurement?.label).toBe('3 V');
+  expect(observed.measurement?.red?.endpointId).toBe('R1.a');
+  expect(value()).toBe('3 V');
+  expect(host.querySelector<HTMLElement>('.measure-console')?.hidden).toBe(false);
+  expect(host.querySelector('button[aria-label="빨강 탐침"]')).toBeNull();
+  expect(button('2D에서 위치 변경')).toBeDefined();
+  expect(toggle('색상').checked).toBe(false);
+  expect(toggle('숫자').checked).toBe(false);
+  await click('두 탐침 맞바꾸기');
+  expect(observed.measurement?.label).toBe('-3 V');
+  expect(observed.measurement?.red?.endpointId).toBe('R1.b');
+  await click('측정값 기록');
+  expect(loadMeasurementNotebook().entries[0].record.value).toBe(-3);
+  await click('2D에서 위치 변경');
+  expect(value()).toBe('-3 V');
+  expect(host.querySelector('.circuit-canvas')!.getAttribute('viewBox')).toBe(view);
+  expect(host.querySelector('[data-measurement-handle="red"]')).not.toBeNull();
+  await click('측정 위치 지우기');
+  await click('3D');
+  expect(observed.measurement).toEqual({red:null,black:null,label:null});
+  expect(button('측정값 기록').disabled).toBe(true);
+  await click('도구 종료');
+  expect(observed.measurement).toBeUndefined();
+  expect(button('3D').getAttribute('aria-pressed')).toBe('true');
+  expect(loadLocal()).toMatchObject({ok:true,document:doc});
 });

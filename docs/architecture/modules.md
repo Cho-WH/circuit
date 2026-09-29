@@ -127,3 +127,5 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 측정표의 `MeasurementEntry`, `loadMeasurementNotebook`, `saveMeasurementNotebook`은 persistence의 공개 계약이다. 측정 원시 기록을 감싸 메모·전류 방향·전원 분리 조건·탐침 위치를 별도로 저장한다. MeasurementAnchor·MeasurementAnchors 타입을 app/measurement-tools와 공유하며 위치 계산은 기존 anchorPose를 재사용한다. app의 `useMeasurementRecords`, `measurement-records`, `MeasurementTable`이 상태 연결·조건별 표시·복사·당시 회로 보기를 나눈다. [ADR-022](../../decisions/ADR-022-measurement-notebook.md).
 
 `component-library.endpointName`과 `wireName`은 사용자용 위치 이름의 공통 경계다. 단자 방향·연결된 부품으로 설명하고 저장 ID는 사용자 이름의 대체값으로 사용하지 않는다. 연결 관계는 명시된 도선에서만 읽으며 좌표는 화면의 단자 방향 표현에만 사용한다.
+
+전압 측정의 3D 입력은 `Potential3DProps.voltageMeasurement?: VoltageMeasurement`이다. App이 기존 측정 API와 탐침 위치 모델로 만든 빨강/검정 point·endpointId 및 포맷된 측정값을 넘긴다. 3D는 공통 PotentialModel의 높이와 카메라로 투영하며 계산·측정 기록을 소유하지 않는다. [ADR-006](../../decisions/ADR-006-threejs-integration.md)

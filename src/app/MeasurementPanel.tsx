@@ -48,6 +48,7 @@ interface Props {
   onSwap: () => void;
   onActiveProbe: (probe: 'red' | 'black') => void;
   consoleHost?: HTMLElement | null;
+  onEditPositions?: () => void;
 }
 function Diagnostics({ items }: { items: Diagnostic[] }) {
   return (
@@ -173,20 +174,21 @@ export function MeasurementPanel(props: Props) {
           ? props.currentReading.diagnostics
           : [];
   const measurementConsole = (
-    <div className="measure-console" hidden={!enabled}>
+    <div className={`measure-console${props.onEditPositions ? ' is-3d' : ''}`} hidden={!enabled}>
       <div className="measure-connections">
         {kind !== 'current' ? (
           <div className="probe-pair">
             {(['red', 'black'] as const).map((color) => {
               const name = color === 'red' ? '빨강' : '검정',
                 attached = Boolean(ref(color === 'red' ? red : black));
+              const ProbeControl = props.onEditPositions ? 'div' : 'button';
               return (
-                <button
+                <ProbeControl
                   key={color}
-                  className={`probe-choice probe-${color}${props.activeProbe === color ? ' is-active' : ''}`}
+                  className={`probe-choice probe-${color}${!props.onEditPositions && props.activeProbe === color ? ' is-active' : ''}`}
                   aria-label={`${name} 탐침`}
-                  aria-pressed={props.activeProbe === color}
-                  onClick={() => props.onActiveProbe(color)}
+                  aria-pressed={props.onEditPositions ? undefined : props.activeProbe === color}
+                  onClick={props.onEditPositions ? undefined : () => props.onActiveProbe(color)}
                   title={anchorName(doc, props.anchors[color]) || `${name} 탐침 놓기`}
                 >
                   <svg width="28" height="44" viewBox="-14 -46 28 50" aria-hidden="true">
@@ -197,7 +199,7 @@ export function MeasurementPanel(props: Props) {
                     className={attached ? 'attached' : ''}
                     aria-label={attached ? '연결됨' : '연결 안 됨'}
                   />
-                </button>
+                </ProbeControl>
               );
             })}
             <button
@@ -226,14 +228,16 @@ export function MeasurementPanel(props: Props) {
             </span>
           </div>
         )}
-        <button
-          className="measure-icon-button"
-          aria-label="측정 위치 지우기"
-          title="측정 위치 지우기"
-          onClick={props.onReset}
-        >
-          <RotateCcw size={16} />
-        </button>
+        {!props.onEditPositions && (
+          <button
+            className="measure-icon-button"
+            aria-label="측정 위치 지우기"
+            title="측정 위치 지우기"
+            onClick={props.onReset}
+          >
+            <RotateCcw size={16} />
+          </button>
+        )}
         {isolated && (
           <span className="isolation-state">
             <Unplug size={15} />
@@ -241,6 +245,11 @@ export function MeasurementPanel(props: Props) {
           </span>
         )}
       </div>
+      {props.onEditPositions && (
+        <button className="measure-edit-positions" onClick={props.onEditPositions}>
+          2D에서 위치 변경
+        </button>
+      )}
       <div className={`measure-result${ready ? ' ready' : ''}`}>
         <output aria-label="측정값" aria-live="polite">
           {kind === 'resistance' && resistance?.status === 'open'

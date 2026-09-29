@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as THREE from 'three';
+import { Vector3 } from 'three';
 import type { CircuitDocument } from '../src/domain';
 import { Potential3D, automaticHeight, fitPotentialHeight, type Potential3DProps } from '../src/potential-3d';
 import { compileCircuit } from '../src/connectivity';
@@ -62,6 +63,43 @@ async function advanceFrame(now: number) {
 }
 
 describe('3D prepared first frame and camera lifetime', () => {
+  it('projects voltage probes with the same height scale, preserves zero/sign, and hides undefined heights', async () => {
+    const {circuit,compiled,update} = await mount();
+    await act(async()=>resolveFont()); await act(async()=>images[0].onload!()); await advanceFrame(performance.now()+2000);
+    const red = {point:{x:96,y:0},endpointId:'R1.a'}, black = {point:{x:184,y:0},endpointId:'R1.b'};
+    const measurement = {red,black,label:'3 V'};
+    await update({voltageMeasurement:measurement,showNumbers:false,showColors:false});
+    const overlay = host.querySelector('.voltage-measurement-overlay')!;
+    expect(overlay.textContent?.trim()).toBe('3 V');
+    expect(host.querySelector('.net-tag')).toBeNull();
+    expect(host.querySelector('.scene-selection')).toBeNull();
+    const source = buildPotentialModel(circuit,compiled,solveCircuit(compiled));
+    for (const heightMultiplier of [1,2]) {
+      await update({heightMultiplier});
+      const [,camera] = observed.render.mock.lastCall as [THREE.Scene,THREE.OrthographicCamera];
+      const fitted = fitPotentialHeight(source,automaticHeight(circuit,source,1000,600),heightMultiplier);
+      const point = new Vector3(red.point.x,-red.point.y,fitted.endpoints[red.endpointId].height!).project(camera);
+      const translate = overlay.querySelector('[data-voltage-probe="red"]')!.getAttribute('transform')!;
+      const coordinates = translate.match(/-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/g)!.map(Number);
+      expect(coordinates[0]).toBeCloseTo((point.x+1)*500);
+      expect(coordinates[1]).toBeCloseTo((1-point.y)*300);
+      expect(host.querySelector('.voltage-measurement-overlay')).toBe(overlay);
+    }
+    await update({voltageMeasurement:{red:black,black:red,label:'-3 V'}});
+    expect(overlay.textContent?.trim()).toBe('-3 V');
+    await update({voltageMeasurement:{red,black:{...red,point:{x:20,y:0}},label:'0 V'}});
+    const ruler = overlay.querySelector('.voltage-ruler')!.getAttribute('d')!.match(/-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/g)!.map(Number);
+    expect(ruler.slice(0,2)).toEqual(ruler.slice(2,4)); // No invented minimum height for zero volts.
+    const net = {...source.endpoints['R1.a'],height:undefined,voltage:undefined};
+    const undefinedPotential = {...source,nets:{...source.nets,[net.netId]:net},endpoints:{...source.endpoints,'R1.a':net}};
+    await update({potential:undefinedPotential,voltageMeasurement:{red,black,label:null}});
+    expect((overlay.querySelector('[data-voltage-probe="red"]') as SVGElement).style.display).toBe('none');
+    expect((overlay.querySelector('[data-voltage-ruler]') as SVGElement).style.display).toBe('none');
+    await update({voltageMeasurement:undefined});
+    expect((overlay as SVGElement).style.display).toBe('none');
+    await act(async()=>root.render(null));
+    expect(overlay.isConnected).toBe(false);
+  });
   it('owns the current overlay through height edits, toggle, pause, and disposal',async()=>{
     const {circuit,compiled,update}=await mount();
     await act(async()=>resolveFont());await act(async()=>images[0].onload!());await advanceFrame(performance.now()+2000);

@@ -10,7 +10,7 @@ import {
   type MeasurementAnchor,
   type MeasurementTool,
 } from './measurement-tools';
-import { probeCurrent } from '../measurement';
+import { probeCurrent, probeVoltage } from '../measurement';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Zap,
@@ -47,6 +47,7 @@ import {
   createComponent,
   symbolMarkup,
   endpointName,
+  quantityFormatForTargets,
 } from '../component-library';
 import { copySelection, type Command, type PastePayload } from '../editor';
 import { parseDocument, serializeDocument } from '../persistence';
@@ -71,6 +72,7 @@ import { MeasurementPanel } from './MeasurementPanel';
 import { AnalysisTools, type MeasurementKind, type AnalysisPanel } from './AnalysisTools';
 import { WorksheetPanel } from './WorksheetPanel';
 import { OutputCanvas, type OutputTool } from './OutputCanvas';
+import type { VoltageMeasurement } from '../potential-3d';
 import type { ExportOptions } from '../export';
 import { parseQuantity, formatQuantity, quantityFormatFor, type QuantityMode } from '../quantity';
 import { Notation } from './Notation';
@@ -84,6 +86,7 @@ import { useVisibleViewport } from './useVisibleViewport';
 import './styles.css';
 import './ux.css';
 const FeedbackFeature = lazy(() => import('./FeedbackBoard'));
+const noSelection: string[] = [];
 
 function GroundIcon({ size = 18 }: { size?: number }) {
   return (
@@ -179,6 +182,7 @@ export function App() {
   const analysisView = resistanceMode ? '2d' : potentialView;
   const measurementActive =
     mode === 'analysis' && measurementKind !== null && analysisView === '2d' && !needsIsolation;
+  const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation;
   const showOperatingState = mode === 'analysis' && !isolated;
   function chooseMeasurement(kind: MeasurementKind | null) {
     setMeasurementKind(kind);
@@ -188,7 +192,7 @@ export function App() {
     if (kind === 'resistance') setAnalysisPanel(null);
   }
   function chooseView(view: '2d' | '3d') {
-    if (view === '3d') chooseMeasurement(null);
+    if (view === '3d' && measurementKind !== 'voltage') chooseMeasurement(null);
     setPotentialView(view);
   }
   useEffect(() => {
@@ -202,6 +206,33 @@ export function App() {
   const valueInput = useRef<HTMLInputElement>(null);
   const idCounter = useRef(1);
   const { compilation, result } = useMemo(() => analyze(doc), [doc]);
+  const voltageMeasurement = useMemo<VoltageMeasurement | undefined>(() => {
+    if (mode !== 'analysis' || measurementKind !== 'voltage') return undefined;
+    const probe = (anchor: MeasurementAnchor | null) => {
+      const pose = anchorPose(doc, anchor),
+        endpoint = anchorEndpoint(doc, anchor);
+      return pose && endpoint ? { point: pose.point, endpointId: endpoint.id } : null;
+    };
+    const red = probe(storedMeasurementAnchors.red),
+      black = probe(storedMeasurementAnchors.black);
+    const reading = probeVoltage(
+      compilation,
+      result,
+      anchorEndpoint(doc, storedMeasurementAnchors.red),
+      anchorEndpoint(doc, storedMeasurementAnchors.black),
+    );
+    return {
+      red,
+      black,
+      label: reading.ok
+        ? formatQuantity(
+            reading.value.voltageV,
+            'V',
+            quantityFormatForTargets(doc, [red?.endpointId ?? '', black?.endpointId ?? '']),
+          )
+        : null,
+    };
+  }, [doc, compilation, result, storedMeasurementAnchors, measurementKind, mode]);
   const currents = useMemo(
     () => buildCurrentModel(doc, compilation, result),
     [doc, compilation, result],
@@ -1000,7 +1031,8 @@ export function App() {
               consoleHost={measurementConsoleHost}
               kind={measurementKind}
               onExit={() => chooseMeasurement(null)}
-              enabled={measurementActive}
+              enabled={measurementEnabled}
+              onEditPositions={analysisView === '3d' ? () => setPotentialView('2d') : undefined}
               isolated={isolated}
               panel={analysisPanel}
               onPanel={setAnalysisPanel}
@@ -1034,9 +1066,10 @@ export function App() {
                   onReturnTo2D={() => setPotentialView('2d')}
                   document={doc}
                   potential={potential}
+                  voltageMeasurement={voltageMeasurement}
                   currentDisplay={showOperatingState && showCurrent ? currentDisplay : undefined}
                   heightMultiplier={heightScale}
-                  selectedIds={selected}
+                  selectedIds={measurementKind === 'voltage' ? noSelection : selected}
                   highlightedId={hovered}
                   selectedNet={selectedNet}
                   showNumbers={!isolated && showNumbers}
@@ -1044,12 +1077,18 @@ export function App() {
                   referenceLabel={
                     doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'
                   }
-                  onSelect={(id) => {
-                    setHovered(id);
-                    setSelected([id]);
-                    const wire = doc.wires.find((w) => w.id === id);
-                    setSelectedNet(wire ? compilation.circuit.endpointToNet[wire.start.id] : null);
-                  }}
+                  onSelect={
+                    measurementKind === 'voltage'
+                      ? undefined
+                      : (id) => {
+                          setHovered(id);
+                          setSelected([id]);
+                          const wire = doc.wires.find((w) => w.id === id);
+                          setSelectedNet(
+                            wire ? compilation.circuit.endpointToNet[wire.start.id] : null,
+                          );
+                        }
+                  }
                 >
                   {circuitCanvas}
                 </PotentialWorkspace>

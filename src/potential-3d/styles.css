@@ -9,3 +9,13 @@
 /* Screen coordinates belong to the 3D projection, never to generic button motion. */
 .potential-labels .potential-tag{transform:none;transition:background-color 120ms ease,color 120ms ease,border-color 120ms ease}
 @media(max-width:760px){.potential-scene-header{top:8px;right:8px}.scene-toolbar{margin-left:auto}.scene-toolbar button{padding:6px;font-size:12px}.scene-footer{left:4px;right:4px;padding:6px 8px;gap:8px}.scene-selection{left:8px;right:8px;padding:7px 9px;gap:8px}.scene-selection small{display:none}}
+
+.voltage-measurement-host{position:absolute;inset:0;pointer-events:none}
+.voltage-measurement-overlay{display:block;width:100%;height:100%;overflow:hidden}
+.voltage-measurement-overlay .probe-red{color:#bc4541}.voltage-measurement-overlay .probe-black{color:#34413a}
+.voltage-guide{fill:none;stroke:currentColor;stroke-width:1;stroke-dasharray:4 4;opacity:.65}
+.voltage-ruler{fill:none;stroke:#53694b;stroke-width:1.5}
+.voltage-probe circle{fill:currentColor;stroke:white;stroke-width:2}
+.voltage-probe path{fill:none;stroke:white;stroke-width:1.5;stroke-linecap:round}
+.voltage-reading rect{fill:#fffffff5;stroke:#8a9384;stroke-width:1}
+.voltage-reading text{fill:#30382f;font-family:'Libertinus Math',serif;font-size:19px;font-variant-numeric:tabular-nums}

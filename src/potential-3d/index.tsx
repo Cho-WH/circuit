@@ -12,6 +12,8 @@ import { projectCurrentPaths } from './current-projection';
 import { htmlNotation, terminalPosition } from '../component-library';
 import { exportSvg } from '../export';
 import { sceneAnchors, sceneExtent, selectedVoltage, obliqueDirection, projectedSize, sceneBounds, automaticHeight, fitPotentialHeight } from './model';
+import { createVoltageMeasurementOverlay, type VoltageMeasurement } from './voltage-measurement';
+export type { VoltageMeasurement } from './voltage-measurement';
 import './styles.css';
 export { voltageTicks, sceneAnchors, sceneExtent, selectedVoltage, automaticHeight, fitPotentialHeight } from './model';
 export { projectCurrentPaths } from './current-projection';
@@ -28,6 +30,7 @@ export interface Potential3DProps {
   showNumbers: boolean;
   showColors: boolean;
   currentDisplay?: CurrentDisplay;
+  voltageMeasurement?: VoltageMeasurement;
   onSelect?: (id: string) => void;
   sourceView?: { x: number; y: number; width: number; height: number };
   entryDuration?: number;
@@ -60,6 +63,7 @@ interface Runtime {
   modelReady: boolean;
   ready: boolean;
   currentOverlay: CurrentOverlay | null;
+  voltageOverlay: ReturnType<typeof createVoltageMeasurementOverlay> | null;
 }
 const point = (p: { x: number; y: number; z: number }) => new THREE.Vector3(p.x, -p.y, p.z);
 function dispose(group: THREE.Object3D) {
@@ -155,7 +159,8 @@ export function Potential3D(props: Potential3DProps) {
   const resetRequested = useRef(false);
   const potential = useMemo(() => heightTarget ? fitPotentialHeight(props.potential, heightTarget.height, heightMultiplier) : props.potential, [props.potential, heightTarget, heightMultiplier]);
   const host = useRef<HTMLDivElement>(null), overlay = useRef<HTMLDivElement>(null);
-  const currentHost = useRef<HTMLDivElement>(null);
+  const currentHost = useRef<HTMLDivElement>(null), voltageHost = useRef<HTMLDivElement>(null);
+  const latestPotential = useRef(potential); latestPotential.current = potential;
   const currentPaths = useMemo(() => props.currentDisplay ? buildCurrentPaths(circuit, props.currentDisplay.model, potential, showColors ? Object.fromEntries(Object.entries(potential.endpoints).map(([id,value])=>[id,value.color])) : undefined) : [], [circuit, props.currentDisplay?.model, potential, showColors]);
   const latestCurrentPaths = useRef(currentPaths); latestCurrentPaths.current = currentPaths;
   const runtime = useRef<Runtime | null>(null), latest = useRef(props);
@@ -163,7 +168,7 @@ export function Potential3D(props: Potential3DProps) {
   const [fallback, setFallback] = useState(false);
   const [preset, setPreset] = useState<Preset>('oblique');
   const [guides, setGuides] = useState(true);
-  const selection = selectedVoltage(circuit, potential, selectedIds[0]);
+  const selection = props.voltageMeasurement ? null : selectedVoltage(circuit, potential, selectedIds[0]);
 
   useEffect(() => {
     const element = host.current;
@@ -186,16 +191,18 @@ export function Potential3D(props: Potential3DProps) {
     controls.enableDamping = false; controls.screenSpacePanning = true; controls.minZoom = .3; controls.maxZoom = 8;
     const floor = new THREE.Group(), content = new THREE.Group(), raised = new THREE.Group();
     content.add(raised); scene.add(floor, content);
-    const r: Runtime = { scene, camera, renderer, controls, floor, content, raised, labels: [], bounds: new THREE.Box3(new THREE.Vector3(-100,-100,0), new THREE.Vector3(100,100,100)), width: 1, height: 1, frustum: 500, frame: 0, progress: 1, preset: 'oblique', floorReady: false, modelReady: false, ready: false, render: () => {}, stop: () => {}, begin: () => {}, currentOverlay: null };
+    const r: Runtime = { scene, camera, renderer, controls, floor, content, raised, labels: [], bounds: new THREE.Box3(new THREE.Vector3(-100,-100,0), new THREE.Vector3(100,100,100)), width: 1, height: 1, frustum: 500, frame: 0, progress: 1, preset: 'oblique', floorReady: false, modelReady: false, ready: false, render: () => {}, stop: () => {}, begin: () => {}, currentOverlay: null, voltageOverlay: voltageHost.current ? createVoltageMeasurementOverlay(voltageHost.current) : null };
     r.render = () => {
+      renderer.domElement.setAttribute('aria-label', latest.current.voltageMeasurement ? '전위 높이와 전압 탐침. 드래그하여 시점을 바꿀 수 있어요.' : '바닥 회로도와 전위 높이 지도. 도선 또는 부품을 눌러 값을 확인하세요.');
       renderer.render(scene, camera);
       const current = latest.current.currentDisplay;
       if (current && r.currentOverlay) {
         const viewport = { width: r.width, height: r.height };
         r.currentOverlay.update(projectCurrentPaths(latestCurrentPaths.current, camera, viewport, r.progress), viewport, current, r.ready);
       }
+      r.voltageOverlay?.update(latest.current.voltageMeasurement, latestPotential.current, camera, r.width, r.height, r.progress);
       const hostRect = element.getBoundingClientRect();
-      const occupied = [...(element.closest('.potential-scene')?.querySelectorAll('.scene-toolbar,.scene-footer,.scene-selection') ?? [])].map(item => {
+      const occupied = [...(element.closest('.potential-scene')?.querySelectorAll('.scene-toolbar,.scene-footer,.scene-selection,.voltage-reading,.voltage-probe') ?? [])].map(item => {
         const rect = item.getBoundingClientRect();
         return { x: rect.left - hostRect.left, y: rect.top - hostRect.top, w: rect.width, h: rect.height };
       });
@@ -284,7 +291,7 @@ export function Potential3D(props: Potential3DProps) {
       cancelAnimationFrame(r.frame); observer.disconnect(); controls.removeEventListener('change',r.render); controls.removeEventListener('start',interrupt); controls.dispose();
       controlSurface.removeEventListener('pointerdown',down); controlSurface.removeEventListener('pointermove',move); controlSurface.removeEventListener('pointercancel',cancel); controlSurface.removeEventListener('lostpointercapture',cancel); controlSurface.removeEventListener('pointerup',up); renderer.domElement.removeEventListener('webglcontextlost',lost); window.removeEventListener('blur',blur);
       dispose(r.floor); dispose(r.content); renderer.dispose(); renderer.domElement.remove();
-      r.currentOverlay?.dispose(); r.currentOverlay = null;
+      r.currentOverlay?.dispose(); r.currentOverlay = null; r.voltageOverlay?.dispose();
       labelHost?.replaceChildren(); r.labels = []; runtime.current = null;
     };
   }, []);
@@ -341,6 +348,7 @@ export function Potential3D(props: Potential3DProps) {
     r.bounds.copy(sceneBounds(extent));
     const radius = Math.max(.9, Math.max(f.width,f.height)*.0035);
     const addLabel = (key: string, text: string, p: THREE.Vector3, className: string, lifted = false, priority = 1, id?: string) => {
+      if (props.voltageMeasurement) id = undefined;
       const previous = existingLabels.get(key);
       const tag = id ? 'button' : 'span';
       const reusable = previous?.element.localName === tag ? previous : undefined;
@@ -404,7 +412,7 @@ export function Potential3D(props: Potential3DProps) {
       const z = ends.length===2 && ends.every(v=>v!==undefined) ? (ends[0]!+ends[1]!)/2 : 0;
       addLabel(`component:${c.id}`,c.label,point({...c.position,z}),'component-tag',true,2,c.id);
     }
-    const selected = selectedVoltage(circuit,potential,selectedIds[0]);
+    const selected = props.voltageMeasurement ? null : selectedVoltage(circuit,potential,selectedIds[0]);
     if(selected) {
       const a=point(selected.a),b=point(selected.b);
       if(guides) for(const p of [a,b]) line(r.raised,[new THREE.Vector3(p.x,p.y,0),p],'#53694b',true,.85);
@@ -419,7 +427,7 @@ export function Potential3D(props: Potential3DProps) {
     if (!r.ready) r.begin();
     else if (resetRequested.current) { resetRequested.current = false; moveCamera(r, 'oblique', true); }
     else r.render();
-  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay)]);
+  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay),Boolean(props.voltageMeasurement)]);
 
   useEffect(() => {
     const r = runtime.current;
@@ -430,6 +438,8 @@ export function Potential3D(props: Potential3DProps) {
   }, [Boolean(props.currentDisplay), fallback]);
   useEffect(() => { runtime.current?.render(); }, [props.currentDisplay, currentPaths]);
 
+  useEffect(() => { runtime.current?.render(); }, [props.voltageMeasurement, potential]);
+
   const choose = (value: Preset, reset = false) => { const r=runtime.current; if(r?.ready) {
     if (reset) { resetRequested.current = true; setHeightTarget({ height: automaticHeight(circuit, props.potential, r.width, r.height) }); }
     else moveCamera(r,value);
@@ -439,7 +449,7 @@ export function Potential3D(props: Potential3DProps) {
     <header className="potential-scene-header"><div className="scene-toolbar" aria-label="3D 카메라 보기">
       <button aria-pressed={preset==='oblique'} onClick={()=>choose('oblique')}><MoveUpRight size={14}/>사선</button><button aria-pressed={preset==='front'} onClick={()=>choose('front')}><ScanLine size={14}/>정면</button><button aria-pressed={preset==='top'} onClick={()=>choose('top')}><Layers3 size={14}/>위에서</button><span className="scene-divider"/><button aria-label="높이 안내선" aria-pressed={guides} onClick={()=>setGuides(!guides)}>{guides?<Eye size={15}/>:<EyeOff size={15}/>}</button><button aria-label="보기 초기화" onClick={()=>choose('oblique',true)}><RotateCcw size={14}/></button>
     </div></header>
-    <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="current-flow-host" ref={currentHost}/><div className="potential-labels" ref={overlay}/>
+    <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="current-flow-host" ref={currentHost}/><div className="potential-labels" ref={overlay}/><div className="voltage-measurement-host" ref={voltageHost}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
     <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number(heightMultiplier.toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>

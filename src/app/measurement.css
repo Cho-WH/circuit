@@ -64,3 +64,13 @@
 .record-condition-value>.notation{font-size:15px}.record-condition-value>span:last-child{font-variant-numeric:tabular-nums}
 .record-isolation{color:var(--accent);font-size:12px}
 .record-scroll td:first-child{color:var(--muted);font-size:12px}.record-scroll td.record-value{width:140px}
+
+.probe-choice{display:flex;align-items:center;justify-content:center}
+.measure-edit-positions{font-size:12px;color:var(--accent);border:1px solid var(--line);border-radius:4px;padding:8px 10px}.analysis-console-host .measure-edit-positions{width:100%}
+
+@media(min-width:641px){
+ .analysis-console-host .measure-console.is-3d{gap:10px}
+ .analysis-console-host .measure-console.is-3d .probe-choice{flex-direction:row;min-height:42px;gap:4px;font-size:12px}
+ .analysis-console-host .measure-console.is-3d .probe-choice svg{width:20px;height:32px}
+ .analysis-console-host .measure-console.is-3d .probe-choice i{position:static}
+}

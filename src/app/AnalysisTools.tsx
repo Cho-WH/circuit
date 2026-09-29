@@ -63,7 +63,9 @@ export function AnalysisTools({
           </button>
         </div>
       )}
-      {threeDimensional && <p className="analysis-tool-hint">측정 도구를 고르면 2D로 전환해요.</p>}
+      {threeDimensional && kind !== 'voltage' && (
+        <p className="analysis-tool-hint">측정 도구를 고르면 2D로 전환해요.</p>
+      )}
     </>
   );
 }
