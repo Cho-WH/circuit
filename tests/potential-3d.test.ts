@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { buildPotentialModel } from '../src/visualization';
-import { sceneAnchors, sceneExtent, selectedVoltage, voltageTicks, automaticHeight, fitPotentialHeight } from '../src/potential-3d';
+import { sceneAnchors, sceneExtent, selectedVoltage, voltageTicks, minorVoltageTicks, automaticHeight, fitPotentialHeight } from '../src/potential-3d';
 import type { CircuitDocument } from '../src/domain';
 function model() {
   const document = JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document as CircuitDocument;
@@ -52,6 +52,12 @@ describe('3D reference plane and voltage readings',()=>{
       expect(ticks).toEqual([...ticks].sort((a,b)=>a-b));
       expect(ticks.length).toBeLessThanOrEqual(8);
     }
+  });
+  it('subdivides major voltage ticks without duplicate labels or invented zero-range steps',()=>{
+    expect(minorVoltageTicks([-5,0,5])).toEqual([-4,-3,-2,-1,1,2,3,4]);
+    expect(minorVoltageTicks([0,2])).toEqual([.5,1,1.5]);
+    expect(minorVoltageTicks([0,.0025])).toEqual([.0005,.001,.0015,.002]);
+    expect(minorVoltageTicks([0])).toEqual([]);
   });
   it('keeps one anchor per solved net and preserves its voltage and height',()=>{
     const {document,potential}=model(); const anchors=sceneAnchors(document,potential);

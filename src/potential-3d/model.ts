@@ -12,7 +12,7 @@ export function projectedSize(bounds: Box3, view: Matrix4) {
 }
 export function sceneBounds(extent: ReturnType<typeof sceneExtent>) {
   const f = extent.floor;
-  return new Box3(new Vector3(f.x-45, -f.y-f.height, extent.minZ-15), new Vector3(f.x+f.width, -f.y, extent.maxZ+30));
+  return new Box3(new Vector3(f.x-45, -f.y-f.height, extent.minZ-15), new Vector3(f.x+f.width+45, -f.y+25, extent.maxZ+30));
 }
 /** Default camera basis and framing bounds, using the actual 3D host dimensions. */
 export function automaticHeight(document: CircuitDocument, potential: PotentialModel, width: number, height: number) {
@@ -47,6 +47,17 @@ export function voltageTicks(values: number[]): number[] {
   const step = [1, 2, 2.5, 5, 10].find(n => n * power >= raw)! * power;
   const first = Math.floor(min / step), last = Math.ceil(max / step);
   return Array.from({ length: last - first + 1 }, (_, i) => Number(((first + i) * step).toPrecision(12)));
+}
+
+/** Unlabelled subdivisions: 5 V → 1 V, 2 V → 0.5 V, 2.5 V → 0.5 V. */
+export function minorVoltageTicks(ticks: number[]): number[] {
+  if (ticks.length < 2) return [];
+  const step = ticks[1] - ticks[0];
+  const leading = Number((step / 10 ** Math.floor(Math.log10(step))).toPrecision(10));
+  const divisions = leading === 2 ? 4 : 5;
+  return ticks.slice(0, -1).flatMap((start, i) =>
+    Array.from({ length: divisions - 1 }, (_, j) =>
+      Number((start + (ticks[i + 1] - start) * (j + 1) / divisions).toPrecision(12))));
 }
 
 export function sceneAnchors(document: CircuitDocument, potential: PotentialModel) {

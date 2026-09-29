@@ -11,7 +11,7 @@ import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { buildCurrentModel, buildPotentialModel } from '../src/visualization';
 
-const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, resize: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
+const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, end: () => {}, change: () => {}, resize: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
 vi.mock('three', async importOriginal => {
   const three = await importOriginal<typeof import('three')>();
   return { ...three, WebGLRenderer: class {
@@ -26,7 +26,7 @@ vi.mock('three/addons/controls/OrbitControls.js', async () => {
   return { OrbitControls: class {
     target = new Vector3(); enabled = true;
     constructor() { observed.target = this.target; }
-    addEventListener(type: string, callback: () => void) { if (type === 'start') observed.start = callback; }
+    addEventListener(type: string, callback: () => void) { if (type === 'start') observed.start = callback; if (type === 'end') observed.end = callback; if (type === 'change') observed.change = callback; }
     removeEventListener() {} update() {} dispose() {}
   } };
 });
@@ -63,6 +63,36 @@ async function advanceFrame(now: number) {
 }
 
 describe('3D prepared first frame and camera lifetime', () => {
+  it('gently attracts a live drag without jumping on start or trapping slow movements', async () => {
+    await mount(); await act(async()=>resolveFont()); await act(async()=>images[0].onload!());
+    await advanceFrame(performance.now()+2000);
+    const camera = observed.render.mock.lastCall![1] as THREE.OrthographicCamera;
+    const target = observed.target!, savedTarget = target.clone(), radius = 500, azimuth = .7;
+    const elevation = () => Math.atan2(camera.position.z-target.z, Math.hypot(camera.position.x-target.x,camera.position.y-target.y));
+    const setElevation = (angle: number) => camera.position.copy(target).add(new Vector3(Math.cos(azimuth)*radius*Math.cos(angle),Math.sin(azimuth)*radius*Math.cos(angle),radius*Math.sin(angle)));
+    const radians = Math.PI/180;
+    setElevation(2*radians); observed.start(); observed.change();
+    expect(elevation()/radians).toBeCloseTo(2, 7);
+    const releasedPosition = camera.position.clone();
+    observed.end();
+    expect(camera.position.equals(releasedPosition)).toBe(true);
+    expect(observed.frames.size).toBe(0);
+    setElevation(radians); observed.change();
+    expect(elevation()/radians).toBeCloseTo(1, 7); // Release also ends attraction.
+    setElevation(0); observed.start();
+    setElevation(radians); observed.change();
+    expect(elevation()).toBeCloseTo(0, 10);
+    // Small deltas accumulate independently of the displayed correction.
+    for(let i=0;i<120;i++) { setElevation(elevation()+.1*radians); observed.change(); }
+    expect(elevation()/radians).toBeCloseTo(13, 6);
+    for(let i=0;i<260;i++) { setElevation(elevation()-.1*radians); observed.change(); }
+    expect(elevation()/radians).toBeCloseTo(-13, 6);
+    expect(camera.position.distanceTo(target)).toBeCloseTo(radius, 8);
+    expect(Math.atan2(camera.position.y-target.y,camera.position.x-target.x)).toBeCloseTo(azimuth, 8);
+    expect(target.equals(savedTarget)).toBe(true);
+    expect(observed.frames.size).toBe(0);
+  });
+
   it('projects voltage probes with the same height scale, preserves zero/sign, and hides undefined heights', async () => {
     const {circuit,compiled,update} = await mount();
     await act(async()=>resolveFont()); await act(async()=>images[0].onload!()); await advanceFrame(performance.now()+2000);
@@ -267,7 +297,7 @@ describe('3D prepared first frame and camera lifetime', () => {
     await advanceFrame(performance.now() + 2000);
     const [, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
     const initial = camera.position.clone(); camera.zoom = 2;
-    const top = [...host.querySelectorAll('button')].find(button => button.textContent === '위에서')!;
+    const top = [...host.querySelectorAll('button')].find(button => button.textContent === '위')!;
     await act(async () => top.click());
     expect(camera.position.equals(initial)).toBe(false); expect(camera.zoom).toBe(2);
     expect(observed.frames.size).toBe(0); expect(entered).toHaveBeenCalledOnce();
@@ -277,7 +307,7 @@ describe('3D prepared first frame and camera lifetime', () => {
     await act(async () => observed.start());
     const [, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
     camera.zoom = 2; const initial = camera.position.clone();
-    const top = [...host.querySelectorAll('button')].find(button => button.textContent === '위에서')!;
+    const top = [...host.querySelectorAll('button')].find(button => button.textContent === '위')!;
     await act(async () => top.click());
     expect(camera.position.equals(initial)).toBe(true); expect(camera.zoom).toBe(2);
     const [id, frame] = [...observed.frames.entries()][0]; observed.frames.delete(id);

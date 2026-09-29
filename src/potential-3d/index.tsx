@@ -9,13 +9,14 @@ import type { CircuitDocument } from '../domain';
 import { buildCurrentPaths, type CurrentDisplay, type PotentialModel } from '../visualization';
 import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
+import { createHorizontalAttraction } from './camera-snap';
 import { htmlNotation, terminalPosition } from '../component-library';
 import { exportSvg } from '../export';
-import { sceneAnchors, sceneExtent, selectedVoltage, obliqueDirection, projectedSize, sceneBounds, automaticHeight, fitPotentialHeight } from './model';
+import { sceneAnchors, sceneExtent, selectedVoltage, obliqueDirection, projectedSize, sceneBounds, automaticHeight, fitPotentialHeight, minorVoltageTicks } from './model';
 import { createVoltageMeasurementOverlay, type VoltageMeasurement } from './voltage-measurement';
 export type { VoltageMeasurement } from './voltage-measurement';
 import './styles.css';
-export { voltageTicks, sceneAnchors, sceneExtent, selectedVoltage, automaticHeight, fitPotentialHeight } from './model';
+export { voltageTicks, minorVoltageTicks, sceneAnchors, sceneExtent, selectedVoltage, automaticHeight, fitPotentialHeight } from './model';
 export { projectCurrentPaths } from './current-projection';
 
 export interface Potential3DProps {
@@ -101,7 +102,7 @@ function cameraPose(r: Runtime, preset: Preset, notify = true) {
   const distance = Math.max(size.x, size.y, size.z, 100) * 4 + 400;
   r.preset = preset;
   r.controls.target.copy(center);
-  const direction = preset === 'top' ? new THREE.Vector3(0, 0, 1) : preset === 'front' ? new THREE.Vector3(0, -1, .001) : obliqueDirection;
+  const direction = preset === 'top' ? new THREE.Vector3(0, 0, 1) : preset === 'front' ? new THREE.Vector3(0, -1, 0) : obliqueDirection;
   r.camera.position.copy(center).addScaledVector(direction, distance);
   r.camera.near = .1; r.camera.far = distance * 10;
   r.camera.zoom = 1;
@@ -209,16 +210,19 @@ export function Potential3D(props: Potential3DProps) {
       // Keep net/component badges away from the full voltage axis, not just its tick text.
       const axisPoints = r.labels.filter(label => label.element.classList.contains('axis-tag')).map(label => {
         const p = label.point.clone().project(camera);
-        return { x: (p.x + 1) * r.width / 2, y: (1 - p.y) * r.height / 2, w: label.element.offsetWidth || 52 };
+        return { axis: label.key.slice(0,label.key.lastIndexOf(':')), x: (p.x + 1) * r.width / 2, y: (1 - p.y) * r.height / 2, w: label.element.offsetWidth || 52 };
       });
-      const axisGutter = axisPoints.length ? { left: Math.min(...axisPoints.map(p => p.x - p.w / 2)) - 8, right: Math.max(...axisPoints.map(p => p.x + p.w / 2)) + 32, top: Math.min(...axisPoints.map(p => p.y)) - 16, bottom: Math.max(...axisPoints.map(p => p.y)) + 16 } : null;
+      const axisGutters = [...new Set(axisPoints.map(p => p.axis))].map(axis => {
+        const points = axisPoints.filter(p => p.axis === axis);
+        return { left: Math.min(...points.map(p => p.x - p.w / 2)) - 8, right: Math.max(...points.map(p => p.x + p.w / 2)) + 8, top: Math.min(...points.map(p => p.y)) - 16, bottom: Math.max(...points.map(p => p.y)) + 16 };
+      });
       for (const label of [...r.labels].sort((a,b) => b.priority-a.priority)) {
         const p = label.point.clone(); if (label.lifted) p.z *= r.progress;
         p.project(camera);
         const x = (p.x + 1) * r.width / 2, y = (1 - p.y) * r.height / 2;
         const w = label.element.offsetWidth || 52, h = label.element.offsetHeight || 25;
         const rect = { x: x - w / 2, y: label.element.classList.contains('axis-tag') ? y - h / 2 : y - h - 9, w, h };
-        const nearAxis = !label.element.classList.contains('axis-tag') && axisGutter && rect.x < axisGutter.right && rect.x + w > axisGutter.left && rect.y < axisGutter.bottom && rect.y + h > axisGutter.top;
+        const nearAxis = !label.element.classList.contains('axis-tag') && axisGutters.some(gutter => rect.x < gutter.right && rect.x + w > gutter.left && rect.y < gutter.bottom && rect.y + h > gutter.top);
         const hidden = nearAxis || p.z < -1 || p.z > 1 || rect.x < 3 || rect.x + w > r.width - 3 || rect.y < 2 || rect.y + h > r.height - 2 || occupied.some(b => rect.x < b.x+b.w+5 && rect.x+w+5 > b.x && rect.y < b.y+b.h+4 && rect.y+h+4 > b.y);
         label.element.style.visibility = hidden ? 'hidden' : 'visible';
         // Projection owns position. Do not feed coordinates into button transform transitions.
@@ -257,9 +261,25 @@ export function Potential3D(props: Potential3DProps) {
     const resize = () => { r.width = Math.max(1, element.clientWidth); r.height = Math.max(1, element.clientHeight); renderer.setSize(r.width, r.height, false); projection(r); r.render(); };
     const observer = new ResizeObserver(resize); observer.observe(element); resize();
     setHeightTarget({ height: automaticHeight(latest.current.document, latest.current.potential, r.width, r.height) });
-    controls.addEventListener('change', r.render);
-    const interrupt = () => { r.stop(); r.render(); };
+    let attract: ReturnType<typeof createHorizontalAttraction> | null = null;
+    const change = () => {
+      if (attract) {
+        const offset = camera.position.clone().sub(controls.target);
+        if (attract(offset)) {
+          camera.position.copy(controls.target).add(offset);
+          camera.lookAt(controls.target);
+        }
+      }
+      r.render();
+    };
+    controls.addEventListener('change', change);
+    const interrupt = () => {
+      r.stop(); r.render();
+      attract = createHorizontalAttraction(camera.position.clone().sub(controls.target));
+    };
+    const endInteraction = () => { attract = null; };
     controls.addEventListener('start', interrupt);
+    controls.addEventListener('end', endInteraction);
     const pointers = new Set<number>();
     let start: { id:number; x: number; y: number; moved:boolean; label:string|null } | null = null;
     const down = (event: PointerEvent) => {
@@ -267,8 +287,8 @@ export function Potential3D(props: Potential3DProps) {
       start=pointers.size===1&&event.button===0?{id:event.pointerId,x:event.clientX,y:event.clientY,moved:false,label:(event.target as Element).closest('[data-selection-id]')?.getAttribute('data-selection-id')??null}:null;
     };
     const move = (event:PointerEvent) => {if(start?.id===event.pointerId&&Math.hypot(event.clientX-start.x,event.clientY-start.y)>5)start.moved=true;};
-    const cancel = (event:PointerEvent) => {pointers.delete(event.pointerId);start=null;};
-    const blur = () => {pointers.clear();start=null;};
+    const cancel = (event:PointerEvent) => {pointers.delete(event.pointerId);start=null;attract=null;};
+    const blur = () => {pointers.clear();start=null;attract=null;};
     const up = (event: PointerEvent) => {
       pointers.delete(event.pointerId);
       if (!start || start.id!==event.pointerId || start.moved || pointers.size || Math.hypot(event.clientX-start.x,event.clientY-start.y)>5) { start = null; return; }
@@ -288,7 +308,7 @@ export function Potential3D(props: Potential3DProps) {
     const lost = (event: Event) => { event.preventDefault(); r.stop(); controls.enabled = false; setFallback(true); latest.current.onError?.('context-lost'); };
     controlSurface.addEventListener('pointerdown', down); controlSurface.addEventListener('pointermove', move); controlSurface.addEventListener('pointercancel', cancel); controlSurface.addEventListener('lostpointercapture', cancel); controlSurface.addEventListener('pointerup', up); renderer.domElement.addEventListener('webglcontextlost', lost); window.addEventListener('blur',blur);
     return () => {
-      cancelAnimationFrame(r.frame); observer.disconnect(); controls.removeEventListener('change',r.render); controls.removeEventListener('start',interrupt); controls.dispose();
+      cancelAnimationFrame(r.frame); observer.disconnect(); controls.removeEventListener('change',change); controls.removeEventListener('start',interrupt); controls.removeEventListener('end',endInteraction); controls.dispose();
       controlSurface.removeEventListener('pointerdown',down); controlSurface.removeEventListener('pointermove',move); controlSurface.removeEventListener('pointercancel',cancel); controlSurface.removeEventListener('lostpointercapture',cancel); controlSurface.removeEventListener('pointerup',up); renderer.domElement.removeEventListener('webglcontextlost',lost); window.removeEventListener('blur',blur);
       dispose(r.floor); dispose(r.content); renderer.dispose(); renderer.domElement.remove();
       r.currentOverlay?.dispose(); r.currentOverlay = null; r.voltageOverlay?.dispose();
@@ -372,16 +392,31 @@ export function Potential3D(props: Potential3DProps) {
     const gridStep = Math.max(f.width,f.height)/12;
     for (let i=0;i<=12;i++) {
       const x=f.x+i*gridStep, y=f.y+i*gridStep;
-      if(x<=f.x+f.width) line(r.content,[new THREE.Vector3(x,-f.y,0),new THREE.Vector3(x,-f.y-f.height,0)],'#deded5',false,.45);
-      if(y<=f.y+f.height) line(r.content,[new THREE.Vector3(f.x,-y,0),new THREE.Vector3(f.x+f.width,-y,0)],'#deded5',false,.45);
+      if(x<=f.x+f.width) line(r.content,[new THREE.Vector3(x,-f.y,0),new THREE.Vector3(x,-f.y-f.height,0)],'#deded5',false,.25);
+      if(y<=f.y+f.height) line(r.content,[new THREE.Vector3(f.x,-y,0),new THREE.Vector3(f.x+f.width,-y,0)],'#deded5',false,.25);
     }
-    const axisX=f.x-10, axisY=-f.y-f.height+20;
-    line(r.content,[new THREE.Vector3(axisX,axisY,extent.minZ),new THREE.Vector3(axisX,axisY,extent.maxZ+15)],'#8a9384');
-    for (const v of extent.ticks) {
-      const z=v*potential.scale;
-      line(r.content,[new THREE.Vector3(axisX-5,axisY,z),new THREE.Vector3(axisX+7,axisY,z)],v===0?'#53694b':'#a0a99b');
-      addLabel(`axis:${v}`,formatQuantity(v,'V'),new THREE.Vector3(axisX-20,axisY,z),'axis-tag',false,v===0?6:5);
-      if(guides && v!==0) line(r.content,[new THREE.Vector3(axisX+7,axisY,z),new THREE.Vector3(f.x+f.width,axisY,z)],'#c3c9be',true,.34);
+    // Two open guide planes sit outside the circuit: rear (+Y) and left (-X).
+    const left=f.x-10, rear=-f.y+10, front=-f.y-f.height+20, right=f.x+f.width;
+    const axes = [{key:'axis',x:left,y:front,labelX:left-20}, {key:'axis-rear',x:right,y:rear,labelX:right+20}];
+    for (const axis of axes) {
+      line(r.content,[new THREE.Vector3(axis.x,axis.y,extent.minZ),new THREE.Vector3(axis.x,axis.y,extent.maxZ+15)],'#7b856f');
+      for (const v of extent.ticks) {
+        const z=v*potential.scale;
+        line(r.content,[new THREE.Vector3(axis.x-5,axis.y,z),new THREE.Vector3(axis.x+5,axis.y,z)],v===0?'#66745a':'#9da78f');
+        addLabel(`${axis.key}:${v}`,formatQuantity(v,'V'),new THREE.Vector3(axis.labelX,axis.y,z),'axis-tag',false,v===0?6:5);
+      }
+    }
+    if (guides) {
+      const addGuide = (v:number, minor:boolean) => {
+        const z=v*potential.scale;
+        const guide=line(r.content,[new THREE.Vector3(left,front,z),new THREE.Vector3(left,rear,z),new THREE.Vector3(right,rear,z)],v===0?'#68765c':'#7e8a72',v!==0,v===0?.9:minor?.6:.8);
+        guide.material.depthWrite=false;
+        if(guide.material instanceof THREE.LineDashedMaterial) {guide.material.dashSize=minor?3:8;guide.material.gapSize=6;}
+        if(minor) for(const axis of axes)
+          line(r.content,[new THREE.Vector3(axis.x-3,axis.y,z),new THREE.Vector3(axis.x+3,axis.y,z)],'#7e8a72',false,.7);
+      };
+      extent.ticks.forEach(v=>addGuide(v,false));
+      minorVoltageTicks(extent.ticks).forEach(v=>addGuide(v,true));
     }
     for (const segment of potential.segments) {
       const active = selectedIds.includes(segment.id) || highlightedId===segment.id || Boolean(selectedNet && potential.nets[selectedNet]?.wireIds.includes(segment.id));
@@ -447,7 +482,7 @@ export function Potential3D(props: Potential3DProps) {
   } };
   return <section className="potential-scene" aria-label="3D 전위 높이 보기">
     <header className="potential-scene-header"><div className="scene-toolbar" aria-label="3D 카메라 보기">
-      <button aria-pressed={preset==='oblique'} onClick={()=>choose('oblique')}><MoveUpRight size={14}/>사선</button><button aria-pressed={preset==='front'} onClick={()=>choose('front')}><ScanLine size={14}/>정면</button><button aria-pressed={preset==='top'} onClick={()=>choose('top')}><Layers3 size={14}/>위에서</button><span className="scene-divider"/><button aria-label="높이 안내선" aria-pressed={guides} onClick={()=>setGuides(!guides)}>{guides?<Eye size={15}/>:<EyeOff size={15}/>}</button><button aria-label="보기 초기화" onClick={()=>choose('oblique',true)}><RotateCcw size={14}/></button>
+      <button aria-pressed={preset==='oblique'} onClick={()=>choose('oblique')}><MoveUpRight size={14}/>사선</button><button aria-pressed={preset==='front'} onClick={()=>choose('front')}><ScanLine size={14}/>정면</button><button aria-pressed={preset==='top'} onClick={()=>choose('top')}><Layers3 size={14}/>위</button><button aria-label="보기 초기화" onClick={()=>choose('oblique',true)}><RotateCcw size={14}/></button><span className="scene-divider"/><button aria-label="눈금" aria-pressed={guides} onClick={()=>setGuides(!guides)}>{guides?<Eye size={15}/>:<EyeOff size={15}/>}눈금</button>
     </div></header>
     <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="current-flow-host" ref={currentHost}/><div className="potential-labels" ref={overlay}/><div className="voltage-measurement-host" ref={voltageHost}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
