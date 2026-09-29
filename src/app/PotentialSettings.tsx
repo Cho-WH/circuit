@@ -14,7 +14,7 @@ export const defaultPotentialSettings: PotentialSettingsValue = {
   fixedRange: false,
   rangeMin: 0,
   rangeMax: 12,
-  heightScale: 18,
+  heightScale: 1,
 };
 interface Props {
   document: CircuitDocument;
@@ -84,12 +84,13 @@ export function PotentialSettings({
           <p className="tiny-note">최소보다 큰 최대값을 입력하세요. 현재 자동 범위가 적용됩니다.</p>
         )}
       <label hidden={!threeDimensional} className="field-label">
-        높이 ×{Number((heightScale / 18).toFixed(2))}
+        높이 ×{Number(heightScale.toFixed(2))}
         <input
           aria-label="높이 강조 배율"
           type="range"
-          min="4"
-          max="40"
+          min="0.25"
+          max="3"
+          step="0.05"
           value={heightScale}
           onChange={(e) => setHeightScale(Number(e.target.value))}
         />

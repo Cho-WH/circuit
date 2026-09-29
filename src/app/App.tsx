@@ -188,11 +188,10 @@ export function App() {
   const potential = useMemo(
     () =>
       buildPotentialModel(doc, compilation.circuit, result, {
-        scale: heightScale,
         palette: potentialPalette,
         ...(fixedRange ? { range: { min: rangeMin, max: rangeMax } } : {}),
       }),
-    [doc, compilation, result, heightScale, potentialPalette, fixedRange, rangeMin, rangeMax],
+    [doc, compilation, result, potentialPalette, fixedRange, rangeMin, rangeMax],
   );
   const paths = useMemo(() => suggestPaths(compilation.circuit), [compilation]);
   const path = customPathIds.length
@@ -972,6 +971,7 @@ export function App() {
               document={doc}
               potential={potential}
               currentDisplay={showCurrent ? currentDisplay : undefined}
+              heightMultiplier={heightScale}
               selectedIds={selected}
               highlightedId={hovered}
               selectedNet={selectedNet}

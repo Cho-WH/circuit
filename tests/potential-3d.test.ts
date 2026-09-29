@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { buildPotentialModel } from '../src/visualization';
-import { sceneAnchors, sceneExtent, selectedVoltage, voltageTicks } from '../src/potential-3d';
+import { sceneAnchors, sceneExtent, selectedVoltage, voltageTicks, automaticHeight, fitPotentialHeight } from '../src/potential-3d';
 import type { CircuitDocument } from '../src/domain';
 function model() {
   const document = JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document as CircuitDocument;
@@ -12,6 +12,37 @@ function model() {
   return { document, potential: buildPotentialModel(document,compiled,result) };
 }
 describe('3D reference plane and voltage readings',()=>{
+  it('normalizes mV, V and kV to the same height while preserving voltage ratios and colors',()=>{
+    const {document}=model();
+    let expected:number[] | undefined;
+    for(const voltageV of [.009,9,9000]) {
+      document.components[0].properties.voltageV=voltageV;
+      const compiled=compileCircuit(document).circuit;
+      const source=buildPotentialModel(document,compiled,solveCircuit(compiled));
+      const target=automaticHeight(document,source,1000,600);
+      const fitted=fitPotentialHeight(source,target,1);
+      const heights=Object.values(fitted.nets).map(n=>n.height!);
+      if(expected) heights.forEach((h,i)=>expect(h).toBeCloseTo(expected![i]));
+      else expected=heights;
+      const extent=sceneExtent(document,fitted);
+      expect(extent.maxZ-extent.minZ).toBeCloseTo(target);
+      for(const [id,net] of Object.entries(fitted.nets)) {
+        expect(net.voltage).toBe(source.nets[id].voltage);
+        expect(net.color).toBe(source.nets[id].color);
+        expect(net.height).toBeCloseTo(fitted.scale*(net.voltage!-fitted.referenceVoltage));
+      }
+      for(const [id,net] of Object.entries(fitted.endpoints)) expect(net).toBe(fitted.nets[source.endpoints[id].netId]);
+    }
+    document.referenceNode={kind:'junction',id:'J1'};
+    const compiled=compileCircuit(document).circuit;
+    const signed=fitPotentialHeight(buildPotentialModel(document,compiled,solveCircuit(compiled)),200,1);
+    expect(sceneExtent(document,signed).minZ).toBeLessThan(0);
+    expect(sceneExtent(document,signed).maxZ).toBeGreaterThan(0);
+    document.components[0].properties.voltageV=0;
+    const zero=fitPotentialHeight(buildPotentialModel(document,compiled,solveCircuit(compileCircuit(document).circuit)),200,1);
+    expect(Object.values(zero.nets).every(n=>n.height===0)).toBe(true);
+    expect(Number.isFinite(zero.scale)).toBe(true);
+  });
   it('covers negative, positive and small voltage ranges with finite ordered ticks including zero',()=>{
     for(const values of [[-9,-3],[0,6,9],[-2,4],[.00001,.00004],[0],[NaN,Infinity]]) {
       const ticks=voltageTicks(values), finite=values.filter(Number.isFinite);

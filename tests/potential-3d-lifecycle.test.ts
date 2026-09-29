@@ -5,12 +5,12 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as THREE from 'three';
 import type { CircuitDocument } from '../src/domain';
-import { Potential3D, type Potential3DProps } from '../src/potential-3d';
+import { Potential3D, automaticHeight, fitPotentialHeight, type Potential3DProps } from '../src/potential-3d';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { buildCurrentModel, buildPotentialModel } from '../src/visualization';
 
-const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
+const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, resize: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
 vi.mock('three', async importOriginal => {
   const three = await importOriginal<typeof import('three')>();
   return { ...three, WebGLRenderer: class {
@@ -36,7 +36,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); observed.render.mockClear(); observed.dispose.mockClear(); observed.frames.clear(); reduced = false; images = [];
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { const id = ++observed.nextFrame; observed.frames.set(id, callback); return id; });
   vi.stubGlobal('cancelAnimationFrame', (id: number) => observed.frames.delete(id));
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { observed.resize = callback; } observe() {} disconnect() {} });
   vi.stubGlobal('matchMedia', () => ({ matches: reduced }));
   vi.stubGlobal('Image', class { src = ''; onload = null; onerror = null; constructor() { images.push(this); } });
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
@@ -124,9 +124,11 @@ describe('3D prepared first frame and camera lifetime', () => {
     label.focus();
     const [,camera]=observed.render.mock.lastCall as [THREE.Scene,THREE.OrthographicCamera];
     const cameraPosition=camera.position.clone(),rotation=camera.quaternion.clone(),zero=host.querySelector<HTMLElement>('[data-label-key="axis:0"]')!,zeroPosition=zero.style.translate;
-    for(const scale of [19,20,4,40,18]) {
-      const potential=buildPotentialModel(circuit,compiled,solveCircuit(compiled),{scale});
-      await update({potential});
+    const source=buildPotentialModel(circuit,compiled,solveCircuit(compiled));
+    const target=automaticHeight(circuit,source,1000,600);
+    for(const heightMultiplier of [1.1,.25,3,1]) {
+      const potential=fitPotentialHeight(source,target,heightMultiplier);
+      await update({heightMultiplier});
       expect([...host.querySelectorAll('[data-label-key]')]).toEqual(nodes);
       expect(document.activeElement).toBe(label);
       expect(camera.position.equals(cameraPosition)).toBe(true);expect(camera.quaternion.equals(rotation)).toBe(true);
@@ -141,6 +143,24 @@ describe('3D prepared first frame and camera lifetime', () => {
       expect(zero.style.translate).toBe(zeroPosition);
       expect(observed.frames.size).toBe(0);
     }
+  });
+  it('keeps height stable on container resize and refits it on view reset', async () => {
+    reduced=true;
+    vi.spyOn(HTMLElement.prototype,'clientWidth','get').mockReturnValue(2000);
+    await mount();await act(async()=>resolveFont());await act(async()=>images[0].onload!());await advanceFrame(performance.now()+2000);
+    const peak = () => {
+      const [scene] = observed.render.mock.lastCall as [THREE.Scene,THREE.Camera];
+      const positions:number[]=[];
+      scene.traverse(object=>{if(object.userData.id==='W1') positions.push(object.position.z);});
+      return Math.max(...positions);
+    };
+    const before=peak();expect(before).toBeGreaterThan(0);
+    vi.spyOn(HTMLElement.prototype,'clientWidth','get').mockReturnValue(360);
+    await act(async()=>observed.resize());
+    expect(peak()).toBe(before);
+    await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="보기 초기화"]')!.click());
+    expect(peak()).toBeGreaterThan(before);
+    expect(observed.frames.size).toBe(0);
   });
   it('updates surviving labels and removes obsolete ones without replacing unrelated nodes',async()=>{
     reduced=true;

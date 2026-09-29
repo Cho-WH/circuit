@@ -11,15 +11,16 @@ import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
 import { htmlNotation, terminalPosition } from '../component-library';
 import { exportSvg } from '../export';
-import { sceneAnchors, sceneExtent, selectedVoltage } from './model';
+import { sceneAnchors, sceneExtent, selectedVoltage, obliqueDirection, projectedSize, sceneBounds, automaticHeight, fitPotentialHeight } from './model';
 import './styles.css';
-export { voltageTicks, sceneAnchors, sceneExtent, selectedVoltage } from './model';
+export { voltageTicks, sceneAnchors, sceneExtent, selectedVoltage, automaticHeight, fitPotentialHeight } from './model';
 export { projectCurrentPaths } from './current-projection';
 
 export interface Potential3DProps {
   quantityFormat?: QuantityFormatOptions;
   document: CircuitDocument;
   potential: PotentialModel;
+  heightMultiplier?: number;
   referenceLabel: string;
   selectedIds: string[];
   highlightedId?: string | null;
@@ -96,24 +97,25 @@ function cameraPose(r: Runtime, preset: Preset, notify = true) {
   const distance = Math.max(size.x, size.y, size.z, 100) * 4 + 400;
   r.preset = preset;
   r.controls.target.copy(center);
-  r.camera.up.set(0, preset === 'top' ? 1 : 0, preset === 'top' ? 0 : 1);
-  const direction = preset === 'top' ? new THREE.Vector3(0, 0, 1) : preset === 'front' ? new THREE.Vector3(0, -1, .001) : new THREE.Vector3(.25, -1, .95).normalize();
+  const direction = preset === 'top' ? new THREE.Vector3(0, 0, 1) : preset === 'front' ? new THREE.Vector3(0, -1, .001) : obliqueDirection;
   r.camera.position.copy(center).addScaledVector(direction, distance);
   r.camera.near = .1; r.camera.far = distance * 10;
-  r.camera.zoom = 1; r.camera.lookAt(center); r.camera.updateMatrixWorld(true);
-  const projected = new THREE.Box3();
-  for (const x of [r.bounds.min.x, r.bounds.max.x]) for (const y of [r.bounds.min.y, r.bounds.max.y]) for (const z of [r.bounds.min.z, r.bounds.max.z]) projected.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(r.camera.matrixWorldInverse));
-  const span = projected.getSize(new THREE.Vector3());
+  r.camera.zoom = 1;
+  // At the pole, set the screen orientation explicitly while keeping OrbitControls' Z-up axis.
+  if (preset === 'top') r.camera.quaternion.identity();
+  else r.camera.lookAt(center);
+  r.camera.updateMatrixWorld(true);
+  const span = projectedSize(r.bounds, r.camera.matrixWorldInverse);
   r.frustum = Math.max(span.y, span.x / (r.width / Math.max(1, r.height)), 100) * 1.18;
   projection(r); if (notify) { r.controls.update(); r.render(); }
 }
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function cameraState(r: Runtime) {
-  return { position: r.camera.position.clone(), rotation: r.camera.quaternion.clone(), up: r.camera.up.clone(), target: r.controls.target.clone(), frustum: r.frustum, zoom: r.camera.zoom };
+  return { position: r.camera.position.clone(), rotation: r.camera.quaternion.clone(), target: r.controls.target.clone(), frustum: r.frustum, zoom: r.camera.zoom };
 }
 function applyCamera(r: Runtime, state: ReturnType<typeof cameraState>) {
-  r.camera.position.copy(state.position); r.camera.quaternion.copy(state.rotation); r.camera.up.copy(state.up);
+  r.camera.position.copy(state.position); r.camera.quaternion.copy(state.rotation);
   r.controls.target.copy(state.target); r.frustum = state.frustum; r.camera.zoom = state.zoom; projection(r);
 }
 // Keep the optical axis aimed at the moving target throughout the orbit.
@@ -123,8 +125,6 @@ function interpolateCamera(r: Runtime, start: ReturnType<typeof cameraState>, en
   r.camera.quaternion.slerpQuaternions(start.rotation, end.rotation, t);
   const distance = THREE.MathUtils.lerp(start.position.distanceTo(start.target), end.position.distanceTo(end.target), t);
   r.camera.position.set(0, 0, distance).applyQuaternion(r.camera.quaternion).add(r.controls.target);
-  r.camera.up.set(0, 1, 0).applyQuaternion(r.camera.quaternion);
-  if (t === 1) r.camera.up.copy(end.up);
   r.frustum = THREE.MathUtils.lerp(start.frustum, end.frustum, t);
   r.camera.zoom = THREE.MathUtils.lerp(start.zoom, end.zoom, t);
   projection(r);
@@ -150,7 +150,10 @@ function moveCamera(r: Runtime, preset: Preset, reset = false) {
 export function Potential3D(props: Potential3DProps) {
   const quantityFormat=props.quantityFormat??defaultQuantityFormat;
   const formatQuantity=(value:number|undefined,unit:string)=>formatSIQuantity(value,unit,quantityFormat);
-  const { document: circuit, potential, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors } = props;
+  const { document: circuit, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors, heightMultiplier = 1 } = props;
+  const [heightTarget, setHeightTarget] = useState<{ height: number } | null>(null);
+  const resetRequested = useRef(false);
+  const potential = useMemo(() => heightTarget ? fitPotentialHeight(props.potential, heightTarget.height, heightMultiplier) : props.potential, [props.potential, heightTarget, heightMultiplier]);
   const host = useRef<HTMLDivElement>(null), overlay = useRef<HTMLDivElement>(null);
   const currentHost = useRef<HTMLDivElement>(null);
   const currentPaths = useMemo(() => props.currentDisplay ? buildCurrentPaths(circuit, props.currentDisplay.model, potential, showColors ? Object.fromEntries(Object.entries(potential.endpoints).map(([id,value])=>[id,value.color])) : undefined) : [], [circuit, props.currentDisplay?.model, potential, showColors]);
@@ -227,7 +230,7 @@ export function Potential3D(props: Potential3DProps) {
       const center = view ? new THREE.Vector3(view.x + view.width / 2, -view.y - view.height / 2, 0) : new THREE.Vector3(end.target.x, end.target.y, 0);
       const distance = end.position.distanceTo(end.target);
       r.controls.target.copy(center); r.camera.position.copy(center).add(new THREE.Vector3(0, 0, distance));
-      r.camera.up.set(0, 1, 0); r.camera.lookAt(center);
+      r.camera.quaternion.identity();
       const size = r.bounds.getSize(new THREE.Vector3());
       r.frustum = view ? Math.max(view.height, view.width / (r.width / r.height)) : Math.max(size.y, size.x / (r.width / r.height)) * 1.18;
       r.progress = 0; r.raised.scale.z = .0001; projection(r);
@@ -246,6 +249,7 @@ export function Potential3D(props: Potential3DProps) {
     runtime.current = r;
     const resize = () => { r.width = Math.max(1, element.clientWidth); r.height = Math.max(1, element.clientHeight); renderer.setSize(r.width, r.height, false); projection(r); r.render(); };
     const observer = new ResizeObserver(resize); observer.observe(element); resize();
+    setHeightTarget({ height: automaticHeight(latest.current.document, latest.current.potential, r.width, r.height) });
     controls.addEventListener('change', r.render);
     const interrupt = () => { r.stop(); r.render(); };
     controls.addEventListener('start', interrupt);
@@ -326,7 +330,7 @@ export function Potential3D(props: Potential3DProps) {
   }, [circuit,quantityFormat]);
 
   useEffect(() => {
-    const r = runtime.current, labelHost = overlay.current; if (!r || !labelHost) return;
+    const r = runtime.current, labelHost = overlay.current; if (!r || !labelHost || !heightTarget) return;
     r.stop(); r.scene.remove(r.content); dispose(r.content);
     r.content = new THREE.Group(); r.raised = new THREE.Group(); r.content.add(r.raised); r.scene.add(r.content);
     // Preserve DOM identity (including keyboard focus) across scale and display changes.
@@ -334,7 +338,7 @@ export function Potential3D(props: Potential3DProps) {
     const existingLabels = new Map(r.labels.map(label => [label.key, label]));
     const nextLabels: Label[] = [];
     const extent = sceneExtent(circuit,potential), f = extent.floor;
-    r.bounds.set(new THREE.Vector3(f.x-45,-f.y-f.height,extent.minZ-15),new THREE.Vector3(f.x+f.width,-f.y,extent.maxZ+30));
+    r.bounds.copy(sceneBounds(extent));
     const radius = Math.max(.9, Math.max(f.width,f.height)*.0035);
     const addLabel = (key: string, text: string, p: THREE.Vector3, className: string, lifted = false, priority = 1, id?: string) => {
       const previous = existingLabels.get(key);
@@ -412,7 +416,9 @@ export function Potential3D(props: Potential3DProps) {
     for (const label of existingLabels.values()) label.element.remove();
     r.labels = nextLabels;
     r.modelReady = true;
-    if (!r.ready) r.begin(); else r.render();
+    if (!r.ready) r.begin();
+    else if (resetRequested.current) { resetRequested.current = false; moveCamera(r, 'oblique', true); }
+    else r.render();
   }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay)]);
 
   useEffect(() => {
@@ -424,7 +430,11 @@ export function Potential3D(props: Potential3DProps) {
   }, [Boolean(props.currentDisplay), fallback]);
   useEffect(() => { runtime.current?.render(); }, [props.currentDisplay, currentPaths]);
 
-  const choose = (value: Preset, reset = false) => { const r=runtime.current; if(r?.ready) {moveCamera(r,value,reset);setPreset(value);} };
+  const choose = (value: Preset, reset = false) => { const r=runtime.current; if(r?.ready) {
+    if (reset) { resetRequested.current = true; setHeightTarget({ height: automaticHeight(circuit, props.potential, r.width, r.height) }); }
+    else moveCamera(r,value);
+    setPreset(value);
+  } };
   return <section className="potential-scene" aria-label="3D 전위 높이 보기">
     <header className="potential-scene-header"><div className="scene-toolbar" aria-label="3D 카메라 보기">
       <button aria-pressed={preset==='oblique'} onClick={()=>choose('oblique')}><MoveUpRight size={14}/>사선</button><button aria-pressed={preset==='front'} onClick={()=>choose('front')}><ScanLine size={14}/>정면</button><button aria-pressed={preset==='top'} onClick={()=>choose('top')}><Layers3 size={14}/>위에서</button><span className="scene-divider"/><button aria-label="높이 안내선" aria-pressed={guides} onClick={()=>setGuides(!guides)}>{guides?<Eye size={15}/>:<EyeOff size={15}/>}</button><button aria-label="보기 초기화" onClick={()=>choose('oblique',true)}><RotateCcw size={14}/></button>
@@ -432,7 +442,7 @@ export function Potential3D(props: Potential3DProps) {
     <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="current-flow-host" ref={currentHost}/><div className="potential-labels" ref={overlay}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
-    <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number((potential.scale/18).toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
+    <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number(heightMultiplier.toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
     {selection&&<div className="scene-selection" aria-live="polite"><strong className="notation" aria-label={selection.component.label} dangerouslySetInnerHTML={{__html:htmlNotation(selection.component.label,true)}}/><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatSIQuantity(selection.difference,'V',quantityFormatFor(selection.component.properties))}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
   </section>;
 }

@@ -1,6 +1,41 @@
 import type { CircuitDocument } from '../domain';
 import { documentBounds, endpointPosition, terminalPosition } from '../component-library';
 import type { PotentialModel } from '../visualization';
+import { Box3, Matrix4, Vector3 } from 'three';
+
+export const obliqueDirection = new Vector3(.25, -1, .95).normalize();
+export function projectedSize(bounds: Box3, view: Matrix4) {
+  const projected = new Box3();
+  for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z])
+    projected.expandByPoint(new Vector3(x, y, z).applyMatrix4(view));
+  return projected.getSize(new Vector3());
+}
+export function sceneBounds(extent: ReturnType<typeof sceneExtent>) {
+  const f = extent.floor;
+  return new Box3(new Vector3(f.x-45, -f.y-f.height, extent.minZ-15), new Vector3(f.x+f.width, -f.y, extent.maxZ+30));
+}
+/** Default camera basis and framing bounds, using the actual 3D host dimensions. */
+export function automaticHeight(document: CircuitDocument, potential: PotentialModel, width: number, height: number) {
+  const bounds = sceneBounds(sceneExtent(document, potential));
+  bounds.min.z = bounds.max.z = 0;
+  const view = new Matrix4().lookAt(obliqueDirection, new Vector3(), new Vector3(0, 0, 1)).invert();
+  const span = projectedSize(bounds, view);
+  const flatFit = Math.max(span.y, span.x / (Math.max(1, width) / Math.max(1, height)), 100);
+  const verticalProjection = new Vector3(0, 0, 1).transformDirection(view).y;
+  return Math.min(span.y, flatFit / .75 - span.y) / verticalProjection;
+}
+/** Rescale display geometry while preserving voltages, colors and endpoint/net identity. */
+export function fitPotentialHeight(potential: PotentialModel, height: number, multiplier: number): PotentialModel {
+  const ticks = voltageTicks(Object.values(potential.nets).flatMap(n => n.voltage === undefined ? [] : [n.voltage - potential.referenceVoltage]));
+  const span = Math.max(...ticks) - Math.min(...ticks);
+  const scale = span > 0 ? height / span * multiplier : 1;
+  const ratio = scale / potential.scale;
+  const nets = Object.fromEntries(Object.entries(potential.nets).map(([id, net]) => [id, { ...net, height: net.height === undefined ? undefined : net.height * ratio }]));
+  return { ...potential, scale, nets,
+    endpoints: Object.fromEntries(Object.entries(potential.endpoints).map(([id, net]) => [id, nets[net.netId]])),
+    segments: potential.segments.map(segment => ({ ...segment, points: segment.points.map(p => ({ ...p, z: p.z * ratio })) })),
+  };
+}
 
 /** Pleasant, signed voltage ticks; the zero plane is always included. */
 export function voltageTicks(values: number[]): number[] {
