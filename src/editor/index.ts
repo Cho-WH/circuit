@@ -1,3 +1,6 @@
+import type { ComponentProperties } from '../domain';
+import { isStoredScalar } from '../domain';
+import * as q from '../rational';
 import { normalizeComponentLabel } from '../domain';
 import { parseQuantity, isQuantityMode } from '../quantity';
 import {
@@ -33,7 +36,7 @@ export type Command =
   | {
       type: 'SetProperties';
       id: string;
-      properties: Record<string, number | string | boolean>;
+      properties: ComponentProperties;
     }
   | { type: 'SetLabel'; id: string; label: string }
   | { type: 'SetReference'; endpoint: EndpointRef | null }
@@ -81,7 +84,7 @@ function missingTargets(ids: Iterable<string>, existingIds: Set<string>): string
 
 function invalidProperties(
   component: ComponentInstance,
-  properties: Record<string, number | string | boolean>,
+  properties: ComponentProperties,
 ): Diagnostic[] {
   for (const [property, value] of Object.entries(properties)) {
     if (typeof value === 'number' && !Number.isFinite(value)) {
@@ -94,7 +97,7 @@ function invalidProperties(
     Object.hasOwn(properties, 'resistanceOhm')
   ) {
     const resistance = properties.resistanceOhm;
-    if (typeof resistance !== 'number' || !Number.isFinite(resistance) || resistance < 0) {
+    if (!isStoredScalar(resistance) || q.sign(resistance) < 0) {
       return [
         diagnostic('INVALID_COMPONENT_VALUE', [component.id], 'error', {
           property: 'resistanceOhm',
@@ -213,12 +216,13 @@ function applyCommand(
       const component = document.components.find((item) => item.id === command.id);
       if (!component) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.id])];
       if('quantityMode' in command.properties&&!isQuantityMode(command.properties.quantityMode))return [diagnostic('INVALID_COMPONENT_VALUE',[component.id],'error',{property:'quantityMode'})];
-      const diagnostics = invalidProperties(component, command.properties);
+      const properties = { ...command.properties };
+      const diagnostics = invalidProperties(component, properties);
       if (diagnostics.length) return diagnostics;
       for (const key of ['resistanceOhm','voltageV']) {
         if (key in command.properties && !(key+'Fraction' in command.properties)) delete component.properties[key+'Fraction'];
       }
-      component.properties = { ...component.properties, ...command.properties };
+      component.properties = { ...component.properties, ...properties };
       break;
     }
 
@@ -427,6 +431,6 @@ export function copySelection(
   };
 }
 
-export function parseValue(input: string, unit: 'Ω' | 'V' | 'A'): number | null {
+export function parseValue(input: string, unit: 'Ω' | 'V' | 'A'): import('../domain').StoredScalar | null {
   return parseQuantity(input,unit)?.value ?? null;
 }

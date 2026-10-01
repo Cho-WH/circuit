@@ -1,6 +1,7 @@
+import * as q from '../rational';
 import type { CircuitDocument } from '../domain';
 import { documentBounds, endpointPosition, terminalPosition } from '../component-library';
-import type { PotentialModel } from '../visualization';
+import { potentialAxisCoordinate, type PotentialModel, type PotentialRange } from '../visualization';
 import { Box3, Matrix4, Vector3 } from 'three';
 
 export const obliqueDirection = new Vector3(.25, -1, .95).normalize();
@@ -24,9 +25,14 @@ export function automaticHeight(document: CircuitDocument, potential: PotentialM
   const verticalProjection = new Vector3(0, 0, 1).transformDirection(view).y;
   return Math.min(span.y, flatFit / .75 - span.y) / verticalProjection;
 }
+function heightTicks(potential: PotentialModel, range?: PotentialRange) {
+  return voltageTicks(range
+    ? [range.min, range.max].map(value => potentialAxisCoordinate(potential, value))
+    : Object.values(potential.nets).flatMap(net => net.voltage === undefined ? [] : [net.voltage - potential.referenceVoltage]));
+}
 /** Rescale display geometry while preserving voltages, colors and endpoint/net identity. */
-export function fitPotentialHeight(potential: PotentialModel, height: number, multiplier: number, range?: { min: number; max: number }): PotentialModel {
-  const ticks = voltageTicks(range ? [range.min, range.max] : Object.values(potential.nets).flatMap(n => n.voltage === undefined ? [] : [n.voltage - potential.referenceVoltage]));
+export function fitPotentialHeight(potential: PotentialModel, height: number, multiplier: number, range?: PotentialRange): PotentialModel {
+  const ticks = heightTicks(potential, range);
   const span = Math.max(...ticks) - Math.min(...ticks);
   const scale = span > 0 ? height / span * multiplier : 1;
   const ratio = scale / potential.scale;
@@ -62,18 +68,18 @@ export function minorVoltageTicks(ticks: number[]): number[] {
 
 export function sceneAnchors(document: CircuitDocument, potential: PotentialModel) {
   return Object.values(potential.nets).flatMap(net => {
-    if (net.height === undefined || net.voltage === undefined) return [];
+    if (net.height === undefined || net.exactVoltage === undefined) return [];
     const junction = document.junctions.find(j => net.endpointIds.includes(j.id));
     const component = document.components.find(c => c.terminals.some(t => net.endpointIds.includes(t.id)));
     const terminal = component?.terminals.find(t => net.endpointIds.includes(t.id));
     const point = junction?.position ?? (component && terminal ? terminalPosition(component, component.terminals.indexOf(terminal)) : undefined);
-    return point ? [{ ...point, z: net.height, voltage: net.voltage, id: net.netId, color: net.color }] : [];
+    return point ? [{ ...point, z: net.height, voltage: net.exactVoltage, id: net.netId, color: net.color }] : [];
   });
 }
 
-export function sceneExtent(document: CircuitDocument, potential: PotentialModel, range?: { min: number; max: number }) {
+export function sceneExtent(document: CircuitDocument, potential: PotentialModel, range?: PotentialRange) {
   const floor = documentBounds(document, 65);
-  const ticks = voltageTicks(range ? [range.min, range.max] : Object.values(potential.nets).flatMap(n => n.voltage === undefined ? [] : [n.voltage - potential.referenceVoltage]));
+  const ticks = heightTicks(potential, range);
   return { floor, ticks, minZ: Math.min(0, ...ticks) * potential.scale, maxZ: Math.max(0, ...ticks) * potential.scale };
 }
 
@@ -82,10 +88,10 @@ export function selectedVoltage(document: CircuitDocument, potential: PotentialM
   if (!component || component.terminals.length < 2) return null;
   const ends = component.terminals.slice(0, 2).map(t => {
     const net = potential.endpoints[t.id];
-    return net?.voltage === undefined || net.height === undefined ? null : {
-      ...endpointPosition(document, { kind: 'terminal', id: t.id }), z: net.height, voltage: net.voltage,
+    return net?.exactVoltage === undefined || net.height === undefined ? null : {
+      ...endpointPosition(document, { kind: 'terminal', id: t.id }), z: net.height, voltage: net.exactVoltage,
     };
   });
   if (!ends[0] || !ends[1]) return null;
-  return { component, a: ends[0], b: ends[1], difference: ends[0].voltage - ends[1].voltage };
+  return { component, a: ends[0], b: ends[1], difference: q.sub(ends[0].voltage,ends[1].voltage) };
 }

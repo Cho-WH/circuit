@@ -17,6 +17,7 @@ const coreModules = new Set([
   'diagnostics',
   'wire-geometry',
   'quantity',
+  'rational',
   'notation',
   'activity',
   'feedback',

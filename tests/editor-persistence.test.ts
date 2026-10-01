@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -5,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   cloneDocument,
-  documentMigrator,
+  requireDocument,
   validateDocument,
   type Annotation,
   type CircuitDocument,
@@ -41,7 +42,7 @@ function fixture(id: string): CircuitDocument {
   const parsed = JSON.parse(readFileSync(join(root, "fixtures", filename), "utf8")) as {
     document: CircuitDocument;
   };
-  return documentMigrator.migrate(parsed.document);
+  return requireDocument(parsed.document);
 }
 
 function mustExecute(history: History, command: Command): History {
@@ -96,14 +97,14 @@ describe("immutable editor commands", () => {
     const result = executeCommand(history, {
       type: "SetProperties",
       id: "R1",
-      properties: { resistanceOhm: 18 },
+      properties: { resistanceOhm: q.store(18) },
     });
 
     expect(result.ok).toBe(true);
     expect(JSON.stringify(history)).toBe(before);
-    expect(source.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toBe(9);
+    expect(source.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toEqual(q.store(9));
     if (!result.ok) return;
-    expect(result.history.present.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toBe(18);
+    expect(result.history.present.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toEqual(q.store(18));
     expect(result.history.present).not.toBe(history.present);
   });
 
@@ -406,7 +407,7 @@ describe("value parsing and activity policy", () => {
     ["1000 Ω", 1_000],
     ["1e3 ohm", 1_000],
   ] as const)("normalizes %s to %d ohms", (written, expected) => {
-    expect(parseValue(written, "Ω")).toBe(expected);
+    expect(parseValue(written, "Ω")).toEqual(q.store(expected));
   });
 
   it.each(["", "one kΩ", "1 V", "-1 Ω", "Infinity", "1kk", "1 Ω trailing"])(
@@ -416,20 +417,20 @@ describe("value parsing and activity policy", () => {
       const history = createHistory(document);
       const parsed = parseValue(written, "Ω");
       expect(parsed).toBeNull();
-      expect(history.present.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toBe(9);
+      expect(history.present.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toEqual(q.store(9));
       expect(history.past).toEqual([]);
     },
   );
 
   it("stores equivalent text inputs as the same SI value", () => {
     const values = ["1k", "1000 Ω"].map((input) => parseValue(input, "Ω"));
-    expect(values).toEqual([1_000, 1_000]);
+    expect(values).toEqual([q.store(1000), q.store(1000)]);
 
     const histories = values.map((resistanceOhm) =>
       mustExecute(createHistory(fixture("FIX-01")), {
         type: "SetProperties",
         id: "R1",
-        properties: { resistanceOhm: resistanceOhm as number },
+        properties: { resistanceOhm: resistanceOhm! },
       }),
     );
     expect(histories[0].present).toStrictEqual(histories[1].present);
@@ -459,14 +460,14 @@ describe("value parsing and activity policy", () => {
     const history = mustExecute(createHistory(document), {
       type: "SetProperties",
       id: "R1",
-      properties: { resistanceOhm: 12 },
+      properties: { resistanceOhm: q.store(12) },
     });
-    expect(history.present.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toBe(12);
+    expect(history.present.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toEqual(q.store(12));
   });
 });
 
 describe("versioned JSON persistence", () => {
-  it("serializes and parses a migrated document without changing its meaning", () => {
+  it("serializes and parses a current-format document without changing its meaning", () => {
     const document = fixture("FIX-03");
     const serialized = serializeDocument(document);
     const parsed = parseDocument(serialized);
@@ -477,7 +478,7 @@ describe("versioned JSON persistence", () => {
 
   it.each([
     ["malformed JSON", "{", "INVALID_JSON"],
-    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 5 }), "INVALID_DOCUMENT"],
+    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 6 }), "INVALID_DOCUMENT"],
     [
       "dangling semantic reference",
       JSON.stringify({
@@ -501,7 +502,7 @@ describe("versioned JSON persistence", () => {
   });
 
   it.each([
-    ["future version", { ...fixture("FIX-02"), version: 5 }],
+    ["future version", { ...fixture("FIX-02"), version: 6 }],
     [
       "dangling reference",
       {
@@ -523,7 +524,7 @@ describe("versioned JSON persistence", () => {
 
   it("does not write anything when asked to save an invalid document", () => {
     const storage = new MemoryStorage();
-    const invalid = { ...fixture("FIX-01"), version: 5 } as unknown as CircuitDocument;
+    const invalid = { ...fixture("FIX-01"), version: 6 } as unknown as CircuitDocument;
 
     const result = saveLocal(invalid, "auto", storage);
     expect(result.ok).toBe(false);

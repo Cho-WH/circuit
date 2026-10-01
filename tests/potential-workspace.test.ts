@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -15,7 +17,7 @@ vi.mock('../src/potential-3d', () => ({ Potential3D: (props: Potential3DProps) =
 let host: HTMLDivElement, root: Root, circuit: CircuitDocument;
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); vi.useFakeTimers();
-  circuit = JSON.parse(readFileSync('fixtures/FIX-02-series.json', 'utf8')).document;
+  circuit = requireDocument(JSON.parse(readFileSync('fixtures/FIX-02-series.json', 'utf8')).document);
   host = document.createElement('div'); document.body.append(host); root = createRoot(host); observed.props = null;
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -30,7 +32,7 @@ describe('3D workspace resource lifecycle', () => {
     await render(true, circuit, 'session-1');
     await act(async () => { observed.props!.onReady!(); observed.props!.onEntered!(); });
     const scene = host.querySelector('[data-scene]');
-    const changed = structuredClone(circuit); changed.components.find(c => c.id === 'R1')!.properties.resistanceOhm = 6;
+    const changed = structuredClone(circuit); changed.components.find(c => c.id === 'R1')!.properties.resistanceOhm = q.store(6);
     await render(true, changed, 'session-1');
     expect(status()).toBe('ready'); expect(host.querySelector('[data-scene]')).toBe(scene);
     await render(true, changed, 'session-2'); expect(status()).toBe('preparing');

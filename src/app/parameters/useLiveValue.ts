@@ -94,11 +94,11 @@ export function useLiveValue(
           s.direction *= -1;
           s.pause = 650;
         }
-        // Generated values have readable precision; preserve exact range endpoints.
+        // The clock is approximate; only integer positions become physical inputs.
         const next =
           s.position === min || s.position === max
             ? s.position
-            : Math.max(min, Math.min(max, Number(s.position.toPrecision(6))));
+            : Math.max(min, Math.min(max, Math.round(s.position)));
         let ok = true;
         flushSync(() => {
           setDisplayed(next);

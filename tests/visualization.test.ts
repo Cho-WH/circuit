@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -29,7 +31,7 @@ function fixture(filename: string): CircuitDocument {
   const parsed = JSON.parse(
     readFileSync(join(root, "fixtures", filename), "utf8"),
   ) as { document: CircuitDocument };
-  return parsed.document;
+  return requireDocument(parsed.document);
 }
 
 function solvedModel(filename: string, options: Parameters<typeof buildPotentialModel>[3] = {}) {
@@ -156,7 +158,7 @@ describe("approved potential palettes", () => {
   for (const palette of potentialPalettes) {
     it(`${palette.id}: changes only color, with shared endpoint/wire values and matching legend ends`, () => {
       const { document, circuit, result, model: original } = solvedModel('FIX-02-series.json');
-      const snapshot = JSON.stringify({document,result});
+      const snapshot = structuredClone({document,result});
       const model = buildPotentialModel(document,circuit,result,{palette:palette.id});
       for(const net of circuit.nets) {
         const n=model.nets[net.id];
@@ -166,7 +168,7 @@ describe("approved potential palettes", () => {
         net.wireIds.forEach(id=>expect(model.segments.find(s=>s.id===id)?.color).toBe(n.color));
       }
       expect(model.segments.map(s=>s.points)).toEqual(original.segments.map(s=>s.points));
-      expect(JSON.stringify({document,result})).toBe(snapshot);
+      expect(structuredClone({document,result})).toEqual(snapshot);
       expect(potentialGradient(palette.id)).toContain(potentialColor(0,0,12,palette.id));
       expect(potentialGradient(palette.id)).toContain(potentialColor(12,0,12,palette.id));
       expect(potentialColor(-100,-9,9,palette.id)).toBe(potentialColor(-9,-9,9,palette.id));
@@ -192,16 +194,16 @@ describe("potential paths", () => {
     expect(paths).toHaveLength(1);
     expect(paths[0].steps.map(({ elementId }) => elementId)).toEqual(["V1", "R1", "R2"]);
     const graph = pathVoltages(paths[0], result);
-    expect(graph.every(({ fromVoltage, toVoltage }) => Number.isFinite(fromVoltage) && Number.isFinite(toVoltage))).toBe(true);
+    expect(graph.every(({ fromVoltage, toVoltage }) => q.isRational(fromVoltage) && q.isRational(toVoltage))).toBe(true);
     const loopChange = graph.reduce(
-      (sum, { fromVoltage, toVoltage }) => sum + toVoltage! - fromVoltage!,
-      0,
+      (sum, { fromVoltage, toVoltage }) => q.add(sum,q.sub(toVoltage!,fromVoltage!)),
+      q.ZERO,
     );
-    expect(loopChange).toBeCloseTo(0, 12);
+    expect(loopChange).toEqual(q.ZERO);
     expect(graph.map(({ elementId, fromVoltage, toVoltage }) => ({ elementId, fromVoltage, toVoltage }))).toEqual([
-      { elementId: "V1", fromVoltage: 0, toVoltage: 9 },
-      { elementId: "R1", fromVoltage: 9, toVoltage: 6 },
-      { elementId: "R2", fromVoltage: 6, toVoltage: 0 },
+      { elementId: "V1", fromVoltage: q.from(0), toVoltage: q.from(9) },
+      { elementId: "R1", fromVoltage: q.from(9), toVoltage: q.from(6) },
+      { elementId: "R2", fromVoltage: q.from(6), toVoltage: q.from(0) },
     ]);
   });
 
@@ -218,7 +220,7 @@ describe("potential paths", () => {
       type: "resistor",
       a,
       b,
-      value: 1,
+      value: q.ONE,
       closed: false,
     });
     const disconnected: CompiledCircuit = {

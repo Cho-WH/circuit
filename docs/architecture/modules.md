@@ -1,14 +1,21 @@
 # 모듈 구성과 공개 계약
 
-## 정확 연산으로의 전환 기준 (채택·구현 대기)
+## 정확 연산 계약
 
-[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 채택했다. 아래 공개 함수와 모듈 책임은 재사용하며, 물리 number 계약을 정확 유리수로 전환한다. domain은 최소 타입·저장 계약을, 독립적인 순수 유리수 모듈은 연산을, quantity는 단위 입력·표시를 담당한다. domain이 유리수 구현에 역으로 의존하지 않게 한다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 화면용 변환은 visualization/quantity 경계에서 수행한다. 현재 코드·v4 저장 타입은 아직 전환 전이다.
+[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 구현했다. domain은 최소 타입·정규형 직렬화·현재 문서 검증을, rational은 순수 사칙연산·비교·표시 변환을, quantity는 단위 입력·표시 반올림을 담당한다. domain은 rational에 역으로 의존하지 않는다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 현재 저장은 회로 v5·측정 기록 v4만 지원한다.
+
+## 구현된 근사 경로의 경계
+
+[ADR-025](../../decisions/ADR-025-bounded-approximate-dc.md)에 따라 simulation이 요청별 정확 계산 예산과 공통 MNA 구성, 정확/근사 풀이, 수용 검사·진단을 소유한다. domain의 공개 결과에는 정확/근사 품질과 측정에 필요한 오차 정보를 명시한다. measurement는 그 품질을 전압차·도선 KCL·등가저항·기록까지 전파하고 quantity/visualization이 ≈와 방향 불확실을 공통으로 표현한다. 렌더러·UI는 행렬·근사 전환·자체 허용오차를 다루지 않는다.
+
+rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v4가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다.
 
 ## 모듈 책임
 
 | 모듈 | 책임 | 금지되는 결합 |
 |---|---|---|
-| `domain` | 회로 문서·계산 계약, ID, 스키마·참조 검증, 순차 마이그레이션 | React, SVG, Three.js, 저장 API |
+| `domain` | 회로 문서·계산 계약, ID, 현재 스키마·참조 검증 | React, SVG, Three.js, 저장 API |
+| `rational` | 정규화된 BigInt 유리수 연산·비교·표시 변환 | 회로·단위·UI·저장 API |
 | `quantity` | 소수·분수·SI 입력, 자동 단위·4자리 지수·원시 숫자 표시, 공통 축 단위 | React, 브라우저, 문서 변경 |
 | `notation` | 수식 토큰·분수·아래첨자·기울임 변환 | React, 브라우저, 계산 결과 수정 |
 | `component-library` | 단자 구성, 기본값, 표시 이름, 기호 | 행렬 계산 직접 수행 |
@@ -22,7 +29,7 @@
 | `potential-3d` | 2D 위치와 전위를 3D 장면으로 변환 | 회로 해석 직접 수행 |
 | `current-view` | 2D·3D가 투영한 화면 경로에 비례 띠·방향 무늬를 표시하고 표시용 프레임 수명을 관리 | 회로 해석·전하 적분·React·Three.js 의존 |
 | `export` | 공통 기호 자원에서 인쇄용 SVG·PNG 생성 | 화면 캡처에 의존 |
-| `persistence` | 회로 자동 저장·파일 입출력, 별도 측정 기록 저장, domain 검증·버전 변환 사용 | 과거 측정 기록을 현재 해석 결과로 사용 |
+| `persistence` | 회로 자동 저장·파일 입출력, 별도 측정 기록 저장, domain의 현재 형식 검증 사용 | 과거 측정 기록을 현재 해석 결과로 사용 |
 | `feedback` | 후기 타입, 입력 정책, 일반·관리자 게이트웨이 계약 | React, 브라우저, Firebase SDK, 회로 문서 결합 |
 | `feedback-firebase` | 운영 후기의 익명 인증·Firestore 읽기/쓰기·관리자 접근 | 회로 문서·물리 계산 결합 |
 | `feedback-local` | 이전 로컬 자료와 계약 검증용 어댑터 | 물리·편집 모듈 접근, 운영 백엔드로 사용 |
@@ -54,10 +61,9 @@ interface Exporter<TOptions> {
   ): Promise<Blob>;
 }
 
-interface DocumentMigrator {
-  canMigrate(version: number): boolean;
-  migrate(input: unknown): CircuitDocument;
-}
+function validateDocument(input: unknown): DocumentValidation;
+// 검증된 현재 형식의 독립 사본이 필요할 때 사용하며, 실패는 DocumentError로 전달한다.
+function requireDocument(input: unknown): CircuitDocument;
 ```
 
 ## 연결망 구성
@@ -93,7 +99,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ## 측정과 출력의 공개 계약
 
-관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v4이며 v1·v2·v3 호환 변환은 ADR-012를 따른다.
+관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v5이며 이전 형식의 변환·호환은 제공하지 않는다(ADR-024).
 
 `measurement`는 `probeVoltage(compilation, result, red, black)`, `probeCurrent(document, compilation, result, target)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
 
@@ -126,7 +132,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ## 분수 표기
 
-`quantity`는 입력 파싱·명시적 분수 복원·숫자 표시와 공통 축 단위를 제공하고, `notation`은 문구 토큰화·기울임을 담당한다. editor와 UI는 quantity의 parseQuantity를 사용하고 component-library는 componentValueInput·notationWidth·svgNotation을 공개한다. 수치 해석기는 원래 SI 숫자만 받는다. ADR-012와 ADR-019를 따른다.
+`quantity`는 입력 파싱·명시적 분수 복원·숫자 표시와 공통 축 단위를 제공하고, `notation`은 문구 토큰화·기울임을 담당한다. editor와 UI는 quantity의 parseQuantity를 사용하고 component-library는 componentValueInput·notationWidth·svgNotation을 공개한다. 수치 해석기는 정확한 SI 유리수만 받는다. ADR-012와 ADR-019를 따른다.
 
 측정표의 `MeasurementEntry`, `loadMeasurementNotebook`, `saveMeasurementNotebook`은 persistence의 공개 계약이다. 측정 원시 기록을 감싸 메모·전류 방향·전원 분리 조건·탐침 위치를 별도로 저장한다. MeasurementAnchor·MeasurementAnchors 타입을 app/measurement-tools와 공유하며 위치 계산은 기존 anchorPose를 재사용한다. app의 `useMeasurementRecords`, `measurement-records`, `MeasurementTable`이 상태 연결·조건별 표시·복사·당시 회로 보기를 나눈다. [ADR-022](../../decisions/ADR-022-measurement-notebook.md).
 
@@ -147,3 +153,7 @@ component-library.adjustableParameter는 부품의 조절 속성·범위·단위
 - SVG와 Three.js의 히트 판정·좌표 투영·시야 조작은 각각의 어댑터에 둔다. 공통화 대상은 사용자 동작의 의미와 상태/명령 처리이며 렌더러 자체를 합치지 않는다.
 
 단자·전위 표지의 일반 선택은 공통 `selectNet`을 사용한다. 2D는 단자 ID로 net을 찾고, 3D는 렌더링에 사용한 net ID를 `onSelectNet`으로 전달한다. 대표 부품·도선으로 대상을 바꾸지 않는다.
+
+### 구현 내부 경계
+
+`rational/conversion`은 단위 없는 10진 토큰 해석과 화면용 binary64 변환을 소유하고, quantity는 이를 재사용해 분수·SI 단위 문법과 표시를 처리한다. domain에는 최소 타입과 저장 정규형 검증만 둔다. `visualization/potential`은 정확 전위와 표시 좌표·축 단위 변환을 함께 관리한다. 2D 범례와 3D 눈금은 같은 공개 변환 함수를 사용하고, 숫자 표시는 정확 전위를 사용한다. 3D 높이 맞춤과 장면 경계는 같은 눈금 계산을 재사용한다.

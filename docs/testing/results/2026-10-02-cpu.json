@@ -1,0 +1,70 @@
+{
+  "command": "node --expose-gc --cpu-prof --cpu-prof-name=dc-stress.cpuprofile tools/benchmark-dc.mjs --once \"--case=grid 5x5 wide\" dc-profile-timing.json",
+  "timing": {
+    "timestamp": "2026-10-01T17:03:51.099Z",
+    "environment": {
+      "node": "v24.18.0",
+      "platform": "win32",
+      "cpu": "AMD Ryzen 5 5600X 6-Core Processor             ",
+      "logicalCpus": 12,
+      "totalMemoryGiB": 31.926193237304688
+    },
+    "timings": [
+      {
+        "name": "grid 5x5 wide",
+        "nets": 25,
+        "elements": 41,
+        "runs": 1,
+        "medianMs": 6254.1854,
+        "p95Ms": 6254.1854,
+        "maxMs": 6254.1854,
+        "heapSampleGrowthMiB": 16.43694305419922,
+        "retainedHeapDeltaMiB": -0.11823272705078125
+      }
+    ]
+  },
+  "method": "Leaf-function sample counts with solveCircuit in their ancestor chain. Sampling fractions, not exact CPU-time attribution.",
+  "solveSamples": 3993,
+  "top": [
+    {
+      "name": "gcd",
+      "samples": 3559,
+      "percent": 89.13097921362385
+    },
+    {
+      "name": "mul",
+      "samples": 409,
+      "percent": 10.242925118958176
+    },
+    {
+      "name": "add",
+      "samples": 12,
+      "percent": 0.3005259203606311
+    },
+    {
+      "name": "rational",
+      "samples": 9,
+      "percent": 0.22539444027047334
+    },
+    {
+      "name": "",
+      "samples": 1,
+      "percent": 0.02504382669671926
+    },
+    {
+      "name": "solveCircuit",
+      "samples": 1,
+      "percent": 0.02504382669671926
+    },
+    {
+      "name": "from",
+      "samples": 1,
+      "percent": 0.02504382669671926
+    },
+    {
+      "name": "solveLinear",
+      "samples": 1,
+      "percent": 0.02504382669671926
+    }
+  ]
+}

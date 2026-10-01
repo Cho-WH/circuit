@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -43,15 +44,15 @@ describe('committed circuit session', () => {
     saveLocal(doc); render('analysis');
     const gesture = {};
     act(() => {
-      for (const value of [12, 20, 40]) session.execute({ type: 'SetProperties', id: 'VR1', properties: { resistanceOhm: value } }, gesture);
+      for (const value of [12, 20, 40]) session.execute({ type: 'SetProperties', id: 'VR1', properties: { resistanceOhm: q.store(value) } }, gesture);
     });
     expect(session.history.past).toHaveLength(1);
-    expect(session.history.present.components[0].properties.resistanceOhm).toBe(40);
+    expect(session.history.present.components[0].properties.resistanceOhm).toEqual(q.store(40));
     act(() => session.undo());
-    expect(session.history.present.components[0].properties.resistanceOhm).toBe(10);
+    expect(session.history.present.components[0].properties.resistanceOhm).toEqual(q.store(10));
     act(() => session.redo());
-    expect(session.history.present.components[0].properties.resistanceOhm).toBe(40);
-    act(() => session.execute({ type: 'SetProperties', id: 'VR1', properties: { resistanceOhm: 50 } }, {}));
+    expect(session.history.present.components[0].properties.resistanceOhm).toEqual(q.store(40));
+    act(() => session.execute({ type: 'SetProperties', id: 'VR1', properties: { resistanceOhm: q.store(50) } }, {}));
     expect(session.history.past).toHaveLength(2);
   });
   it('keeps consecutive edits in one event and undoes a batch as one step', () => {
@@ -63,19 +64,19 @@ describe('committed circuit session', () => {
       });
       session.execute([
         { type: 'SetLabel', id: 'R1', label: '부하' },
-        { type: 'SetProperties', id: 'R1', properties: { resistanceOhm: 25 } },
+        { type: 'SetProperties', id: 'R1', properties: { resistanceOhm: q.store(25) } },
       ]);
     });
     const updated = session.history.present;
     expect(updated.components[0]).toMatchObject({
       label: '부하',
-      properties: { resistanceOhm: 25 },
+      properties: { resistanceOhm: q.store(25) },
     });
     expect(session.history.past).toHaveLength(2);
     act(() => session.undo());
     expect(session.history.present.components[0]).toMatchObject({
       label: 'R1',
-      properties: { resistanceOhm: 10 },
+      properties: { resistanceOhm: q.store(10) },
     });
     act(() => session.redo());
     expect(session.history.present).toEqual(updated);
@@ -92,7 +93,7 @@ describe('committed circuit session', () => {
       expect(
         session.execute([
           { type: 'SetLabel', id: 'R1', label: '변경' },
-          { type: 'SetProperties', id: 'R1', properties: { resistanceOhm: 25 } },
+          { type: 'SetProperties', id: 'R1', properties: { resistanceOhm: q.store(25) } },
         ]).ok,
       ).toBe(false);
     });
@@ -134,7 +135,7 @@ describe('committed circuit session', () => {
       expect(
         session.execute([
           { type: 'SetOutputScale', scale: 1.5 },
-          { type: 'SetProperties', id: 'R1', properties: { resistanceOhm: 25 } },
+          { type: 'SetProperties', id: 'R1', properties: { resistanceOhm: q.store(25) } },
         ]).ok,
       ).toBe(false);
       expect(session.execute({ type: 'DeleteElements', ids: ['R1'] }).ok).toBe(false);
@@ -156,14 +157,14 @@ describe('committed circuit session', () => {
     act(() => session.redo()); expect(session.history.present.components[0].label).toBe('R_load');
     const before = session.history;
     act(() => {
-      const blocked: Record<string, string | number | boolean>[] = [{ resistanceOhm: 50 }, { answerText: '50 Ω' }, { labelText: 'Alias' }, { answerDisplay: 'custom' }];
+      const blocked: import('../src/domain').ComponentProperties[] = [{ resistanceOhm: q.store(50) }, { answerText: '50 Ω' }, { labelText: 'Alias' }, { answerDisplay: 'custom' }];
       for (const properties of blocked) {
         expect(session.execute({ type: 'SetProperties', id: 'R1', properties }).ok).toBe(false);
       }
     });
     expect(session.history).toBe(before);
     act(() => { expect(session.execute({ type: 'SetProperties', id: 'R1', properties: { answerBlank: true, labelVisible: false, answerOffsetX: 20 } }).ok).toBe(true); });
-    expect(session.history.present.components[0].properties.resistanceOhm).toBe(10);
+    expect(session.history.present.components[0].properties.resistanceOhm).toEqual(q.store(10));
     act(() => vi.advanceTimersByTime(450));
     const saved = loadLocal(); expect(saved?.ok && saved.document.components[0].label).toBe('R_load');
     render('build'); expect(session.history.present.components[0].label).toBe('R_load');
@@ -179,8 +180,8 @@ describe('committed circuit session', () => {
       expect(session.execute({type:'MoveComponents',positions:{R1:{x:200,y:100}}}).ok).toBe(false);
     });
     expect(session.history).toBe(before);
-    act(() => {expect(session.execute({type:'SetProperties',id:'R1',properties:{resistanceOhm:20}}).ok).toBe(true);});
-    expect(session.history.present.components[0].properties.resistanceOhm).toBe(20);
+    act(() => {expect(session.execute({type:'SetProperties',id:'R1',properties:{resistanceOhm:q.store(20)}}).ok).toBe(true);});
+    expect(session.history.present.components[0].properties.resistanceOhm).toEqual(q.store(20));
     act(() => session.undo());
     expect(session.history.present).toEqual(before.present);
     act(() => {expect(session.execute({type:'ReplaceDocument',document:emptyDocument('replacement')}).ok).toBe(true);});

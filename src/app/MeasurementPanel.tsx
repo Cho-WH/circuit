@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import { formatQuantity } from '../quantity';
 import { Notation } from './Notation';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -99,7 +100,7 @@ export function MeasurementPanel(props: Props) {
       ? equivalentResistance(compilation.circuit, redNet, blackNet, { excludeSourceIds: excluded })
       : null;
   const current = props.currentReading.ok
-    ? Math.abs(props.currentReading.value.amperes)
+    ? q.abs(props.currentReading.value.amperes)
     : undefined;
   const measuredTarget = props.anchors.current;
   const targetName = anchorName(doc, measuredTarget);
@@ -113,7 +114,7 @@ export function MeasurementPanel(props: Props) {
         : resistance?.ohms;
   const unit = kind === 'voltage' ? 'V' : kind === 'current' ? 'A' : 'Ω';
   function record() {
-    if (!enabled || !kind || reading === undefined || !Number.isFinite(reading)) {
+    if (!enabled || !kind || reading === undefined || !q.isRational(reading)) {
       setMessage('측정 위치를 먼저 골라 주세요.');
       return;
     }
@@ -156,7 +157,7 @@ export function MeasurementPanel(props: Props) {
     } else setMessage('기록 형식을 확인하세요.');
   }
   const connected = kind === 'current' ? reading !== undefined : Boolean(ref(red) && ref(black));
-  const ready = enabled && reading !== undefined && Number.isFinite(reading);
+  const ready = enabled && reading !== undefined && q.isRational(reading);
   const diagnostics =
     kind === 'voltage'
       ? connected && !voltage.ok

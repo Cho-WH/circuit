@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import type { Point } from '../domain';
 import {
   currentBand,
@@ -219,10 +220,10 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
       display = nextDisplay;
       active = visible;
       // Compare electrical data, never projected coordinates or model object identity.
-      const signature = JSON.stringify([display.scaleAmperes, paths.map(({ path }) => {
+      const signature = JSON.stringify([q.exactText(display.scaleAmperes), paths.map(({ path }) => {
         const value = path.sample.value;
         return [path.id, value.status, value.status === 'known'
-          ? [value.amperes, value.from.id, value.to.id] : null];
+          ? [q.exactText(value.amperes), value.from.id, value.to.id] : null];
       }).sort((a, b) => String(a[0]).localeCompare(String(b[0])))]);
       visibility.update(currentSignature !== null && signature !== currentSignature,
         !!display.changing, currentSignature === null || display.paused || media.matches || !active || doc.hidden);
@@ -234,7 +235,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
         if (points.length < 2 || points.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y)))
           continue;
         const value = path.sample.value;
-        if (value.status === 'known' && value.amperes === 0) continue;
+        if (value.status === 'uncertain' || (value.status === 'known' && q.sign(value.amperes) === 0)) continue;
         liveBands.add(path.id);
         let view = bandViews.get(path.id);
         if (!view) {
@@ -258,7 +259,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
         }
         const magnitude = currentBand(value.amperes, display.scaleAmperes, display.widthScale);
         group.dataset.bandState = magnitude.state;
-        group.dataset.amperes = String(value.amperes);
+        group.dataset.amperes = q.exactText(value.amperes);
         line.setAttribute(
           'class',
           magnitude.state === 'overflow' ? 'current-flow-overflow' : 'current-flow-band',
@@ -282,7 +283,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
         }
       }
       const directions = new Map(paths.map(({ path }) => [path.id,
-        path.sample.value.status === 'known' ? Math.sign(path.sample.value.amperes) : 0]));
+        path.sample.value.status === 'known' ? q.sign(path.sample.value.amperes) : 0]));
       for (const track of buildCurrentTracks(paths)) {
         const length = flowLength(track.points);
         if (!Number.isFinite(length) || length === 0) continue;

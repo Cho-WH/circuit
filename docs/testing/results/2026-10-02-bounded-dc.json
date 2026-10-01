@@ -1,0 +1,797 @@
+{
+  "timestamp": "2026-10-01T17:52:09.005Z",
+  "environment": {
+    "node": "v24.18.0",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor             ",
+    "logicalCpus": 12,
+    "totalMemoryGiB": 31.926193237304688
+  },
+  "timings": [
+    {
+      "name": "FIX-01 solve",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.0545999999999367,
+      "p95Ms": 0.10320000000001528,
+      "maxMs": 0.14620000000013533,
+      "heapSampleGrowthMiB": 14.193458557128906,
+      "retainedHeapDeltaMiB": -0.34195709228515625
+    },
+    {
+      "name": "FIX-01 pipeline",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.14809999999988577,
+      "p95Ms": 0.2821999999998752,
+      "maxMs": 0.47939999999994143,
+      "heapSampleGrowthMiB": 16.054969787597656,
+      "retainedHeapDeltaMiB": 0.10498809814453125
+    },
+    {
+      "name": "FIX-02 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.04719999999997526,
+      "p95Ms": 0.12220000000002074,
+      "maxMs": 0.33609999999998763,
+      "heapSampleGrowthMiB": 16.09479522705078,
+      "retainedHeapDeltaMiB": -0.02001953125
+    },
+    {
+      "name": "FIX-02 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.19100000000003092,
+      "p95Ms": 0.39840000000003783,
+      "maxMs": 0.5072999999999865,
+      "heapSampleGrowthMiB": 16.133201599121094,
+      "retainedHeapDeltaMiB": 0.25921630859375
+    },
+    {
+      "name": "FIX-03 solve",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.02980000000002292,
+      "p95Ms": 0.06560000000013133,
+      "maxMs": 0.10869999999999891,
+      "heapSampleGrowthMiB": 15.921913146972656,
+      "retainedHeapDeltaMiB": 0.01102447509765625
+    },
+    {
+      "name": "FIX-03 pipeline",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.14980000000014115,
+      "p95Ms": 0.23129999999991924,
+      "maxMs": 0.35439999999994143,
+      "heapSampleGrowthMiB": 15.953643798828125,
+      "retainedHeapDeltaMiB": 0.031097412109375
+    },
+    {
+      "name": "FIX-04 solve",
+      "nets": 3,
+      "elements": 4,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.08539999999993597,
+      "p95Ms": 0.12779999999997926,
+      "maxMs": 0.344899999999825,
+      "heapSampleGrowthMiB": 15.990882873535156,
+      "retainedHeapDeltaMiB": 0.0115203857421875
+    },
+    {
+      "name": "FIX-04 pipeline",
+      "nets": 3,
+      "elements": 4,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.4226000000001022,
+      "p95Ms": 0.5256999999999152,
+      "maxMs": 0.7575999999999112,
+      "heapSampleGrowthMiB": 15.973426818847656,
+      "retainedHeapDeltaMiB": 0.05646514892578125
+    },
+    {
+      "name": "FIX-05 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.060000000000172804,
+      "p95Ms": 0.07899999999995089,
+      "maxMs": 0.14830000000006294,
+      "heapSampleGrowthMiB": 15.893585205078125,
+      "retainedHeapDeltaMiB": 0.01625823974609375
+    },
+    {
+      "name": "FIX-05 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.25270000000000437,
+      "p95Ms": 0.3430000000000746,
+      "maxMs": 0.8827000000001135,
+      "heapSampleGrowthMiB": 15.932098388671875,
+      "retainedHeapDeltaMiB": 0.06935882568359375
+    },
+    {
+      "name": "FIX-06 solve",
+      "nets": 1,
+      "elements": 1,
+      "runs": 100,
+      "status": "error",
+      "diagnostics": [
+        {
+          "code": "SOURCE_SHORT",
+          "parameters": {}
+        }
+      ],
+      "medianMs": 0.0032999999998537533,
+      "p95Ms": 0.00959999999986394,
+      "maxMs": 0.04719999999997526,
+      "heapSampleGrowthMiB": 0.748077392578125,
+      "retainedHeapDeltaMiB": 0.01263427734375
+    },
+    {
+      "name": "FIX-07 solve",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "status": "error",
+      "diagnostics": [
+        {
+          "code": "FLOATING_SUBCIRCUIT",
+          "parameters": {}
+        }
+      ],
+      "medianMs": 0.0052999999998064595,
+      "p95Ms": 0.012999999999919964,
+      "maxMs": 0.05819999999994252,
+      "heapSampleGrowthMiB": 0.9961318969726562,
+      "retainedHeapDeltaMiB": 0.01288604736328125
+    },
+    {
+      "name": "FIX-08 solve",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "status": "error",
+      "diagnostics": [
+        {
+          "code": "CONFLICTING_SOURCES",
+          "parameters": {}
+        }
+      ],
+      "medianMs": 0.00889999999981228,
+      "p95Ms": 0.01739999999972497,
+      "maxMs": 0.06359999999995125,
+      "heapSampleGrowthMiB": 2.4656448364257812,
+      "retainedHeapDeltaMiB": 0.01348876953125
+    },
+    {
+      "name": "FIX-09 solve",
+      "nets": 4,
+      "elements": 6,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.19420000000036453,
+      "p95Ms": 0.24850000000014916,
+      "maxMs": 0.4720999999999549,
+      "heapSampleGrowthMiB": 15.843841552734375,
+      "retainedHeapDeltaMiB": 0.01177215576171875
+    },
+    {
+      "name": "FIX-09 pipeline",
+      "nets": 4,
+      "elements": 6,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.6658000000002176,
+      "p95Ms": 0.9068999999999505,
+      "maxMs": 1.0452000000000226,
+      "heapSampleGrowthMiB": 16.00511932373047,
+      "retainedHeapDeltaMiB": 0.056396484375
+    },
+    {
+      "name": "FIX-09 sweep pipeline",
+      "nets": 4,
+      "elements": 6,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.4839999999999236,
+      "p95Ms": 0.8811999999998079,
+      "maxMs": 1.0880999999999403,
+      "heapSampleGrowthMiB": 16.099044799804688,
+      "retainedHeapDeltaMiB": 0.1519775390625
+    },
+    {
+      "name": "FIX-10 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.04070000000001528,
+      "p95Ms": 0.0672999999997046,
+      "maxMs": 0.2946999999999207,
+      "heapSampleGrowthMiB": 15.749610900878906,
+      "retainedHeapDeltaMiB": 0.0076751708984375
+    },
+    {
+      "name": "FIX-10 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.134900000000016,
+      "p95Ms": 0.1920999999997548,
+      "maxMs": 0.36340000000018335,
+      "heapSampleGrowthMiB": 15.862030029296875,
+      "retainedHeapDeltaMiB": 0.01792144775390625
+    },
+    {
+      "name": "FIX-11 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.039800000000013824,
+      "p95Ms": 0.058100000000194996,
+      "maxMs": 0.1894999999999527,
+      "heapSampleGrowthMiB": 15.814384460449219,
+      "retainedHeapDeltaMiB": 0.00875091552734375
+    },
+    {
+      "name": "FIX-11 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.13369999999986248,
+      "p95Ms": 0.17029999999977008,
+      "maxMs": 0.3850999999999658,
+      "heapSampleGrowthMiB": 15.876739501953125,
+      "retainedHeapDeltaMiB": 0.017425537109375
+    },
+    {
+      "name": "FIX-11 sweep pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.1516999999998916,
+      "p95Ms": 0.20299999999997453,
+      "maxMs": 0.3605999999999767,
+      "heapSampleGrowthMiB": 15.957763671875,
+      "retainedHeapDeltaMiB": -0.007568359375
+    },
+    {
+      "name": "FIX-12 solve",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.029500000000098225,
+      "p95Ms": 0.043100000000322325,
+      "maxMs": 0.0806999999999789,
+      "heapSampleGrowthMiB": 15.905784606933594,
+      "retainedHeapDeltaMiB": 0.00957489013671875
+    },
+    {
+      "name": "FIX-12 pipeline",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.12900000000036016,
+      "p95Ms": 0.17819999999983338,
+      "maxMs": 0.31989999999996144,
+      "heapSampleGrowthMiB": 15.905357360839844,
+      "retainedHeapDeltaMiB": 0.0255279541015625
+    },
+    {
+      "name": "FIX-12 sweep pipeline",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.14089999999987413,
+      "p95Ms": 0.1748000000002321,
+      "maxMs": 0.6194000000000415,
+      "heapSampleGrowthMiB": 16.051925659179688,
+      "retainedHeapDeltaMiB": 0.0109100341796875
+    },
+    {
+      "name": "grid 3x3 varied",
+      "nets": 9,
+      "elements": 13,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.7290000000002692,
+      "p95Ms": 1.0369999999998072,
+      "maxMs": 1.3385999999995875,
+      "heapSampleGrowthMiB": 16.040916442871094,
+      "retainedHeapDeltaMiB": 0.064361572265625
+    },
+    {
+      "name": "grid 5x5 varied",
+      "nets": 25,
+      "elements": 41,
+      "runs": 43,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 33.81010000000015,
+      "p95Ms": 46.50739999999996,
+      "maxMs": 50.11559999999963,
+      "heapSampleGrowthMiB": 32.17588806152344,
+      "retainedHeapDeltaMiB": 0.018768310546875
+    },
+    {
+      "name": "grid 7x7 varied",
+      "nets": 49,
+      "elements": 85,
+      "runs": 12,
+      "status": "solved",
+      "quality": {
+        "mode": "approximate",
+        "reason": "operation-limit",
+        "policy": "dc-budget-1",
+        "condition": 208.74557863966595,
+        "backwardError": 4.570557009298928e-16,
+        "refinements": 0
+      },
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLUTION",
+          "parameters": {
+            "reason": "operation-limit",
+            "policy": "dc-budget-1"
+          }
+        }
+      ],
+      "medianMs": 124.38559999999961,
+      "p95Ms": 147.8104000000003,
+      "maxMs": 147.8104000000003,
+      "heapSampleGrowthMiB": 34.014991760253906,
+      "retainedHeapDeltaMiB": -0.04267120361328125
+    },
+    {
+      "name": "grid 3x3 wide",
+      "nets": 9,
+      "elements": 13,
+      "runs": 30,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 49.808100000000195,
+      "p95Ms": 56.742699999999786,
+      "maxMs": 67.03159999999934,
+      "heapSampleGrowthMiB": 31.322471618652344,
+      "retainedHeapDeltaMiB": -0.04405975341796875
+    },
+    {
+      "name": "grid 5x5 wide",
+      "nets": 25,
+      "elements": 41,
+      "runs": 11,
+      "status": "error",
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLVE_FAILED",
+          "parameters": {
+            "reason": "numerical-instability",
+            "trigger": "integer-limit"
+          }
+        }
+      ],
+      "medianMs": 134.24269999999888,
+      "p95Ms": 164.47950000000128,
+      "maxMs": 164.47950000000128,
+      "heapSampleGrowthMiB": 3.279693603515625,
+      "retainedHeapDeltaMiB": 0.07485198974609375
+    },
+    {
+      "name": "grid 3x3 long",
+      "nets": 9,
+      "elements": 13,
+      "runs": 20,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 71.44759999999951,
+      "p95Ms": 93.06780000000072,
+      "maxMs": 100.054900000001,
+      "heapSampleGrowthMiB": 18.13592529296875,
+      "retainedHeapDeltaMiB": 0.02266693115234375
+    },
+    {
+      "name": "grid 5x5 long",
+      "nets": 25,
+      "elements": 41,
+      "runs": 12,
+      "status": "solved",
+      "quality": {
+        "mode": "approximate",
+        "reason": "integer-limit",
+        "policy": "dc-budget-1",
+        "condition": 86.9283616712855,
+        "backwardError": 1.7579150141004518e-16,
+        "refinements": 0
+      },
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLUTION",
+          "parameters": {
+            "reason": "integer-limit",
+            "policy": "dc-budget-1"
+          }
+        }
+      ],
+      "medianMs": 125.31540000000132,
+      "p95Ms": 143.69980000000032,
+      "maxMs": 143.69980000000032,
+      "heapSampleGrowthMiB": 34.14314270019531,
+      "retainedHeapDeltaMiB": 0.06324005126953125
+    }
+  ],
+  "integers": [
+    {
+      "name": "FIX-01 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 37
+    },
+    {
+      "name": "FIX-01 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 88
+    },
+    {
+      "name": "FIX-02 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 75
+    },
+    {
+      "name": "FIX-02 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 149
+    },
+    {
+      "name": "FIX-03 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 43
+    },
+    {
+      "name": "FIX-03 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 118
+    },
+    {
+      "name": "FIX-04 solve",
+      "maxFractionInputBits": 6,
+      "constructions": 81
+    },
+    {
+      "name": "FIX-04 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 175
+    },
+    {
+      "name": "FIX-05 solve",
+      "maxFractionInputBits": 4,
+      "constructions": 50
+    },
+    {
+      "name": "FIX-05 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 123
+    },
+    {
+      "name": "FIX-06 solve",
+      "maxFractionInputBits": 0,
+      "constructions": 0
+    },
+    {
+      "name": "FIX-07 solve",
+      "maxFractionInputBits": 0,
+      "constructions": 0
+    },
+    {
+      "name": "FIX-08 solve",
+      "maxFractionInputBits": 4,
+      "constructions": 4
+    },
+    {
+      "name": "FIX-09 solve",
+      "maxFractionInputBits": 11,
+      "constructions": 152
+    },
+    {
+      "name": "FIX-09 pipeline",
+      "maxFractionInputBits": 11,
+      "constructions": 290
+    },
+    {
+      "name": "FIX-09 sweep pipeline",
+      "maxFractionInputBits": 13,
+      "constructions": 298
+    },
+    {
+      "name": "FIX-10 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 74
+    },
+    {
+      "name": "FIX-10 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 152
+    },
+    {
+      "name": "FIX-11 solve",
+      "maxFractionInputBits": 4,
+      "constructions": 75
+    },
+    {
+      "name": "FIX-11 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 149
+    },
+    {
+      "name": "FIX-11 sweep pipeline",
+      "maxFractionInputBits": 10,
+      "constructions": 157
+    },
+    {
+      "name": "FIX-12 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 43
+    },
+    {
+      "name": "FIX-12 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 118
+    },
+    {
+      "name": "FIX-12 sweep pipeline",
+      "maxFractionInputBits": 10,
+      "constructions": 126
+    },
+    {
+      "name": "grid 3x3 varied",
+      "maxFractionInputBits": 80,
+      "constructions": 901
+    },
+    {
+      "name": "grid 5x5 varied",
+      "maxFractionInputBits": 290,
+      "constructions": 8052
+    },
+    {
+      "name": "grid 7x7 varied",
+      "maxFractionInputBits": 518,
+      "constructions": 25461
+    },
+    {
+      "name": "grid 3x3 wide",
+      "maxFractionInputBits": 2445,
+      "constructions": 901
+    },
+    {
+      "name": "grid 5x5 wide",
+      "maxFractionInputBits": 3821,
+      "constructions": 2903
+    },
+    {
+      "name": "grid 3x3 long",
+      "maxFractionInputBits": 2740,
+      "constructions": 901
+    },
+    {
+      "name": "grid 5x5 long",
+      "maxFractionInputBits": 3832,
+      "constructions": 2847
+    }
+  ],
+  "soak": [
+    {
+      "name": "FIX-09-balanced-bridge.json",
+      "stepsPerCycle": 1001,
+      "cycles": 10,
+      "verifiedSteps": 1001,
+      "cycleMs": [
+        527.5041000000019,
+        319.5649000000012,
+        280.7308000000012,
+        314.13430000000153,
+        270.5652000000009,
+        275.14300000000003,
+        324.69490000000224,
+        297.97710000000006,
+        274.3813000000009,
+        259.6244000000006
+      ],
+      "heapAfterGcMiB": [
+        25.86225128173828,
+        25.566604614257812,
+        25.654136657714844,
+        25.646011352539062,
+        25.590621948242188,
+        25.593841552734375,
+        25.5838623046875,
+        25.683944702148438,
+        25.630508422851562,
+        25.664405822753906
+      ],
+      "heapDeltaAfterFirstCycleMiB": -0.197845458984375
+    },
+    {
+      "name": "FIX-11-variable-divider.json",
+      "stepsPerCycle": 1001,
+      "cycles": 10,
+      "verifiedSteps": 1001,
+      "cycleMs": [
+        191.14730000000054,
+        161.08399999999892,
+        128.08719999999812,
+        138.58110000000306,
+        132.46399999999994,
+        133.17309999999998,
+        142.41280000000188,
+        156.41660000000047,
+        140.193299999999,
+        135.17819999999847
+      ],
+      "heapAfterGcMiB": [
+        25.575897216796875,
+        25.626388549804688,
+        25.68183135986328,
+        25.662811279296875,
+        25.63324737548828,
+        25.63457489013672,
+        25.667884826660156,
+        25.682044982910156,
+        25.671913146972656,
+        25.613746643066406
+      ],
+      "heapDeltaAfterFirstCycleMiB": 0.03784942626953125
+    },
+    {
+      "name": "FIX-12-variable-parallel.json",
+      "stepsPerCycle": 1001,
+      "cycles": 10,
+      "verifiedSteps": 1001,
+      "cycleMs": [
+        138.8142000000007,
+        133.78130000000237,
+        131.71150000000125,
+        126.04629999999815,
+        155.34059999999954,
+        126.01429999999891,
+        125.18539999999848,
+        124.33339999999953,
+        119.2380000000012,
+        120.98649999999907
+      ],
+      "heapAfterGcMiB": [
+        25.6180419921875,
+        25.699867248535156,
+        25.659637451171875,
+        25.676727294921875,
+        25.747039794921875,
+        25.656997680664062,
+        25.657249450683594,
+        25.73668670654297,
+        25.696922302246094,
+        25.693984985351562
+      ],
+      "heapDeltaAfterFirstCycleMiB": 0.0759429931640625
+    }
+  ]
+}

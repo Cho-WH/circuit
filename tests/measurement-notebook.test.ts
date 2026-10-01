@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 import { describe, expect, it } from 'vitest';
 import { examples } from '../src/fixtures';
 import { endpointName, wireName } from '../src/component-library';
@@ -22,7 +23,7 @@ function entry(id = 'one'): MeasurementEntry {
     condition: '정상 연결',
     source: 'simulation',
     quantity: 'voltage',
-    value: 3,
+    value: q.store(3),
     unit: 'V',
     targetIds: ['R1.a', 'R1.b'],
   });
@@ -47,7 +48,7 @@ describe('measurement notebook', () => {
     for (const wire of doc.wires)
       for (const end of [wire.start, wire.end]) if (end.id === 'J1') end.id = 'Jm';
     saved.record.targetIds = ['Jm', 'R1.a'];
-    saved.record.value = -3;
+    saved.record.value = q.store(-3);
     const before = JSON.stringify(doc);
     const r1 = doc.components.find((c) => c.id === 'R1')!.label;
     const r2 = doc.components.find((c) => c.id === 'R2')!.label;
@@ -100,7 +101,7 @@ describe('measurement notebook', () => {
       ...current.record,
       quantity: 'current',
       unit: 'A',
-      value: -1,
+      value: q.store(-1),
       targetIds: ['R1'],
     };
     current.anchors = { red: null, black: null, current: { kind: 'component', id: 'R1' } };
@@ -112,7 +113,7 @@ describe('measurement notebook', () => {
       ...resistance.record,
       quantity: 'resistance',
       unit: 'Ω',
-      value: 3,
+      value: q.store(3),
       condition: '모든 전원 분리',
     };
     resistance.sourcesDisconnected = true;
@@ -121,12 +122,16 @@ describe('measurement notebook', () => {
     expect(measurementValue(current)).toBe('1 A');
     expect(measurementDirection(current)).toMatch(/오른쪽 단자.*→.*왼쪽 단자/);
     expect(store.data.has('edu-circuit:auto:v1')).toBe(false);
-    // Existing CircuitDocument migration is also applied inside notebook snapshots.
-    const key = [...store.data.keys()][0],
-      old = JSON.parse(store.data.get(key)!);
-    old.entries[0].record.documentSnapshot.version = 3;
-    store.data.set(key, JSON.stringify(old));
-    expect(loadMeasurementNotebook(store).entries[0].record.documentSnapshot.version).toBe(4);
+  });
+  it('rejects old notebook versions and numeric values in current records', () => {
+    for (const corrupt of [
+      { version: 2, entries: [entry()] },
+      { version: 4, entries: [{ ...entry(), record: { ...entry().record, value: 1 / 3 } }] },
+    ]) {
+      const store = storage();
+      store.data.set('edu-circuit:measurement-notebook:v4', JSON.stringify(corrupt));
+      expect(loadMeasurementNotebook(store)).toMatchObject({ entries: [], warning: expect.any(String) });
+    }
   });
   it('recovers a valid backup, rejects unsupported versions and reports storage failure', () => {
     const store = storage(),
@@ -191,7 +196,7 @@ describe('measurement notebook', () => {
     resistor.properties.quantityNotation = 'scientific';
     changed.record.documentSnapshot.components.find(
       (c) => c.id === 'R1',
-    )!.properties.resistanceOhm = 6;
+    )!.properties.resistanceOhm = q.store(6);
     detached.sourcesDisconnected = true;
     expect(
       measurementConditions([first, moved, changed, detached]).map((group) => group.entries.length),
@@ -211,7 +216,7 @@ describe('measurement notebook', () => {
     expect(text).toContain("'=1+1 <script>note</script>");
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
-    saved.record.value = -3;
+    saved.record.value = q.store(-3);
     expect(measurementValue(saved)).toBe('-3 V');
     expect(measurementTableText([saved], ',')).toContain('"\'-3 V"');
   });

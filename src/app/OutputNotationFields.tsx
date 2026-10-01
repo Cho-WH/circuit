@@ -1,7 +1,8 @@
+import type { ComponentProperties } from '../domain';
 import { ComponentNameInput } from './ComponentNameInput';
 import { useId } from 'react';
 interface Props {
-  properties: Record<string, string | number | boolean>;
+  properties: ComponentProperties;
   label: string | null | undefined;
   value: string | null | undefined;
   onChange: (values: Record<string, string | number | boolean>) => void;

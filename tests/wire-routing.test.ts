@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyDocument, documentMigrator, type Point } from '../src/domain';
+import { emptyDocument, requireDocument, type Point } from '../src/domain';
 import { createComponent, wirePoints, compactWirePoints } from '../src/component-library';
 import { orthogonalRoute, stretchWire, shiftWireSegment } from '../src/wire-geometry';
 import { previewCommand, executeCommand, executeCommands, createHistory, undo, redo, type Command } from '../src/editor';
@@ -59,7 +59,7 @@ describe('local wire geometry rules', () => {
 });
 
 describe('wire editing commands and invariants', () => {
-  const fixture = () => documentMigrator.migrate(source);
+  const fixture = () => requireDocument(source);
   it.each<Command>([
     {type:'MoveWireSegment',wireId:'W2',segment:2,offset:40},
     {type:'MoveComponents',positions:{R1:{x:740,y:380}}},

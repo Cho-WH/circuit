@@ -18,7 +18,7 @@ output.fontScale은 0.5~2의 문서 설정이다. 글자 및 사각 빈칸의 �
 
 저장 형식 v2의 Annotation에 point 종류, 선택적 position/end 좌표, null anchor를 추가한다. anchor가 null이면 position이 필수다. 예전 anchor 주석은 처음 이동하기 전까지 기존 기준 위치를 따른다. 자유 배치한 주석은 회로 연결 ID에 의존하지 않는다. visibility는 always/hidden이며 주석은 출력 화면과 출력 이미지에만 보인다.
 
-validateDocument는 v1 입력을 이전 스키마로 검증한 뒤 복제하여 v2로 순차 변환한다. 기존 주석의 problem/always는 always, answer/hidden은 hidden으로 옮겨 종전 문제 그림을 보존한다. 원본은 수정하지 않는다. 브라우저 저장 키는 유지하여 기존 자동·명시·백업 저장본을 찾을 수 있고, v2 검증을 거쳐 v3으로 변환하며 v3→v4 순차 변환 이후 다음 저장부터 v4를 기록한다. v1 fixture는 호환성 검증 자료로 유지한다.
+2026-10-02 개정: 회로 저장은 ADR-024의 v5만 지원한다. 이전 버전의 변환·호환과 보존 스키마를 제거했으며, 출력 표기·배치 계약은 유지한다.
 
 ## 출력 계약
 
@@ -30,7 +30,7 @@ exportSvg(document, options?, result?)와 createSvgExport는 동일한 문서 �
 
 ## 입력한 분수
 
-quantity의 parseQuantity는 분수·부호·SI 접두어를 파싱하여 계산용 value와 선택적 fraction 문자열을 반환한다. 부품 properties의 resistanceOhm/voltageV는 계속 숫자이며 resistanceOhmFraction/voltageVFraction에 명시적으로 입력한 비율을 저장한다. 기존 v2의 확장 속성이므로 스키마 변경이나 마이그레이션은 없다. 표기가 현재 수치와 일치할 때만 표시하고 숫자만 바꾸는 편집 명령은 이전 표기를 삭제한다. 저장·복사·실행 취소는 두 속성을 함께 보존한다.
+quantity의 parseQuantity는 분수·부호·SI 접두어를 파싱하여 계산용 value와 선택적 fraction 문자열을 반환한다. 부품 properties의 resistanceOhm/voltageV는 v5의 정확값이며 resistanceOhmFraction/voltageVFraction에 명시적으로 입력한 비율을 저장한다. 물리값·저장 버전의 기준은 ADR-024를 따른다. 표기가 현재 수치와 일치할 때만 표시하고 숫자만 바꾸는 편집 명령은 이전 표기를 삭제한다. 저장·복사·실행 취소는 두 속성을 함께 보존한다.
 
 이름·출력 값·주석의 숫자 비율은 공통 notationTokens와 svgNotation으로 분자·가로선·분모를 그리며 분자와 분모는 주변 숫자와 같은 폰트 크기를 사용한다. 이름·값 사이의 기본 간격과 출력 경계에 증가한 높이를 반영한다. 라이브 회로와 독립 SVG·PNG가 같은 벡터 배치를 사용하고 출력 경계는 분수 높이를 포함한다. 일반 소수와 자동 계산 결과는 소수 표기를 유지한다.
 
@@ -60,7 +60,7 @@ Annotation.presentation은 화살표 주석 전용 label/answer Text·Display·V
 
 기호·값 SVG 그룹을 나누어 각각 드래그하고, 오프셋은 기본 배치에 더하는 문서 좌표다. 글자 이동은 화살표 위치·길이·회전·방향을 바꾸지 않는다. 본체 이동은 글자도 함께 이동하고 독립 오프셋은 유지한다. 출력 경계는 두 표기의 최종 위치를 포함한다. 이 표기는 출력에만 보이고 계산에 영향을 주지 않는다.
 
-v3 스키마를 보존하고 v3 검증 후 복제하여 v4로 승격한다. 기존 content·arrow·end는 그대로 유지하고 새 presentation은 편집할 때만 추가하므로 기존 이름과 배치를 보존한다.
+현재 스키마는 v5이며 `content`·`arrow`·`presentation`은 출력 데이터로 유지한다.
 
 
 ## 2026-09-26 실제 부품 이름·값 통일 (TCH-001~003)

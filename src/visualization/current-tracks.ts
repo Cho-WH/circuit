@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import type { Point } from '../domain';
 import type { CurrentPath } from './current-paths';
 
@@ -8,7 +9,7 @@ export interface ProjectedCurrentPath {
 export interface CurrentTrack {
   ids: string[];
   points: Point[];
-  amperes: number;
+  amperes: q.Scalar;
   closed: boolean;
   startJunction?: string;
   endJunction?: string;
@@ -23,18 +24,18 @@ export function buildCurrentTracks(paths: ProjectedCurrentPath[]): CurrentTrack[
       const v = path.sample.value;
       if (
         v.status !== 'known' ||
-        !Number.isFinite(v.amperes) ||
-        v.amperes === 0 ||
+        (typeof v.amperes === 'number' && !Number.isFinite(v.amperes)) ||
+        q.sign(v.amperes) === 0 ||
         points.length < 2
       )
         return [];
-      const reverse = v.amperes < 0;
+      const reverse = q.sign(v.amperes) < 0;
       return [
         {
           id: path.id,
           from: (reverse ? v.to : v.from).id,
           to: (reverse ? v.from : v.to).id,
-          amperes: Math.abs(v.amperes),
+          amperes: q.abs(v.amperes),
           points: reverse ? [...points].reverse() : points,
         },
       ];
@@ -55,7 +56,7 @@ export function buildCurrentTracks(paths: ProjectedCurrentPath[]): CurrentTrack[
     const candidates = outgoing.get(e.to) ?? [];
     if (incoming.get(e.to)?.length !== 1 || candidates.length !== 1) return -1;
     const candidate = edges[candidates[0]];
-    return Math.abs(e.amperes - candidate.amperes) <= Math.max(e.amperes, candidate.amperes) * 1e-8
+    return q.equal(e.amperes, candidate.amperes)
       ? candidates[0]
       : -1;
   });

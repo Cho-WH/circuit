@@ -1,8 +1,7 @@
+import { isStoredScalar, physicalProperties, type Rational, type ComponentProperties } from './scalar';
+export { validApproximation, type Approximation, isStoredScalar, physicalProperties, type Rational, type StoredScalar, type ComponentProperties } from './scalar';
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../schemas/circuit-document.schema.json';
-import versionThreeSchema from '../../schemas/circuit-document-v3.schema.json';
-import versionTwoSchema from '../../schemas/circuit-document-v2.schema.json';
-import previousSchema from '../../schemas/circuit-document-v1.schema.json';
 
 export type Point = { x: number; y: number };
 export type EndpointRef = { kind: 'terminal' | 'junction'; id: string };
@@ -11,7 +10,7 @@ export interface Terminal { id: string; role: string; localPosition?: Point }
 export interface ComponentInstance {
   id: string; type: ComponentType; label: string; position: Point;
   rotation: 0 | 90 | 180 | 270;
-  properties: Record<string, number | string | boolean>;
+  properties: ComponentProperties;
   terminals: Terminal[];
 }
 export interface Wire { id: string; start: EndpointRef; end: EndpointRef; waypoints: Point[] }
@@ -19,14 +18,14 @@ export interface Junction { id: string; position: Point }
 export interface ArrowStyle { shape: 'straight' | 'corner'; length: number; legLength: number; rotation: number; reversed: boolean }
 export interface Annotation {
   id: string; kind: 'label' | 'arrow' | 'blank' | 'question' | 'note' | 'point';
-  anchor: EndpointRef | null; position?: Point; end?: Point; arrow?: ArrowStyle; presentation?: Record<string,string|number|boolean>; content: string; visibility: 'always' | 'hidden';
+  anchor: EndpointRef | null; position?: Point; end?: Point; arrow?: ArrowStyle; presentation?: Record<string, string | number | boolean>; content: string; visibility: 'always' | 'hidden';
 }
 export interface ActivityDefinition {
   allowedCommands: string[]; revealSteps: Record<string, unknown>[];
   resetSnapshotId?: string | null; [key: string]: unknown;
 }
 export interface CircuitDocument {
-  $schema?: string; format: 'edu-circuit'; version: 4; output?: { fontScale?: number }; documentId: string; title: string;
+  $schema?: string; format: 'edu-circuit'; version: 5; output?: { fontScale?: number }; documentId: string; title: string;
   components: ComponentInstance[]; wires: Wire[]; junctions: Junction[];
   annotations: Annotation[]; referenceNode: EndpointRef | null; activity: ActivityDefinition | null;
 }
@@ -52,56 +51,43 @@ export interface Diagnostic {
 export const diagnostic = (code: string, affectedIds: string[] = [], severity: Diagnostic['severity'] = 'error', parameters: Diagnostic['parameters'] = {}): Diagnostic =>
   ({ code, severity, affectedIds: [...new Set(affectedIds)], parameters, suggestedActions: ['INSPECT_CONNECTIONS'] });
 export interface Net { id: string; endpointIds: string[]; wireIds: string[] }
-export interface CompiledElement { id: string; type: ComponentType; a: string; b: string; value: number; closed: boolean }
+export interface CompiledElement { id: string; type: ComponentType; a: string; b: string; value: Rational; closed: boolean }
 export interface CompiledCircuit {
   nets: Net[]; elements: CompiledElement[]; endpointToNet: Record<string, string>;
   referenceNetId?: string;
 }
 export interface CompileResult { circuit: CompiledCircuit; diagnostics: Diagnostic[] }
 export interface CircuitCompiler { compile(document: CircuitDocument): CompileResult }
-export interface SolveOptions { absoluteTolerance?: number; relativeTolerance?: number }
+export type SolveOptions = Record<string, never>;
 export interface SimulationResult {
-  status: 'solved' | 'warning' | 'error'; nodeVoltages: Record<string, number>;
-  branchCurrents: Record<string, number>; componentVoltages: Record<string, number>;
-  componentPowers: Record<string, number>; diagnostics: Diagnostic[];
+  quality?: { mode: 'exact' } | { mode: 'approximate'; reason: 'integer-limit' | 'operation-limit'; policy: 'dc-budget-1'; backwardError: number; condition: number; refinements: number };
+  status: 'solved' | 'warning' | 'error'; nodeVoltages: Record<string, Rational>;
+  branchCurrents: Record<string, Rational>; componentVoltages: Record<string, Rational>;
+  componentPowers: Record<string, Rational>; diagnostics: Diagnostic[];
 }
 export interface SimulationEngine { solve(circuit: CompiledCircuit, options?: SolveOptions): SimulationResult }
 export interface DiagnosticInput { document: CircuitDocument; compilation: CompileResult; result: SimulationResult }
 export interface DiagnosticEngine { evaluate(input: DiagnosticInput): Diagnostic[] }
 export interface Exporter<TOptions> { export(document: CircuitDocument, options: TOptions): Promise<Blob> }
-export interface DocumentMigrator { canMigrate(version: number): boolean; migrate(input: unknown): CircuitDocument }
 
 const validateSchema = new Ajv2020({ allErrors: true, strict: false }).compile<CircuitDocument>(schema);
 export type DocumentValidation = { ok: true; document: CircuitDocument } | { ok: false; diagnostics: Diagnostic[] };
-const validatePrevious = new Ajv2020({ allErrors: true, strict: false }).compile(previousSchema);
-const validateVersionTwo = new Ajv2020({ allErrors: true, strict: false }).compile(versionTwoSchema);
-const validateVersionThree = new Ajv2020({ allErrors: true, strict: false }).compile(versionThreeSchema);
 export function validateDocument(input: unknown): DocumentValidation {
-  if (input && typeof input === 'object' && 'version' in input && input.version === 1 && validatePrevious(input)) {
-    const migrated = JSON.parse(JSON.stringify(input));
-    migrated.version = 2;
-    for (const annotation of migrated.annotations) annotation.visibility = ['hidden', 'answer'].includes(annotation.visibility) ? 'hidden' : 'always';
-    input = migrated;
-  }
-  if (input && typeof input === 'object' && 'version' in input && input.version === 2 && validateVersionTwo(input)) {
-    input = {...JSON.parse(JSON.stringify(input)), version: 3};
-  }
-  if (input && typeof input === 'object' && 'version' in input && input.version === 3 && validateVersionThree(input)) {
-    input = {...JSON.parse(JSON.stringify(input)), version: 4};
-  }
   if (!validateSchema(input)) return { ok: false, diagnostics: [diagnostic('INVALID_DOCUMENT', [], 'error', { detail: (validateSchema.errors ?? []).map(e => `${e.instancePath} ${e.message}`).join('; ') })] };
   const doc = input;
   const ids = new Set<string>();
   const diagnostics: Diagnostic[] = [];
   const endpoints = new Map<string, EndpointRef['kind']>();
   for (const c of doc.components) {
-    if (c.type !== 'resistive-load') continue;
+    for (const key of physicalProperties) {
+      const v = c.properties[key];
+      if (v !== undefined && !isStoredScalar(v)) diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: key }));
+    }
     const { resistanceMinOhm: min, resistanceMaxOhm: max, resistanceOhm: value } = c.properties;
-    // Optional v4 extension: old documents retain their exact electrical values.
-    if (min === undefined && max === undefined) continue;
-    if (typeof min !== 'number' || typeof max !== 'number' || typeof value !== 'number' ||
-        !Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(value) ||
-        min <= 0 || max <= min || value < min || value > max)
+    if (c.type !== 'resistive-load' || (min === undefined && max === undefined)) continue;
+    const compare = (a: import('./scalar').StoredScalar, b: import('./scalar').StoredScalar) => BigInt(a.numerator)*BigInt(b.denominator)-BigInt(b.numerator)*BigInt(a.denominator);
+    if (!isStoredScalar(min) || !isStoredScalar(max) || !isStoredScalar(value) ||
+        BigInt(min.numerator) <= 0n || compare(max,min) <= 0n || compare(value,min) < 0n || compare(value,max) > 0n)
       diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'resistanceRange' }));
   }
   for (const item of [...doc.components, ...doc.components.flatMap(c => c.terminals), ...doc.wires, ...doc.junctions, ...doc.annotations]) {
@@ -119,16 +105,14 @@ export function cloneDocument(document: CircuitDocument): CircuitDocument { retu
 export class DocumentError extends Error {
   constructor(public readonly diagnostics: Diagnostic[]) { super(diagnostics.map(d => d.code).join(', ')); this.name = 'DocumentError'; }
 }
-export const documentMigrator: DocumentMigrator = {
-  canMigrate: version => version === 1 || version === 2 || version === 3 || version === 4,
-  migrate(input) {
-    const checked = validateDocument(input);
-    if (!checked.ok) throw new DocumentError(checked.diagnostics);
-    return cloneDocument(checked.document);
-  },
-};
+/** Read current-format data without altering the caller's document. */
+export function requireDocument(input: unknown): CircuitDocument {
+  const checked = validateDocument(input);
+  if (!checked.ok) throw new DocumentError(checked.diagnostics);
+  return cloneDocument(checked.document);
+}
 export function emptyDocument(id = 'untitled'): CircuitDocument {
-  return { format: 'edu-circuit', version: 4, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
+  return { format: 'edu-circuit', version: 5, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
 }
 
 export function normalizeComponentLabel(input:string):string|null {

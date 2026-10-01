@@ -1,3 +1,4 @@
+import type { Scalar } from '../rational';
 import { formatQuantity as formatSIQuantity, quantityFormatFor, defaultQuantityFormat, type QuantityFormatOptions } from '../quantity';
 // @refresh reset
 // The imperative WebGL runtime must not retain old render closures across code updates.
@@ -6,7 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
-import { buildCurrentPaths, type CurrentDisplay, type PotentialModel } from '../visualization';
+import { potentialAxisValue, buildCurrentPaths, type CurrentDisplay, type PotentialRange, type PotentialModel } from '../visualization';
 import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
 import { createHorizontalAttraction } from './camera-snap';
@@ -25,7 +26,7 @@ export interface Potential3DProps {
   document: CircuitDocument;
   potential: PotentialModel;
   heightMultiplier?: number;
-  heightRange?: { min: number; max: number };
+  heightRange?: PotentialRange;
   referenceLabel: string;
   selectedIds: string[];
   highlightedId?: string | null;
@@ -142,7 +143,7 @@ function moveCamera(r: Runtime, preset: Preset, reset = false) {
 
 export function Potential3D(props: Potential3DProps) {
   const quantityFormat=props.quantityFormat??defaultQuantityFormat;
-  const formatQuantity=(value:number|undefined,unit:string)=>formatSIQuantity(value,unit,quantityFormat);
+  const formatQuantity=(value:Scalar|undefined,unit:string)=>formatSIQuantity(value,unit,quantityFormat);
   const { document: circuit, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors, heightMultiplier = 1 } = props;
   const [heightTarget, setHeightTarget] = useState<{ height: number } | null>(null);
   const resetRequested = useRef(false);
@@ -408,7 +409,7 @@ export function Potential3D(props: Potential3DProps) {
       for (const v of extent.ticks) {
         const z=v*potential.scale;
         line(r.content,[new THREE.Vector3(axis.x-5,axis.y,z),new THREE.Vector3(axis.x+5,axis.y,z)],v===0?'#66745a':'#9da78f');
-        addLabel(`${axis.key}:${v}`,formatQuantity(v,'V'),new THREE.Vector3(axis.labelX,axis.y,z),'axis-tag',false,v===0?6:5);
+        addLabel(`${axis.key}:${v}`,formatQuantity(potentialAxisValue(potential,v),'V'),new THREE.Vector3(axis.labelX,axis.y,z),'axis-tag',false,v===0?6:5);
       }
     }
     if (guides) {

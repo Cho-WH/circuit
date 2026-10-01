@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -125,7 +126,7 @@ it.each([100, 5000])('finishes a slider commit arriving after release without re
   function ControlHarness() {
     const [component, setComponent] = useState(() => {
       const c = createComponent('resistive-load', 'VR1', { x: 0, y: 0 });
-      c.properties = { resistanceOhm: 3, resistanceMinOhm: 1, resistanceMaxOhm: 6 };
+      c.properties = { resistanceOhm: q.store(3), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(6) };
       return c;
     });
     return createElement(ParameterControl, {
@@ -160,13 +161,13 @@ it('offers direct play/pause and resumes from the paused value in the same direc
   function ControlHarness() {
     const [component, setComponent] = useState(() => {
       const c = createComponent('resistive-load', 'VR1', { x: 0, y: 0 });
-      c.properties.resistanceOhm = 100;
+      c.properties.resistanceOhm = q.store(100);
       return c;
     });
     return createElement(ParameterControl, {
       component, parameter: adjustableParameter(component)!, disabled: false,
       onAdjustingChange: activity,
-      onChange: (value: number) => {
+      onChange: (value: q.StoredScalar) => {
         setComponent(c => ({ ...c, properties: { ...c.properties, resistanceOhm: value } }));
         return true;
       },

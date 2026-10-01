@@ -1,4 +1,4 @@
-import type { EndpointRef } from '../domain';
+import { isStoredScalar, type EndpointRef } from '../domain';
 import { createMeasurementRecord, type MeasurementRecord } from '../measurement';
 import { wirePoints } from '../component-library';
 
@@ -18,11 +18,11 @@ export interface MeasurementEntry {
   currentDirection?: { from: EndpointRef; to: EndpointRef };
 }
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
-const key = 'edu-circuit:measurement-notebook:v2';
+const key = 'edu-circuit:measurement-notebook:v4';
 
 function parse(text: string): MeasurementEntry[] {
   const data = JSON.parse(text);
-  if (data.version !== 2 || !Array.isArray(data.entries)) throw new Error('Invalid notebook');
+  if (data.version !== 4 || !Array.isArray(data.entries)) throw new Error('Invalid notebook');
   const ids = new Set<string>();
   return data.entries.map((entry: MeasurementEntry) => {
     if (
@@ -35,9 +35,11 @@ function parse(text: string): MeasurementEntry[] {
       !entry.record
     )
       throw new Error('Invalid entry');
+    if (entry.record.value !== null && !isStoredScalar(entry.record.value))
+      throw new Error('Invalid measurement value');
     ids.add(entry.id);
     const record = createMeasurementRecord(entry.record.documentSnapshot, entry.record);
-    if (!record.ok || !['voltage', 'current', 'resistance'].includes(record.value.quantity))
+    if (!record.ok || entry.record.quality !== record.value.quality || !['voltage', 'current', 'resistance'].includes(record.value.quantity))
       throw new Error('Invalid measurement');
     const doc = record.value.documentSnapshot;
     const endpoints = new Map([
@@ -126,7 +128,7 @@ export function saveMeasurementNotebook(
 ): boolean {
   try {
     storage ??= localStorage;
-    const serialized = JSON.stringify({ version: 2, entries });
+    const serialized = JSON.stringify({ version: 4, entries });
     parse(serialized);
     const previous = storage.getItem(key);
     if (previous) {

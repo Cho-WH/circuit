@@ -1,3 +1,5 @@
+import * as q from '../rational';
+import { isStoredScalar, type Rational, type StoredScalar } from '../domain';
 import {
   cloneDocument,
   diagnostic,
@@ -18,57 +20,93 @@ export type MeasurementResult<T> =
   | { ok: false; diagnostics: Diagnostic[] };
 
 export interface ProbeVoltage {
-  voltageV: number;
+  voltageV: Rational;
   redNetId: string;
   blackNetId: string;
 }
 
-export interface CurrentTarget { kind: 'component' | 'wire'; id: string }
-export interface CurrentReading { amperes: number; from: EndpointRef; to: EndpointRef }
+export interface CurrentTarget {
+  kind: 'component' | 'wire';
+  id: string;
+}
+export interface CurrentReading {
+  amperes: Rational;
+  from: EndpointRef;
+  to: EndpointRef;
+}
 
 /** Non-contact measurement. Wire direction is start → end, never inferred from coordinates. */
-export function probeCurrent(document: CircuitDocument, compilation: CompileResult, result: SimulationResult, target: CurrentTarget | null): MeasurementResult<CurrentReading> {
+export function probeCurrent(
+  document: CircuitDocument,
+  compilation: CompileResult,
+  result: SimulationResult,
+  target: CurrentTarget | null,
+): MeasurementResult<CurrentReading> {
   if (!target) return fail('INCOMPLETE_PROBE');
   const upstream = [...compilation.diagnostics, ...result.diagnostics];
-  if (result.status === 'error' || hasErrors(upstream)) return { ok: false, diagnostics: upstream.length ? upstream : [diagnostic('MEASUREMENT_UNAVAILABLE', [target.id])] };
+  if (result.status === 'error' || hasErrors(upstream))
+    return {
+      ok: false,
+      diagnostics: upstream.length
+        ? upstream
+        : [diagnostic('MEASUREMENT_UNAVAILABLE', [target.id])],
+    };
   const pair = (c: ComponentInstance) => {
-    const positive = c.type === 'dc-voltage-source' ? c.terminals.find(t => t.role === 'positive') : undefined;
+    const positive =
+      c.type === 'dc-voltage-source' ? c.terminals.find((t) => t.role === 'positive') : undefined;
     const first = positive ?? c.terminals[0];
-    return [first, c.terminals.find(t => t.id !== first?.id)] as const;
+    return [first, c.terminals.find((t) => t.id !== first?.id)] as const;
   };
   if (target.kind === 'component') {
-    const c = document.components.find(c => c.id === target.id);
+    const c = document.components.find((c) => c.id === target.id);
     if (!c) return fail('MEASUREMENT_TARGET_NOT_FOUND', [target.id]);
-    const [a, b] = pair(c), amperes = result.branchCurrents[c.id];
-    if (!a || !b || !owns(result.branchCurrents, c.id) || !Number.isFinite(amperes)) return fail('MEASUREMENT_UNAVAILABLE', [c.id]);
-    return ok({ amperes, from: {kind:'terminal',id:a.id}, to: {kind:'terminal',id:b.id} });
+    const [a, b] = pair(c),
+      amperes = result.branchCurrents[c.id];
+    if (!a || !b || !owns(result.branchCurrents, c.id) || !q.isRational(amperes))
+      return fail('MEASUREMENT_UNAVAILABLE', [c.id]);
+    return ok({
+      amperes,
+      from: { kind: 'terminal', id: a.id },
+      to: { kind: 'terminal', id: b.id },
+    });
   }
-  const wire = document.wires.find(w => w.id === target.id);
+  const wire = document.wires.find((w) => w.id === target.id);
   if (!wire) return fail('MEASUREMENT_TARGET_NOT_FOUND', [target.id]);
   // Remove only the queried wire from the ideal conductor graph. A remaining path
   // means a zero-resistance cycle: its individual wire currents are not unique.
   const neighbors = new Map<string, string[]>();
   for (const w of document.wires) {
     if (w.id === wire.id) continue;
-    for (const [a,b] of [[w.start.id,w.end.id],[w.end.id,w.start.id]]) neighbors.set(a,[...(neighbors.get(a) ?? []),b]);
+    for (const [a, b] of [
+      [w.start.id, w.end.id],
+      [w.end.id, w.start.id],
+    ])
+      neighbors.set(a, [...(neighbors.get(a) ?? []), b]);
   }
-  const side = new Set<string>([wire.start.id]), queue = [wire.start.id];
-  for (let i=0;i<queue.length;i++) for (const id of neighbors.get(queue[i]) ?? []) if (!side.has(id)) { side.add(id); queue.push(id); }
+  const side = new Set<string>([wire.start.id]),
+    queue = [wire.start.id];
+  for (let i = 0; i < queue.length; i++)
+    for (const id of neighbors.get(queue[i]) ?? [])
+      if (!side.has(id)) {
+        side.add(id);
+        queue.push(id);
+      }
   if (side.has(wire.end.id)) return fail('WIRE_CURRENT_UNDEFINED', [wire.id]);
-  let amperes = 0;
+  let amperes = q.ZERO;
   // KCL on one side of the cut. Sum all terminal injections, including several
   // components at a junction; assigning one current to an entire net is invalid.
-  for (const c of [...document.components].sort((a,b)=>a.id.localeCompare(b.id))) {
-    const [a,b] = pair(c);
+  for (const c of [...document.components].sort((a, b) => a.id.localeCompare(b.id))) {
+    const [a, b] = pair(c);
     if (!a || !b) return fail('MEASUREMENT_UNAVAILABLE', [c.id]);
     const sign = Number(side.has(b.id)) - Number(side.has(a.id));
     if (!sign) continue;
     const current = result.branchCurrents[c.id];
-    if (!owns(result.branchCurrents,c.id) || !Number.isFinite(current)) return fail('MEASUREMENT_UNAVAILABLE', [wire.id,c.id]);
-    amperes += sign * current;
+    if (!owns(result.branchCurrents, c.id) || !q.isRational(current))
+      return fail('MEASUREMENT_UNAVAILABLE', [wire.id, c.id]);
+    amperes = q.add(amperes, q.mul(sign, current));
   }
-  if (!Number.isFinite(amperes)) return fail('MEASUREMENT_UNAVAILABLE', [wire.id]);
-  return ok({amperes,from:wire.start,to:wire.end});
+  if (!q.isRational(amperes)) return fail('MEASUREMENT_UNAVAILABLE', [wire.id]);
+  return ok({ amperes, from: wire.start, to: wire.end });
 }
 
 export interface AmmeterInsertionRequest {
@@ -96,7 +134,7 @@ export type SweepQuantity =
 export interface SweepRequest {
   componentId: string;
   property: 'resistanceOhm' | 'voltageV';
-  values: number[];
+  values: (Rational | StoredScalar)[];
   xLabel: string;
   xUnit: 'Ω' | 'V';
   yLabel: string;
@@ -106,8 +144,8 @@ export interface SweepRequest {
 export type ParameterSweepRequest = SweepRequest;
 
 export interface SweepSample {
-  x: number;
-  y: number | null;
+  x: Rational;
+  y: Rational | null;
   diagnostics: Diagnostic[];
 }
 
@@ -128,13 +166,15 @@ export interface MeasurementRecordFields {
   condition: string;
   source: 'simulation' | 'external';
   quantity: MeasurementQuantity;
-  value: number | null;
+  value: q.Rational | StoredScalar | null;
   unit: MeasurementUnit;
   targetIds: string[];
   recordedAt?: string;
 }
 
-export interface MeasurementRecord extends MeasurementRecordFields {
+export interface MeasurementRecord extends Omit<MeasurementRecordFields, 'value'> {
+  value: StoredScalar | null;
+  quality: 'exact' | 'approximate';
   documentSnapshot: CircuitDocument;
 }
 
@@ -156,7 +196,7 @@ const fail = <T>(
 const hasErrors = (diagnostics: Diagnostic[]): boolean =>
   diagnostics.some((item) => item.severity === 'error');
 
-const owns = (record: Record<string, number>, id: string): boolean =>
+const owns = (record: Record<string, Rational>, id: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, id);
 
 export function probeVoltage(
@@ -166,7 +206,10 @@ export function probeVoltage(
   black: EndpointRef | null,
 ): MeasurementResult<ProbeVoltage> {
   if (!red || !black) {
-    return fail('INCOMPLETE_PROBE', [red?.id, black?.id].filter((id): id is string => !!id));
+    return fail(
+      'INCOMPLETE_PROBE',
+      [red?.id, black?.id].filter((id): id is string => !!id),
+    );
   }
 
   const redNetId = compilation.circuit.endpointToNet[red.id];
@@ -191,8 +234,8 @@ export function probeVoltage(
   if (!owns(result.nodeVoltages, redNetId) || !owns(result.nodeVoltages, blackNetId)) {
     return fail('MEASUREMENT_UNAVAILABLE', [red.id, black.id]);
   }
-  const voltageV = result.nodeVoltages[redNetId] - result.nodeVoltages[blackNetId];
-  if (!Number.isFinite(voltageV)) {
+  const voltageV = q.sub(result.nodeVoltages[redNetId], result.nodeVoltages[blackNetId]);
+  if (!q.isRational(voltageV)) {
     return fail('MEASUREMENT_UNAVAILABLE', [red.id, black.id]);
   }
   return ok({ voltageV, redNetId, blackNetId }, upstreamDiagnostics);
@@ -293,12 +336,10 @@ function sweepReading(
   quantity: SweepQuantity,
   compilation: CompileResult,
   result: SimulationResult,
-): MeasurementResult<number> {
+): MeasurementResult<Rational> {
   if (quantity.kind === 'probe-voltage') {
     const measured = probeVoltage(compilation, result, quantity.red, quantity.black);
-    return measured.ok
-      ? ok(measured.value.voltageV, measured.diagnostics)
-      : measured;
+    return measured.ok ? ok(measured.value.voltageV, measured.diagnostics) : measured;
   }
 
   const values =
@@ -317,7 +358,7 @@ function sweepReading(
     };
   }
   const value = values[quantity.componentId];
-  return Number.isFinite(value)
+  return q.isRational(value)
     ? ok(value, result.diagnostics)
     : fail('MEASUREMENT_UNAVAILABLE', [quantity.componentId]);
 }
@@ -335,8 +376,8 @@ function validateSweep(
   if (
     !request.values.every(
       (value) =>
-        Number.isFinite(value) &&
-        (request.property !== 'resistanceOhm' || value >= 0),
+        (q.isRational(value) || isStoredScalar(value)) &&
+        (request.property !== 'resistanceOhm' || q.sign(value) >= 0),
     )
   ) {
     return fail('INVALID_COMPONENT_VALUE', [request.componentId], {
@@ -367,12 +408,12 @@ function validateSweep(
 function annotateSampleDiagnostics(
   diagnostics: Diagnostic[],
   sampleIndex: number,
-  x: number,
+  x: Rational,
 ): Diagnostic[] {
   return diagnostics.map((item) => ({
     ...item,
     affectedIds: [...item.affectedIds],
-    parameters: { ...item.parameters, sampleIndex, x },
+    parameters: { ...item.parameters, sampleIndex, x: q.exactText(x) },
     suggestedActions: [...item.suggestedActions],
   }));
 }
@@ -393,10 +434,10 @@ export function parameterSweep(
   const samples: SweepSample[] = [];
   const diagnostics: Diagnostic[] = [];
   for (let index = 0; index < request.values.length; index += 1) {
-    const x = request.values[index];
+    const x = q.from(request.values[index]);
     const candidate = cloneDocument(documentValidation.document);
     const component = candidate.components.find((item) => item.id === request.componentId)!;
-    component.properties = { ...component.properties, [request.property]: x };
+    component.properties = { ...component.properties, [request.property]: q.store(x) };
 
     const compilation = compiler.compile(candidate);
     const compileErrors = compilation.diagnostics.filter((item) => item.severity === 'error');
@@ -441,16 +482,19 @@ function validateRecordFields(
   fields: MeasurementRecordFields,
   affectedIds?: string[],
 ): Diagnostic[] {
-  const diagnosticIds =
-    affectedIds ?? (Array.isArray(fields.targetIds) ? fields.targetIds : []);
+  const diagnosticIds = affectedIds ?? (Array.isArray(fields.targetIds) ? fields.targetIds : []);
   if (
+    ('quality' in fields &&
+      fields.quality !==
+        (fields.value !== null && typeof fields.value === 'object' && fields.value.approximation
+          ? 'approximate'
+          : 'exact')) ||
     typeof fields.condition !== 'string' ||
     !fields.condition.trim() ||
     (fields.source !== 'simulation' && fields.source !== 'external') ||
     !(fields.quantity in unitsByQuantity) ||
     unitsByQuantity[fields.quantity] !== fields.unit ||
-    (fields.value !== null &&
-      (typeof fields.value !== 'number' || !Number.isFinite(fields.value))) ||
+    (fields.value !== null && !(q.isRational(fields.value) || isStoredScalar(fields.value))) ||
     !Array.isArray(fields.targetIds) ||
     !fields.targetIds.every((id) => typeof id === 'string') ||
     (fields.recordedAt !== undefined && typeof fields.recordedAt !== 'string')
@@ -470,6 +514,8 @@ export function createMeasurementRecord(
   if (diagnostics.length) return { ok: false, diagnostics };
   return ok({
     ...fields,
+    quality: fields.value !== null && q.from(fields.value).approximation ? 'approximate' : 'exact',
+    value: fields.value === null ? null : q.store(fields.value),
     targetIds: [...fields.targetIds],
     documentSnapshot: cloneDocument(validation.document),
   });
@@ -486,9 +532,7 @@ function csvCell(value: string): string {
     : protectedValue;
 }
 
-export function measurementsToCsv(
-  records: MeasurementRecord[],
-): MeasurementResult<string> {
+export function measurementsToCsv(records: MeasurementRecord[]): MeasurementResult<string> {
   const rows = [
     [
       'condition',
@@ -500,6 +544,8 @@ export function measurementsToCsv(
       'targetIds',
       'recordedAt',
       'documentSnapshot',
+      'quality',
+      'approximation',
     ].join(','),
   ];
 
@@ -516,11 +562,15 @@ export function measurementsToCsv(
         csvCell(record.documentSnapshot.documentId),
         csvCell(record.source),
         csvCell(record.quantity),
-        record.value === null ? '' : String(record.value),
+        record.value === null
+          ? ''
+          : (q.from(record.value).approximation ? '≈ ' : '') + q.exactText(record.value),
         csvCell(record.unit),
         csvCell(record.targetIds.join('|')),
         csvCell(record.recordedAt ?? ''),
         csvCell(JSON.stringify(record.documentSnapshot)),
+        record.quality,
+        csvCell(record.value?.approximation ? JSON.stringify(record.value.approximation) : ''),
       ].join(','),
     );
   }

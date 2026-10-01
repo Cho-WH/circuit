@@ -1,12 +1,14 @@
+import type { ComponentProperties } from '../../domain';
+import * as q from '../../rational';
 import { useEffect, useState, type Ref } from 'react';
-import type { ComponentInstance } from '../../domain';
+import { isStoredScalar, type ComponentInstance } from '../../domain';
 import { adjustableParameter, type AdjustableParameter } from '../../component-library';
-import { parseQuantity } from '../../quantity';
+import { quantityInput, parseQuantity } from '../../quantity';
 import './parameters.css';
 
 export interface ParameterRange {
-  min: number;
-  max: number;
+  min: q.StoredScalar;
+  max: q.StoredScalar;
 }
 export interface ParameterRangeDraft {
   min: string;
@@ -19,16 +21,18 @@ export function parseParameterRange(
 ): ParameterRange | null {
   const min = parseQuantity(draft.min, parameter.unit)?.value;
   const max = parseQuantity(draft.max, parameter.unit)?.value;
-  return min !== undefined && max !== undefined && min > 0 && max > min ? { min, max } : null;
+  return min !== undefined && max !== undefined && q.sign(min) > 0 && q.compare(max, min) > 0
+    ? { min, max }
+    : null;
 }
 
 export function parameterRangeProperties(parameter: AdjustableParameter, range: ParameterRange) {
-  const properties: Record<string, number | string | boolean> = {
+  const properties: ComponentProperties = {
     [parameter.minimumProperty]: range.min,
     [parameter.maximumProperty]: range.max,
   };
-  const value = Math.max(range.min, Math.min(range.max, parameter.value));
-  if (value !== parameter.value) {
+  const value = q.store(q.clamp(parameter.value, range.min, range.max));
+  if (!q.equal(value, parameter.value)) {
     properties[parameter.property] = value;
     properties[parameter.property + 'Fraction'] = '';
   }
@@ -74,15 +78,23 @@ export function ParameterRangeFields({
   onChange,
 }: {
   component: ComponentInstance;
-  onChange: (properties: Record<string, number | string | boolean>) => boolean;
+  onChange: (properties: ComponentProperties) => boolean;
 }) {
   const parameter = adjustableParameter(component)!;
-  const [draft, setDraft] = useState({ min: String(parameter.min), max: String(parameter.max) });
+  const [draft, setDraft] = useState({
+    min: quantityInput(parameter.min),
+    max: quantityInput(parameter.max),
+  });
   const [error, setError] = useState('');
   useEffect(() => {
-    setDraft({ min: String(parameter.min), max: String(parameter.max) });
+    setDraft({ min: quantityInput(parameter.min), max: quantityInput(parameter.max) });
     setError('');
-  }, [parameter.min, parameter.max]);
+  }, [
+    parameter.min.numerator,
+    parameter.min.denominator,
+    parameter.max.numerator,
+    parameter.max.denominator,
+  ]);
   function commit() {
     const range = parseParameterRange(draft, parameter);
     if (!range) {
@@ -90,7 +102,13 @@ export function ParameterRangeFields({
       return;
     }
     const properties = parameterRangeProperties(parameter, range);
-    if (Object.entries(properties).every(([key, value]) => component.properties[key] === value))
+    if (
+      Object.entries(properties).every(([key, value]) =>
+        isStoredScalar(value)
+          ? isStoredScalar(component.properties[key]) && q.equal(component.properties[key], value)
+          : component.properties[key] === value,
+      )
+    )
       return;
     setError(onChange(properties) ? '' : '범위를 바꿀 수 없습니다.');
   }
@@ -107,7 +125,7 @@ export function ParameterRangeFields({
           commit();
         }
         if (e.key === 'Escape') {
-          setDraft({ min: String(parameter.min), max: String(parameter.max) });
+          setDraft({ min: quantityInput(parameter.min), max: quantityInput(parameter.max) });
           setError('');
         }
       }}

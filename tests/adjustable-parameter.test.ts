@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 import { describe, expect, it } from 'vitest';
 import { cloneDocument, validateDocument } from '../src/domain';
 import { adjustableParameter, createComponent } from '../src/component-library';
@@ -13,8 +14,8 @@ function circuit() {
   const doc = cloneDocument(examples.find((e) => e.id === 'FIX-02')!.document);
   const variable = doc.components.find((c) => c.id === 'R1')!;
   variable.type = 'resistive-load';
-  variable.properties = { resistanceOhm: 3, resistanceMinOhm: 3, resistanceMaxOhm: 6 };
-  doc.components.find((c) => c.id === 'R2')!.properties.resistanceOhm = 3;
+  variable.properties = { resistanceOhm: q.store(3), resistanceMinOhm: q.store(3), resistanceMaxOhm: q.store(6) };
+  doc.components.find((c) => c.id === 'R2')!.properties.resistanceOhm = q.store(3);
   return doc;
 }
 describe('adjustable resistance contract', () => {
@@ -27,10 +28,10 @@ describe('adjustable resistance contract', () => {
   it('preserves bounded values on save/load and rejects invalid ranges and out-of-range commands', () => {
     const doc = circuit();
     expect(parseDocument(serializeDocument(doc))).toEqual({ ok: true, document: doc });
-    const invalid: Record<string, number>[] = [
-      { resistanceMinOhm: 0 },
-      { resistanceMaxOhm: 2 },
-      { resistanceOhm: 7 },
+    const invalid: import('../src/domain').ComponentProperties[] = [
+      { resistanceMinOhm: q.store(0) },
+      { resistanceMaxOhm: q.store(2) },
+      { resistanceOhm: q.store(7) },
     ];
     for (const properties of invalid) {
       expect(
@@ -38,7 +39,7 @@ describe('adjustable resistance contract', () => {
       ).toBe(false);
     }
     const old = cloneDocument(doc);
-    old.components.find((c) => c.id === 'R1')!.properties = { resistanceOhm: 0 };
+    old.components.find((c) => c.id === 'R1')!.properties = { resistanceOhm: q.store(0) };
     expect(validateDocument(old)).toEqual({ ok: true, document: old });
     expect(parseDocument(serializeDocument(old))).toEqual({ ok: true, document: old });
   });
@@ -48,9 +49,9 @@ describe('adjustable resistance contract', () => {
     const parameter = adjustableParameter(variable)!;
     const scales = parameterScales(doc, variable.id, parameter);
     expect(scales).toEqual({
-      voltage: { min: 0, max: 9 },
-      height: { min: 0, max: 9 },
-      current: 1.5,
+      voltage: { min: q.ZERO, max: q.from(9) },
+      height: { min: q.ZERO, max: q.from(9) },
+      current: q.from(1.5),
     });
     const beforeKey = parameterContext(doc, variable.id, parameter);
     const first = analyze(doc);
@@ -60,8 +61,8 @@ describe('adjustable resistance contract', () => {
       1,
       scales.height,
     );
-    expect(first.result.componentVoltages.R1).toBeCloseTo(4.5);
-    variable.properties.resistanceOhm = 6;
+    expect(q.toNumber(first.result.componentVoltages.R1)).toBeCloseTo(4.5);
+    variable.properties.resistanceOhm = q.store(6);
     const second = analyze(doc);
     const b = fitPotentialHeight(
       buildPotentialModel(doc, second.compilation.circuit, second.result),
@@ -70,8 +71,8 @@ describe('adjustable resistance contract', () => {
       scales.height,
     );
     expect(parameterContext(doc, variable.id, adjustableParameter(variable)!)).toBe(beforeKey);
-    expect(second.result.componentVoltages.R1).toBeCloseTo(6);
-    expect(Math.abs(second.result.branchCurrents.R1)).toBeCloseTo(1);
+    expect(q.toNumber(second.result.componentVoltages.R1)).toBeCloseTo(6);
+    expect(Math.abs(q.toNumber(second.result.branchCurrents.R1))).toBeCloseTo(1);
     expect(a.scale).toBe(b.scale);
   });
 });

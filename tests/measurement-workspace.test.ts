@@ -1,3 +1,4 @@
+import { requireDocument } from '../src/domain';
 // @vitest-environment happy-dom
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -16,7 +17,7 @@ import { anchorPose } from '../src/app/measurement-tools';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import type { CircuitDocument } from '../src/domain';
-const document = JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document as CircuitDocument;
+const document = requireDocument(JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document) as CircuitDocument;
 const compilation = compileCircuit(document), result = solveCircuit(compilation.circuit);
 const noop = () => {};
 function voltageProps(red: string, black: string) {

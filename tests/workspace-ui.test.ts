@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -82,7 +83,7 @@ describe('workspace transitions and file actions', () => {
     const doc = layoutExample(examples.find(e => e.id === 'FIX-02')!.document);
     const variable = doc.components.find(c => c.id === 'R1')!;
     variable.type = 'resistive-load';
-    variable.properties = { resistanceOhm: 3, resistanceMinOhm: 1, resistanceMaxOhm: 10 };
+    variable.properties = { resistanceOhm: q.store(3), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(10) };
     saveLocal(doc);
     await act(async () => root.render(createElement(App)));
     await act(async () => host.querySelector('[data-component-id="R1"] .component')!
@@ -182,7 +183,7 @@ describe('workspace transitions and file actions', () => {
   });
 
   it('stores display modes per component and applies the chosen mode to all in one undo step',async()=>{
-    const doc=layoutExample(examples[1].document);doc.components.find(c=>c.id==='R1')!.properties.resistanceOhm=90000;
+    const doc=layoutExample(examples[1].document);doc.components.find(c=>c.id==='R1')!.properties.resistanceOhm=q.store(90000);
     saveLocal(doc);await act(async()=>root.render(createElement(App)));
     expect(host.querySelector('.topbar [aria-label="숫자 표시 방식"]')).toBeNull();
     await act(async()=>host.querySelector('[data-component-id="R1"] .component')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
@@ -212,7 +213,7 @@ describe('workspace transitions and file actions', () => {
     await change('10n');await act(async()=>input.dispatchEvent(new FocusEvent('focusout',{bubbles:true})));
     expect(host.querySelector('[data-value-id="R1"]')?.textContent).toBe('10 nΩ');
     await change('12/');await act(async()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
-    expect(input.value).toBe('1e-8');
+    expect(input.value).toBe('0.00000001');
     await change('1/0');await act(async()=>input.dispatchEvent(new FocusEvent('focusout',{bubbles:true})));
     expect(host.querySelector('[data-value-id="R1"]')?.textContent).toBe('10 nΩ');
     await change('90k');await act(async()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));

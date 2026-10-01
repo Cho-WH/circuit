@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -44,7 +45,7 @@ describe('resistance mode source disconnection',()=>{
     expect(reading(doc,'V1.p','V1.n')).toBe('2 Ω');
   });
   it('disconnects every source, including a source outside the probed port and a 0 V source',()=>{
-    const doc=example('FIX-02'),extra=createComponent('dc-voltage-source','V2',{x:500,y:300});extra.properties.voltageV=0;
+    const doc=example('FIX-02'),extra=createComponent('dc-voltage-source','V2',{x:500,y:300});extra.properties.voltageV=q.store(0);
     doc.components.push(extra);
     doc.wires.push({id:'WX',start:{kind:'terminal',id:extra.terminals[0].id},end:{kind:'terminal',id:'R1.a'},waypoints:[]},{id:'WY',start:{kind:'terminal',id:extra.terminals[1].id},end:{kind:'terminal',id:'R1.b'},waypoints:[]});
     expect(reading(doc,'R1.a','R1.b')).toBe('3 Ω');

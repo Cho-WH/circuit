@@ -41,7 +41,7 @@ export function PotentialSettings({
     <div className="potential-settings">
       {selectedNet && potential.nets[selectedNet] && (
         <div className="net-readout">
-          <strong>{formatQuantity(potential.nets[selectedNet].voltage, 'V')}</strong>
+          <strong>{formatQuantity(potential.nets[selectedNet].exactVoltage, 'V')}</strong>
           <p>
             {potential.nets[selectedNet].endpointIds.map((id) => endpointName(doc, id)).join(' · ')}
           </p>

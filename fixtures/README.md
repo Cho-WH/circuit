@@ -43,3 +43,7 @@ FIX-11·12는 제안 당시 저항값과 범위를 1/10로 줄였다. FIX-09는 
 ## 오류 fixture
 
 `expected.status`가 `error`이고 `numericalResultsForbidden`이 `true`이면 해석기는 유한한 수치 해를 임의로 생성해서는 안 된다.
+
+## 정확값 형식
+
+회로 데이터는 v5이며 물리 속성은 정규형 정수 문자열 쌍이다(ADR-024). 실행 중 이전 버전으로부터 변환하지 않는다. `expected`의 소수·허용오차는 기존 표시 비교용으로 유지하고, 정확한 물리 관계는 `exact-dc.test.ts`에서 별도로 확인한다.

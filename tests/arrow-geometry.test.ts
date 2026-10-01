@@ -15,13 +15,6 @@ describe('output arrow geometry',()=>{
     expect(reverse.path).toBe(g.path);expect(reverse.head).not.toBe(g.head);
     const a=g.points[1],b=g.points[2],c=g.points[0];expect((a.x-c.x)*(b.x-a.x)+(a.y-c.y)*(b.y-a.y)).toBeCloseTo(0);
   });
-  it('retains legacy v2 arrows and input without mutating them',()=>{
-    const input={...emptyDocument(),version:2,annotations:[{...annotation,arrow:undefined,end:{x:80,y:110}}]};delete input.annotations[0].arrow;
-    const before=JSON.stringify(input),checked=validateDocument(input);expect(checked.ok).toBe(true);if(!checked.ok)return;
-    expect(checked.document.version).toBe(4);expect(JSON.stringify(input)).toBe(before);
-    const style=arrowStyle(checked.document.annotations[0],{x:20,y:30});expect(style.length).toBe(100);
-    const g=arrowGeometry(checked.document.annotations[0],{x:20,y:30});expect(g.points[1].x).toBeCloseTo(80);expect(g.points[1].y).toBeCloseTo(110);
-  });
   it('moves rigidly, survives save and undo and includes the full corner in export bounds',()=>{
     const doc=emptyDocument();doc.annotations=[annotation];
     const changed=executeCommand(createHistory(doc),outputMoveCommand(doc,{id:'arrow',part:'annotation'},{x:15,y:25})!);expect(changed.ok).toBe(true);if(!changed.ok)return;
@@ -54,9 +47,4 @@ it('edits and moves arrow name and value independently without moving the arrow'
   expect(undo(changed.history).present).toEqual(doc);expect(parseDocument(serializeDocument(next))).toEqual({ok:true,document:next});
   const output=createSvgExport(next);expect(output.content).toContain('data-output-part="value"');expect(output.content).toContain('aria-label="3/4"');expect(output.content).toContain(' A</text>');expect(output.content).toContain('2𝐼');expect(output.bounds.x+output.bounds.width).toBeGreaterThan(650);
   a.presentation={...a.presentation,answerVisible:false,labelBlank:true};const hidden=createSvgExport(next).content;expect(hidden).not.toContain('aria-label="3/4"');expect(hidden).not.toContain('2𝐼');expect(hidden).toContain('data-output-part="label"');
-});
-it('migrates v3 arrows without changing their original name or geometry',()=>{
-  const input={...emptyDocument(),version:3,annotations:[annotation]},before=JSON.stringify(input);
-  const checked=validateDocument(input);expect(checked.ok).toBe(true);if(!checked.ok)return;
-  expect(checked.document.annotations).toEqual(input.annotations);expect(JSON.stringify(input)).toBe(before);expect(checked.document.version).toBe(4);
 });

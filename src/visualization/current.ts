@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import type {
   CircuitDocument,
   CompileResult,
@@ -9,8 +10,8 @@ import { probeCurrent } from '../measurement';
 
 /** Signed terminal/edge current; no geometry, carrier velocity, or animation clock. */
 export type CurrentValue =
-  | { status: 'known'; amperes: number; from: EndpointRef; to: EndpointRef }
-  | { status: 'undefined' | 'unavailable'; diagnostics: Diagnostic[] };
+  | { status: 'known'; amperes: q.Scalar; from: EndpointRef; to: EndpointRef }
+  | { status: 'undefined' | 'unavailable' | 'uncertain'; diagnostics: Diagnostic[] };
 export interface CurrentSample {
   id: string;
   kind: 'component' | 'wire';
@@ -18,12 +19,12 @@ export interface CurrentSample {
 }
 export interface CurrentModel {
   samples: CurrentSample[];
-  maxMagnitude: number;
+  maxMagnitude: q.Scalar;
 }
 export interface CurrentDisplay {
   model: CurrentModel;
   /** Automatically normalized to the current result's largest magnitude. */
-  scaleAmperes: number;
+  scaleAmperes: q.Scalar;
   widthScale: number;
   paused: boolean;
   /** An ongoing parameter gesture or automatic sweep; independent of flow playback. */
@@ -41,7 +42,9 @@ export function buildCurrentModel(
   const samples = targets.map((target) => {
     const reading = probeCurrent(document, compilation, result, target);
     const value: CurrentValue = reading.ok
-      ? { status: 'known', ...reading.value }
+      ? q.direction(reading.value.amperes) === undefined
+        ? { status: 'uncertain', diagnostics: [] }
+        : { status: 'known', ...reading.value }
       : {
           status: reading.diagnostics.some((d) => d.code === 'WIRE_CURRENT_UNDEFINED')
             ? 'undefined'
@@ -52,8 +55,13 @@ export function buildCurrentModel(
   });
   return {
     samples,
-    maxMagnitude: samples.reduce(
-      (max, { value }) => (value.status === 'known' ? Math.max(max, Math.abs(value.amperes)) : max),
+    maxMagnitude: samples.reduce<q.Scalar>(
+      (max, { value }) =>
+        value.status === 'known'
+          ? q.compare(q.abs(value.amperes), max) > 0
+            ? q.abs(value.amperes)
+            : max
+          : max,
       0,
     ),
   };
@@ -62,12 +70,20 @@ export function buildCurrentModel(
 export const currentFullWidth = 14;
 export type CurrentBand = { state: 'zero' | 'visible' | 'subpixel' | 'overflow'; width: number };
 /** Never inflate a tiny nonzero value or silently clamp an overflowing ratio. */
-export function currentBand(amperes: number, scaleAmperes: number, widthScale = 1): CurrentBand {
-  if (amperes === 0) return { state: 'zero', width: 0 };
-  if (!Number.isFinite(amperes) || !Number.isFinite(scaleAmperes) || scaleAmperes <= 0)
+export function currentBand(
+  amperes: q.Scalar,
+  scaleAmperes: q.Scalar,
+  widthScale = 1,
+): CurrentBand {
+  if (
+    (typeof amperes === 'number' && !Number.isFinite(amperes)) ||
+    (typeof scaleAmperes === 'number' && !Number.isFinite(scaleAmperes)) ||
+    q.sign(scaleAmperes) <= 0
+  )
     return { state: 'overflow', width: 0 };
-  const ratio = Math.abs(amperes) / scaleAmperes;
-  if (ratio > 1) return { state: 'overflow', width: 0 };
+  if (q.sign(amperes) === 0) return { state: 'zero', width: 0 };
+  if (q.compare(q.abs(amperes), scaleAmperes) > 0) return { state: 'overflow', width: 0 };
+  const ratio = q.toNumber(q.div(q.abs(amperes), scaleAmperes));
   const width = ratio * currentFullWidth * widthScale;
   return { state: width < 0.75 ? 'subpixel' : 'visible', width };
 }

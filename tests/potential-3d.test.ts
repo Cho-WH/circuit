@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { compileCircuit } from '../src/connectivity';
@@ -6,7 +8,7 @@ import { buildPotentialModel } from '../src/visualization';
 import { sceneAnchors, sceneExtent, selectedVoltage, voltageTicks, minorVoltageTicks, automaticHeight, fitPotentialHeight } from '../src/potential-3d';
 import type { CircuitDocument } from '../src/domain';
 function model() {
-  const document = JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document as CircuitDocument;
+  const document = requireDocument(JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document) as CircuitDocument;
   const compiled = compileCircuit(document).circuit;
   const result = solveCircuit(compiled);
   return { document, potential: buildPotentialModel(document,compiled,result) };
@@ -16,7 +18,7 @@ describe('3D reference plane and voltage readings',()=>{
     const {document}=model();
     let expected:number[] | undefined;
     for(const voltageV of [.009,9,9000]) {
-      document.components[0].properties.voltageV=voltageV;
+      document.components[0].properties.voltageV=q.store(voltageV);
       const compiled=compileCircuit(document).circuit;
       const source=buildPotentialModel(document,compiled,solveCircuit(compiled));
       const target=automaticHeight(document,source,1000,600);
@@ -38,7 +40,7 @@ describe('3D reference plane and voltage readings',()=>{
     const signed=fitPotentialHeight(buildPotentialModel(document,compiled,solveCircuit(compiled)),200,1);
     expect(sceneExtent(document,signed).minZ).toBeLessThan(0);
     expect(sceneExtent(document,signed).maxZ).toBeGreaterThan(0);
-    document.components[0].properties.voltageV=0;
+    document.components[0].properties.voltageV=q.store(0);
     const zero=fitPotentialHeight(buildPotentialModel(document,compiled,solveCircuit(compileCircuit(document).circuit)),200,1);
     expect(Object.values(zero.nets).every(n=>n.height===0)).toBe(true);
     expect(Number.isFinite(zero.scale)).toBe(true);
@@ -62,7 +64,7 @@ describe('3D reference plane and voltage readings',()=>{
   it('keeps one anchor per solved net and preserves its voltage and height',()=>{
     const {document,potential}=model(); const anchors=sceneAnchors(document,potential);
     expect(anchors.length).toBe(Object.keys(potential.nets).length);
-    for(const a of anchors) { expect(a.z).toBe(potential.nets[a.id].height); expect(a.voltage).toBe(potential.nets[a.id].voltage); }
+    for(const a of anchors) { expect(a.z).toBe(potential.nets[a.id].height); expect(a.voltage).toEqual(potential.nets[a.id].exactVoltage); }
     potential.nets[anchors[0].id].height=undefined;
     expect(sceneAnchors(document,potential).some(a=>a.id===anchors[0].id)).toBe(false);
   });
@@ -75,8 +77,8 @@ describe('3D reference plane and voltage readings',()=>{
   });
   it('reads signed terminal differences and never assigns a value to an unsolved terminal',()=>{
     const {document,potential}=model(); const r=selectedVoltage(document,potential,'R1')!;
-    expect(r.difference).toBeCloseTo(r.a.voltage-r.b.voltage,12);
-    expect(r.a.z-r.b.z).toBeCloseTo(r.difference*potential.scale,12);
+    expect(r.difference).toEqual(q.sub(r.a.voltage,r.b.voltage));
+    expect(r.a.z-r.b.z).toBeCloseTo(q.toNumber(r.difference)*potential.scale,12);
     potential.endpoints[r.component.terminals[0].id].height=undefined;
     expect(selectedVoltage(document,potential,'R1')).toBeNull();
     expect(selectedVoltage(document,potential,'missing')).toBeNull();

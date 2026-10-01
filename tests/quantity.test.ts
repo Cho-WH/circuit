@@ -1,6 +1,8 @@
+import * as q from '../src/rational';
 import { serializeDocument, parseDocument } from '../src/persistence';
 import { describe, expect, it } from 'vitest';
 import {
+  quantityInput,
   parseQuantity,
   formatQuantity,
   createQuantityScale,
@@ -25,7 +27,7 @@ import { exportSvg } from '../src/export';
 describe('shared physical quantities', () => {
   it('preserves component preferences across save and atomic undo without changing physical values',()=>{
     const document=emptyDocument('display');document.components=[createComponent('resistor','R1',{x:0,y:0}),createComponent('resistor','R2',{x:240,y:0})];
-    document.components[0].properties.resistanceOhm=90000;
+    document.components[0].properties.resistanceOhm=q.store(90000);
     const history=createHistory(document);
     const changed=executeCommand(history,{type:'SetProperties',id:'R1',properties:{quantityMode:'scientific'}});if(!changed.ok)throw Error('edit');
     expect(componentValue(changed.history.present.components[0])).toBe('9.000 × 10⁴ Ω');
@@ -33,7 +35,7 @@ describe('shared physical quantities', () => {
     const restored=parseDocument(serializeDocument(changed.history.present));expect(restored.ok&&restored.document).toEqual(changed.history.present);
     const all=executeCommands(changed.history,document.components.map(c=>({type:'SetProperties' as const,id:c.id,properties:{quantityMode:'plain'}})));if(!all.ok)throw Error('all');
     expect(undo(all.history).present).toEqual(changed.history.present);
-    expect(all.history.present.components[0].properties.resistanceOhm).toBe(90000);
+    expect(all.history.present.components[0].properties.resistanceOhm).toEqual(q.store(90000));
     expect(executeCommand(history,{type:'SetProperties',id:'R1',properties:{quantityMode:'unknown'}}).ok).toBe(false);
     const restricted=structuredClone(document);restricted.activity={allowedCommands:['SetLabel'],revealSteps:[]};
     expect(executeCommands(createHistory(restricted),document.components.map(c=>({type:'SetProperties' as const,id:c.id,properties:{quantityMode:'plain'}}))).ok).toBe(false);
@@ -52,24 +54,22 @@ describe('shared physical quantities', () => {
     ['10µohm', 0.00001],
     ['10n', 1e-8],
     ['10p', 1e-11],
-    ['0.1/0.3', 1 / 3],
-    ['1/3 u', Number('0.000000333333333333333333333333333333')],
+    ['0.1/0.3', q.rational(1n,3n)],
+    ['1/3 u', q.rational(1n,3000000n)],
     ['3/4 kΩ', 750],
     ['-3/-4 nΩ', 7.5e-10],
     ['1e300/1e300', 1],
-    ['9007199254740993', 9007199254740992],
-    ['9007199254740995', 9007199254740996],
+    ['9007199254740993', q.rational(9007199254740993n)],
+    ['9007199254740995', q.rational(9007199254740995n)],
     ['5e-324', Number.MIN_VALUE],
     ['1.7976931348623157e308', Number.MAX_VALUE],
     ['.1m', 0.0001],
     ['+0', 0],
     ['0/3 n', 0],
-  ])('converts %s with one binary rounding', (input, value) =>
-    expect(parseQuantity(String(input), 'Ω')?.value).toBe(value),
+  ])('parses %s without rounding', (input, value) =>
+    expect(parseQuantity(String(input), 'Ω')?.value).toEqual(q.store(value)),
   );
   it.each([
-    '1e309',
-    '1e-324',
     '1e-99999',
     '1/0',
     '1/-0',
@@ -86,8 +86,8 @@ describe('shared physical quantities', () => {
     expect(parseQuantity(input, 'Ω')).toBeNull(),
   );
   it('supports negative voltage and current without negative resistance', () => {
-    expect(parseQuantity('-3/4 nV', 'V')?.value).toBe(-7.5e-10);
-    expect(parseQuantity('-10pA', 'A')?.value).toBe(-1e-11);
+    expect(parseQuantity('-3/4 nV', 'V')?.value).toEqual(q.store(-7.5e-10));
+    expect(parseQuantity('-10pA', 'A')?.value).toEqual(q.store(-1e-11));
     expect(parseQuantity('2mV', 'A')).toBeNull();
   });
   it('round trips exact written fractions without repeatedly rounding the displayed value', () => {
@@ -105,7 +105,7 @@ describe('shared physical quantities', () => {
       };
     }
     expect(
-      storedFraction({ ...component.properties, resistanceOhm: 1 }, 'resistanceOhm', 'Ω'),
+      storedFraction({ ...component.properties, resistanceOhm: q.store(1) }, 'resistanceOhm', 'Ω'),
     ).toBeUndefined();
   });
   it.each([
@@ -131,7 +131,7 @@ describe('shared physical quantities', () => {
     expect(formatQuantity(NaN, 'V')).toBe('— V');
     const axis = createQuantityScale([0.001, 0.003, 0], 'A');
     expect(axis.unit).toBe('mA');
-    expect(createQuantityScale([1e8, Number.MIN_VALUE], 'A').format(Number.MIN_VALUE)).toBe('4.941 × 10⁻³³⁰');
+    expect(createQuantityScale([1e8, Number.MIN_VALUE], 'A').format(Number.MIN_VALUE)).toBe('5.000 × 10⁻³³⁰');
     expect([0.001, 0.003, 0].map((v) => axis.format(v))).toEqual(['1', '3', '0']);
     expect(createQuantityScale([1, 1e-8], 'A').format(1e-8)).toBe('1.000 × 10⁻⁸');
     for (const v of [Number.MIN_VALUE, Number.MAX_VALUE, 1e-30, -1e21, Math.PI])
@@ -140,14 +140,14 @@ describe('shared physical quantities', () => {
   it('uses identical values in the editor, output preview and standalone SVG', () => {
     const doc = emptyDocument('quantity-output');
     const component = createComponent('resistor', 'R1', { x: 100, y: 100 });
-    component.properties.resistanceOhm = 90000;
+    component.properties.resistanceOhm = q.store(90000);
     doc.components = [component];
     for (const mode of ['auto', 'scientific', 'plain'] as const) {
       const expected = componentValue(component, { mode });
       expect(componentPresentation(component, undefined, { mode }).value).toBe(expected);
       expect(exportSvg(doc, { quantityFormat: { mode } })).toContain(expected);
     }
-    expect(component.properties.resistanceOhm).toBe(90000);
+    expect(component.properties.resistanceOhm).toEqual(q.store(90000));
   });
   it('normalizes names in commands, rejects empty names, and undoes one committed edit', () => {
     const doc = emptyDocument('names');
@@ -168,4 +168,11 @@ describe('shared physical quantities', () => {
     expect(svg).toContain(' A</text>');
     expect(svg).not.toContain('𝐴');
   });
+});
+
+it.each(['1e400', '1e-400', '1/3e400'])('keeps %s editable without display rounding', (text) => {
+  const value = parseQuantity(text, 'V')!.value;
+  const input = quantityInput(value);
+  expect(input.length).toBeLessThanOrEqual(256);
+  expect(parseQuantity(input, 'V')!.value).toEqual(value);
 });

@@ -1,0 +1,510 @@
+{
+  "timestamp": "2026-10-01T16:56:59.792Z",
+  "environment": {
+    "node": "v24.18.0",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor             ",
+    "logicalCpus": 12,
+    "totalMemoryGiB": 31.926193237304688
+  },
+  "timings": [
+    {
+      "name": "FIX-01 solve",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "medianMs": 0.023500000000012733,
+      "p95Ms": 0.0522000000000844,
+      "maxMs": 0.1092999999998483,
+      "heapSampleGrowthMiB": 2.123809814453125,
+      "retainedHeapDeltaMiB": -0.34283447265625
+    },
+    {
+      "name": "FIX-01 pipeline",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "medianMs": 0.14740000000006148,
+      "p95Ms": 0.2401999999999589,
+      "maxMs": 0.4533000000001266,
+      "heapSampleGrowthMiB": 7.814826965332031,
+      "retainedHeapDeltaMiB": 0.12793731689453125
+    },
+    {
+      "name": "FIX-02 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.04970000000002983,
+      "p95Ms": 0.10079999999993561,
+      "maxMs": 0.18489999999997053,
+      "heapSampleGrowthMiB": 2.95098876953125,
+      "retainedHeapDeltaMiB": 0.09178924560546875
+    },
+    {
+      "name": "FIX-02 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.2988000000000284,
+      "p95Ms": 0.4998000000000502,
+      "maxMs": 2.9466999999999643,
+      "heapSampleGrowthMiB": 12.918319702148438,
+      "retainedHeapDeltaMiB": 0.17719268798828125
+    },
+    {
+      "name": "FIX-03 solve",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.017600000000129512,
+      "p95Ms": 0.04500000000007276,
+      "maxMs": 0.1956000000000131,
+      "heapSampleGrowthMiB": 2.3531646728515625,
+      "retainedHeapDeltaMiB": 0.02252960205078125
+    },
+    {
+      "name": "FIX-03 pipeline",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.1248000000000502,
+      "p95Ms": 0.1793999999999869,
+      "maxMs": 0.2660000000000764,
+      "heapSampleGrowthMiB": 14.467109680175781,
+      "retainedHeapDeltaMiB": 0.031829833984375
+    },
+    {
+      "name": "FIX-04 solve",
+      "nets": 3,
+      "elements": 4,
+      "runs": 100,
+      "medianMs": 0.02359999999998763,
+      "p95Ms": 0.048900000000003274,
+      "maxMs": 0.0704000000000633,
+      "heapSampleGrowthMiB": 2.8485031127929688,
+      "retainedHeapDeltaMiB": 0.010040283203125
+    },
+    {
+      "name": "FIX-04 pipeline",
+      "nets": 3,
+      "elements": 4,
+      "runs": 100,
+      "medianMs": 0.16489999999998872,
+      "p95Ms": 0.28109999999992397,
+      "maxMs": 0.5190000000000055,
+      "heapSampleGrowthMiB": 15.755081176757812,
+      "retainedHeapDeltaMiB": -0.21016693115234375
+    },
+    {
+      "name": "FIX-05 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.013799999999946522,
+      "p95Ms": 0.02500000000009095,
+      "maxMs": 0.06550000000015643,
+      "heapSampleGrowthMiB": 1.8297119140625,
+      "retainedHeapDeltaMiB": 0.00986480712890625
+    },
+    {
+      "name": "FIX-05 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.09659999999985303,
+      "p95Ms": 0.19619999999986248,
+      "maxMs": 0.3410000000001219,
+      "heapSampleGrowthMiB": 9.316627502441406,
+      "retainedHeapDeltaMiB": 0.0354766845703125
+    },
+    {
+      "name": "FIX-06 solve",
+      "nets": 1,
+      "elements": 1,
+      "runs": 100,
+      "medianMs": 0.002300000000104774,
+      "p95Ms": 0.00909999999998945,
+      "maxMs": 0.023899999999912325,
+      "heapSampleGrowthMiB": 0.37555694580078125,
+      "retainedHeapDeltaMiB": 0.00888824462890625
+    },
+    {
+      "name": "FIX-07 solve",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "medianMs": 0.0022999999998774,
+      "p95Ms": 0.0028999999999541615,
+      "maxMs": 0.02549999999996544,
+      "heapSampleGrowthMiB": 0.5113143920898438,
+      "retainedHeapDeltaMiB": 0.22934722900390625
+    },
+    {
+      "name": "FIX-08 solve",
+      "nets": 2,
+      "elements": 2,
+      "runs": 100,
+      "medianMs": 0.0052999999998064595,
+      "p95Ms": 0.009000000000014552,
+      "maxMs": 0.05169999999998254,
+      "heapSampleGrowthMiB": 0.8096542358398438,
+      "retainedHeapDeltaMiB": 0.0114288330078125
+    },
+    {
+      "name": "FIX-09 solve",
+      "nets": 4,
+      "elements": 6,
+      "runs": 100,
+      "medianMs": 0.04240000000004329,
+      "p95Ms": 0.10160000000018954,
+      "maxMs": 0.22910000000001673,
+      "heapSampleGrowthMiB": 4.7867279052734375,
+      "retainedHeapDeltaMiB": 0.0112152099609375
+    },
+    {
+      "name": "FIX-09 pipeline",
+      "nets": 4,
+      "elements": 6,
+      "runs": 100,
+      "medianMs": 0.5408999999999651,
+      "p95Ms": 0.662199999999757,
+      "maxMs": 0.9827999999999975,
+      "heapSampleGrowthMiB": 15.995628356933594,
+      "retainedHeapDeltaMiB": 0.0704498291015625
+    },
+    {
+      "name": "FIX-09 sweep pipeline",
+      "nets": 4,
+      "elements": 6,
+      "runs": 100,
+      "medianMs": 0.5751999999997679,
+      "p95Ms": 0.7653999999997723,
+      "maxMs": 0.9160999999999149,
+      "heapSampleGrowthMiB": 16.047027587890625,
+      "retainedHeapDeltaMiB": 0.1553802490234375
+    },
+    {
+      "name": "FIX-10 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.05430000000023938,
+      "p95Ms": 0.06730000000015934,
+      "maxMs": 0.3372999999996864,
+      "heapSampleGrowthMiB": 2.5858535766601562,
+      "retainedHeapDeltaMiB": 0.00736236572265625
+    },
+    {
+      "name": "FIX-10 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.24130000000013752,
+      "p95Ms": 0.2953000000002248,
+      "maxMs": 1.3185000000003129,
+      "heapSampleGrowthMiB": 11.040969848632812,
+      "retainedHeapDeltaMiB": 0.01317596435546875
+    },
+    {
+      "name": "FIX-11 solve",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.05150000000003274,
+      "p95Ms": 0.05889999999999418,
+      "maxMs": 0.09879999999975553,
+      "heapSampleGrowthMiB": 2.5829315185546875,
+      "retainedHeapDeltaMiB": 0.008697509765625
+    },
+    {
+      "name": "FIX-11 pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.22880000000031941,
+      "p95Ms": 0.29500000000007276,
+      "maxMs": 0.6367000000000189,
+      "heapSampleGrowthMiB": 10.984092712402344,
+      "retainedHeapDeltaMiB": 0.020050048828125
+    },
+    {
+      "name": "FIX-11 sweep pipeline",
+      "nets": 3,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.2775000000001455,
+      "p95Ms": 0.4127000000003136,
+      "maxMs": 0.6455000000000837,
+      "heapSampleGrowthMiB": 12.015182495117188,
+      "retainedHeapDeltaMiB": -0.01992034912109375
+    },
+    {
+      "name": "FIX-12 solve",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.03290000000015425,
+      "p95Ms": 0.051899999999932334,
+      "maxMs": 0.09209999999984575,
+      "heapSampleGrowthMiB": 1.9835052490234375,
+      "retainedHeapDeltaMiB": 0.009307861328125
+    },
+    {
+      "name": "FIX-12 pipeline",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.2300000000000182,
+      "p95Ms": 0.2903000000001157,
+      "maxMs": 0.8735000000001492,
+      "heapSampleGrowthMiB": 13.38201904296875,
+      "retainedHeapDeltaMiB": 0.0455322265625
+    },
+    {
+      "name": "FIX-12 sweep pipeline",
+      "nets": 2,
+      "elements": 3,
+      "runs": 100,
+      "medianMs": 0.2676000000001295,
+      "p95Ms": 0.44319999999970605,
+      "maxMs": 3.4971999999997934,
+      "heapSampleGrowthMiB": 13.943305969238281,
+      "retainedHeapDeltaMiB": 0.01142120361328125
+    },
+    {
+      "name": "grid 3x3 varied",
+      "nets": 9,
+      "elements": 13,
+      "runs": 100,
+      "medianMs": 1.1399000000001251,
+      "p95Ms": 2.939600000000155,
+      "maxMs": 4.310500000000047,
+      "heapSampleGrowthMiB": 15.710952758789062,
+      "retainedHeapDeltaMiB": 0.01157379150390625
+    },
+    {
+      "name": "grid 5x5 varied",
+      "nets": 25,
+      "elements": 41,
+      "runs": 50,
+      "medianMs": 29.685899999999947,
+      "p95Ms": 35.727400000000216,
+      "maxMs": 39.089300000000094,
+      "heapSampleGrowthMiB": 15.01068115234375,
+      "retainedHeapDeltaMiB": 0.01849365234375
+    },
+    {
+      "name": "grid 7x7 varied",
+      "nets": 49,
+      "elements": 85,
+      "runs": 8,
+      "medianMs": 303.8643000000002,
+      "p95Ms": 318.2983000000004,
+      "maxMs": 318.2983000000004,
+      "heapSampleGrowthMiB": 16.192955017089844,
+      "retainedHeapDeltaMiB": -0.0223388671875
+    },
+    {
+      "name": "grid 3x3 wide",
+      "nets": 9,
+      "elements": 13,
+      "runs": 31,
+      "medianMs": 48.27130000000034,
+      "p95Ms": 50.02669999999944,
+      "maxMs": 52.58569999999963,
+      "heapSampleGrowthMiB": 30.548927307128906,
+      "retainedHeapDeltaMiB": -0.05643463134765625
+    },
+    {
+      "name": "grid 5x5 wide",
+      "nets": 25,
+      "elements": 41,
+      "runs": 8,
+      "medianMs": 5266.780899999998,
+      "p95Ms": 5285.736199999999,
+      "maxMs": 5285.736199999999,
+      "heapSampleGrowthMiB": 30.20135498046875,
+      "retainedHeapDeltaMiB": -0.020111083984375
+    },
+    {
+      "name": "grid 3x3 long",
+      "nets": 9,
+      "elements": 13,
+      "runs": 22,
+      "medianMs": 68.15170000000217,
+      "p95Ms": 71.7905000000028,
+      "maxMs": 72.03719999999157,
+      "heapSampleGrowthMiB": 30.14171600341797,
+      "retainedHeapDeltaMiB": -0.21491241455078125
+    },
+    {
+      "name": "grid 5x5 long",
+      "nets": 25,
+      "elements": 41,
+      "runs": 8,
+      "medianMs": 6213.884900000005,
+      "p95Ms": 6355.556000000011,
+      "maxMs": 6355.556000000011,
+      "heapSampleGrowthMiB": 60.48011779785156,
+      "retainedHeapDeltaMiB": -0.01636505126953125
+    }
+  ],
+  "integers": [
+    {
+      "name": "FIX-01 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 39
+    },
+    {
+      "name": "FIX-01 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 90
+    },
+    {
+      "name": "FIX-02 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 81
+    },
+    {
+      "name": "FIX-02 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 155
+    },
+    {
+      "name": "FIX-03 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 47
+    },
+    {
+      "name": "FIX-03 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 122
+    },
+    {
+      "name": "FIX-04 solve",
+      "maxFractionInputBits": 6,
+      "constructions": 89
+    },
+    {
+      "name": "FIX-04 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 183
+    },
+    {
+      "name": "FIX-05 solve",
+      "maxFractionInputBits": 4,
+      "constructions": 52
+    },
+    {
+      "name": "FIX-05 pipeline",
+      "maxFractionInputBits": 8,
+      "constructions": 125
+    },
+    {
+      "name": "FIX-06 solve",
+      "maxFractionInputBits": 0,
+      "constructions": 0
+    },
+    {
+      "name": "FIX-07 solve",
+      "maxFractionInputBits": 0,
+      "constructions": 0
+    },
+    {
+      "name": "FIX-08 solve",
+      "maxFractionInputBits": 4,
+      "constructions": 4
+    },
+    {
+      "name": "FIX-09 solve",
+      "maxFractionInputBits": 11,
+      "constructions": 168
+    },
+    {
+      "name": "FIX-09 pipeline",
+      "maxFractionInputBits": 11,
+      "constructions": 306
+    },
+    {
+      "name": "FIX-09 sweep pipeline",
+      "maxFractionInputBits": 13,
+      "constructions": 314
+    },
+    {
+      "name": "FIX-10 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 80
+    },
+    {
+      "name": "FIX-10 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 158
+    },
+    {
+      "name": "FIX-11 solve",
+      "maxFractionInputBits": 4,
+      "constructions": 81
+    },
+    {
+      "name": "FIX-11 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 155
+    },
+    {
+      "name": "FIX-11 sweep pipeline",
+      "maxFractionInputBits": 10,
+      "constructions": 163
+    },
+    {
+      "name": "FIX-12 solve",
+      "maxFractionInputBits": 5,
+      "constructions": 47
+    },
+    {
+      "name": "FIX-12 pipeline",
+      "maxFractionInputBits": 7,
+      "constructions": 122
+    },
+    {
+      "name": "FIX-12 sweep pipeline",
+      "maxFractionInputBits": 10,
+      "constructions": 130
+    },
+    {
+      "name": "grid 3x3 varied",
+      "maxFractionInputBits": 80,
+      "constructions": 945
+    },
+    {
+      "name": "grid 5x5 varied",
+      "maxFractionInputBits": 290,
+      "constructions": 8208
+    },
+    {
+      "name": "grid 7x7 varied",
+      "maxFractionInputBits": 637,
+      "constructions": 37095
+    },
+    {
+      "name": "grid 3x3 wide",
+      "maxFractionInputBits": 2445,
+      "constructions": 945
+    },
+    {
+      "name": "grid 5x5 wide",
+      "maxFractionInputBits": 9282,
+      "constructions": 8208
+    },
+    {
+      "name": "grid 3x3 long",
+      "maxFractionInputBits": 2740,
+      "constructions": 945
+    },
+    {
+      "name": "grid 5x5 long",
+      "maxFractionInputBits": 9326,
+      "constructions": 8208
+    }
+  ]
+}

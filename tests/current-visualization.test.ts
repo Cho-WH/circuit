@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { OrthographicCamera, Vector3 } from 'three';
@@ -20,7 +22,7 @@ import {
 import { projectCurrentPaths } from '../src/potential-3d';
 
 function fixture(name: string) {
-  return JSON.parse(readFileSync(`fixtures/${name}.json`, 'utf8')).document as CircuitDocument;
+  return requireDocument(JSON.parse(readFileSync(`fixtures/${name}.json`, 'utf8')).document) as CircuitDocument;
 }
 function solve(doc: CircuitDocument) {
   const compilation = compileCircuit(doc),
@@ -42,9 +44,9 @@ describe('current display physical invariants (VIS-006)', () => {
       W6: 3,
       V1: -3,
     }))
-      expect(values[id]).toMatchObject({ status: 'known', amperes });
+      expect(values[id]).toMatchObject({ status: 'known', amperes: q.from(amperes) });
     expect(values.V1).toMatchObject({ from: { id: 'V1.p' }, to: { id: 'V1.n' } });
-    expect(model.maxMagnitude).toBe(3);
+    expect(model.maxMagnitude).toEqual(q.from(3));
     expect(JSON.stringify(doc)).toBe(snapshot);
     expect(solve(doc).model).toEqual(model);
   });
@@ -79,17 +81,17 @@ describe('current display physical invariants (VIS-006)', () => {
     ).toBe(true);
     const open = fixture('FIX-05-open-switch'),
       a = solve(open);
-    expect(a.model.samples.every((s) => s.value.status === 'known' && s.value.amperes === 0)).toBe(
+    expect(a.model.samples.every((s) => s.value.status === 'known' && q.sign(s.value.amperes) === 0)).toBe(
       true,
     );
     expect(buildCurrentPaths(open, a.model).some((p) => p.id === 'S1')).toBe(false);
     const doc = fixture('FIX-03-parallel'),
       compiled = compileCircuit(doc),
       result = solveCircuit(compiled.circuit);
-    result.branchCurrents.R1 = 1e-18;
+    result.branchCurrents.R1 = q.from(1e-18);
     expect(
       buildCurrentModel(doc, compiled, result).samples.find((s) => s.id === 'R1')?.value,
-    ).toMatchObject({ status: 'known', amperes: 1e-18 });
+    ).toMatchObject({ status: 'known', amperes:q.from(1e-18) });
     delete result.branchCurrents.R1;
     expect(
       buildCurrentModel(doc, compiled, result).samples.find((s) => s.id === 'R1')?.value.status,
@@ -175,7 +177,7 @@ describe('projected flow geometry', () => {
           kind: 'wire' as const,
           value: {
             status: 'known' as const,
-            amperes: 1,
+            amperes:q.from(1),
             from: { kind: 'terminal' as const, id: from },
             to: { kind: 'terminal' as const, id: to },
           },

@@ -1,0 +1,286 @@
+{
+  "timestamp": "2026-10-01T17:54:58.404Z",
+  "environment": {
+    "node": "v24.18.0",
+    "platform": "win32",
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor             ",
+    "logicalCpus": 12,
+    "totalMemoryGiB": 31.926193237304688
+  },
+  "timings": [
+    {
+      "name": "grid 3x3 varied",
+      "nets": 9,
+      "elements": 13,
+      "runs": 100,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 0.8497999999999593,
+      "p95Ms": 1.4447999999999865,
+      "maxMs": 1.6791000000000622,
+      "heapSampleGrowthMiB": 16.059974670410156,
+      "retainedHeapDeltaMiB": -0.14522552490234375
+    },
+    {
+      "name": "grid 5x5 varied",
+      "nets": 25,
+      "elements": 41,
+      "runs": 42,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 34.069600000000264,
+      "p95Ms": 48.236799999999675,
+      "maxMs": 66.53330000000005,
+      "heapSampleGrowthMiB": 32.8018798828125,
+      "retainedHeapDeltaMiB": -0.0823211669921875
+    },
+    {
+      "name": "grid 7x7 varied",
+      "nets": 49,
+      "elements": 85,
+      "runs": 11,
+      "status": "solved",
+      "quality": {
+        "mode": "approximate",
+        "reason": "operation-limit",
+        "policy": "dc-budget-1",
+        "condition": 208.74557863966595,
+        "backwardError": 4.570557009298928e-16,
+        "refinements": 0
+      },
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLUTION",
+          "parameters": {
+            "reason": "operation-limit",
+            "policy": "dc-budget-1"
+          }
+        }
+      ],
+      "medianMs": 134.29230000000007,
+      "p95Ms": 157.39130000000023,
+      "maxMs": 157.39130000000023,
+      "heapSampleGrowthMiB": 34.45234680175781,
+      "retainedHeapDeltaMiB": -0.0363616943359375
+    },
+    {
+      "name": "grid 7x7 varied pipeline",
+      "nets": 49,
+      "elements": 85,
+      "runs": 11,
+      "status": "solved",
+      "quality": {
+        "mode": "approximate",
+        "reason": "operation-limit",
+        "policy": "dc-budget-1",
+        "condition": 208.74557863966606,
+        "backwardError": 2.9605947323337516e-16,
+        "refinements": 0
+      },
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLUTION",
+          "parameters": {
+            "reason": "operation-limit",
+            "policy": "dc-budget-1"
+          }
+        }
+      ],
+      "medianMs": 142.6162000000004,
+      "p95Ms": 178.60620000000017,
+      "maxMs": 178.60620000000017,
+      "heapSampleGrowthMiB": 33.000816345214844,
+      "retainedHeapDeltaMiB": 0.12659454345703125
+    },
+    {
+      "name": "grid 3x3 wide",
+      "nets": 9,
+      "elements": 13,
+      "runs": 27,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 56.46860000000015,
+      "p95Ms": 66.04889999999978,
+      "maxMs": 76.93870000000061,
+      "heapSampleGrowthMiB": 31.31340789794922,
+      "retainedHeapDeltaMiB": -0.06116485595703125
+    },
+    {
+      "name": "grid 5x5 wide",
+      "nets": 25,
+      "elements": 41,
+      "runs": 10,
+      "status": "error",
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLVE_FAILED",
+          "parameters": {
+            "reason": "numerical-instability",
+            "trigger": "integer-limit"
+          }
+        }
+      ],
+      "medianMs": 160.14919999999984,
+      "p95Ms": 188.64899999999943,
+      "maxMs": 188.64899999999943,
+      "heapSampleGrowthMiB": 9.396369934082031,
+      "retainedHeapDeltaMiB": 0.0447998046875
+    },
+    {
+      "name": "grid 5x5 wide pipeline",
+      "nets": 25,
+      "elements": 41,
+      "runs": 10,
+      "status": "error",
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLVE_FAILED",
+          "parameters": {
+            "reason": "numerical-instability",
+            "trigger": "integer-limit"
+          }
+        }
+      ],
+      "medianMs": 167.66370000000097,
+      "p95Ms": 184.40229999999974,
+      "maxMs": 184.40229999999974,
+      "heapSampleGrowthMiB": 29.26245880126953,
+      "retainedHeapDeltaMiB": 0.07358551025390625
+    },
+    {
+      "name": "grid 3x3 long",
+      "nets": 9,
+      "elements": 13,
+      "runs": 21,
+      "status": "solved",
+      "quality": {
+        "mode": "exact"
+      },
+      "diagnostics": [],
+      "medianMs": 72.10440000000017,
+      "p95Ms": 85.01469999999972,
+      "maxMs": 87.22370000000046,
+      "heapSampleGrowthMiB": 18.195167541503906,
+      "retainedHeapDeltaMiB": 0.00205230712890625
+    },
+    {
+      "name": "grid 5x5 long",
+      "nets": 25,
+      "elements": 41,
+      "runs": 12,
+      "status": "solved",
+      "quality": {
+        "mode": "approximate",
+        "reason": "integer-limit",
+        "policy": "dc-budget-1",
+        "condition": 86.9283616712855,
+        "backwardError": 1.7579150141004518e-16,
+        "refinements": 0
+      },
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLUTION",
+          "parameters": {
+            "reason": "integer-limit",
+            "policy": "dc-budget-1"
+          }
+        }
+      ],
+      "medianMs": 127.09170000000086,
+      "p95Ms": 158.1840000000011,
+      "maxMs": 158.1840000000011,
+      "heapSampleGrowthMiB": 33.26183319091797,
+      "retainedHeapDeltaMiB": 0.14571380615234375
+    },
+    {
+      "name": "grid 5x5 long pipeline",
+      "nets": 25,
+      "elements": 41,
+      "runs": 14,
+      "status": "solved",
+      "quality": {
+        "mode": "approximate",
+        "reason": "integer-limit",
+        "policy": "dc-budget-1",
+        "condition": 86.92836167128549,
+        "backwardError": 1.7579150141004518e-16,
+        "refinements": 0
+      },
+      "diagnostics": [
+        {
+          "code": "APPROXIMATE_SOLUTION",
+          "parameters": {
+            "reason": "integer-limit",
+            "policy": "dc-budget-1"
+          }
+        }
+      ],
+      "medianMs": 99.21020000000135,
+      "p95Ms": 146.90899999999965,
+      "maxMs": 146.90899999999965,
+      "heapSampleGrowthMiB": 58.918846130371094,
+      "retainedHeapDeltaMiB": -0.03326416015625
+    }
+  ],
+  "integers": [
+    {
+      "name": "grid 3x3 varied",
+      "maxFractionInputBits": 80,
+      "constructions": 901
+    },
+    {
+      "name": "grid 5x5 varied",
+      "maxFractionInputBits": 290,
+      "constructions": 8052
+    },
+    {
+      "name": "grid 7x7 varied",
+      "maxFractionInputBits": 518,
+      "constructions": 25461
+    },
+    {
+      "name": "grid 7x7 varied pipeline",
+      "maxFractionInputBits": 521,
+      "constructions": 25727
+    },
+    {
+      "name": "grid 3x3 wide",
+      "maxFractionInputBits": 2445,
+      "constructions": 901
+    },
+    {
+      "name": "grid 5x5 wide",
+      "maxFractionInputBits": 3821,
+      "constructions": 2903
+    },
+    {
+      "name": "grid 5x5 wide pipeline",
+      "maxFractionInputBits": 4095,
+      "constructions": 2790
+    },
+    {
+      "name": "grid 3x3 long",
+      "maxFractionInputBits": 2740,
+      "constructions": 901
+    },
+    {
+      "name": "grid 5x5 long",
+      "maxFractionInputBits": 3832,
+      "constructions": 2847
+    },
+    {
+      "name": "grid 5x5 long pipeline",
+      "maxFractionInputBits": 3835,
+      "constructions": 3107
+    }
+  ]
+}

@@ -1,5 +1,6 @@
+import * as q from '../src/rational';
 import { describe, expect, it } from 'vitest';
-import { emptyDocument, validateDocument, documentMigrator, createDocumentIdAllocator, type CircuitDocument, type ComponentType } from '../src/domain';
+import { emptyDocument, validateDocument, requireDocument, createDocumentIdAllocator, type CircuitDocument, type ComponentType } from '../src/domain';
 import { createComponent, terminalPosition, wirePoints, endpointPosition } from '../src/component-library';
 import { createHistory, executeCommand, previewCommand, undo, redo, insertionCandidates } from '../src/editor';
 import { compileCircuit } from '../src/connectivity';
@@ -184,8 +185,8 @@ describe('component deletion preserves wiring locally', () => {
   });
 
   it('restores the series circuit current when an inserted resistor is deleted', () => {
-    const doc = documentMigrator.migrate(source), component = createComponent('resistor', 'R2', { x: 300, y: 450 });
-    component.properties.resistanceOhm = 6;
+    const doc = requireDocument(source), component = createComponent('resistor', 'R2', { x: 300, y: 450 });
+    component.properties.resistanceOhm = q.store(6);
     const target = insertionCandidates(doc, component.position)[0];
     const inserted = executeCommand(createHistory(doc), { type: 'InsertComponentOnWire', component, ...target, newWireId: 'W3' });
     expect(inserted.ok).toBe(true); if (!inserted.ok) return;
@@ -194,8 +195,8 @@ describe('component deletion preserves wiring locally', () => {
     expect(next.wires).toHaveLength(doc.wires.length);
     for (const wire of doc.wires) expect(compactWirePoints(wirePoints(next, next.wires.find(w => w.id === wire.id)!)))
       .toEqual(compactWirePoints(wirePoints(doc, wire)));
-    expect(solveCircuit(compileCircuit(inserted.history.present).circuit).branchCurrents.R1).toBeCloseTo(1);
-    expect(solveCircuit(compileCircuit(next).circuit).branchCurrents.R1).toBeCloseTo(3);
+    expect(q.toNumber(solveCircuit(compileCircuit(inserted.history.present).circuit).branchCurrents.R1)).toBeCloseTo(1);
+    expect(q.toNumber(solveCircuit(compileCircuit(next).circuit).branchCurrents.R1)).toBeCloseTo(3);
     expect(solveCircuit(compileCircuit(next).circuit).diagnostics).toEqual(solveCircuit(compileCircuit(doc).circuit).diagnostics);
   });
 

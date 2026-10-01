@@ -36,4 +36,5 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-021](ADR-021-analysis-workspace.md) | 시각화와 측정의 분석 화면 통합 | accepted | 분석 UX 1차 통합 |
 | [ADR-022](ADR-022-measurement-notebook.md) | 비교를 위한 측정표와 별도 로컬 기록 | accepted | 측정 기록 UX 개선 |
 | [ADR-023](ADR-023-live-parameters.md) | 가변저항 조절과 연속 갱신 | accepted | 가변저항 학습 조작 |
-| [ADR-024](ADR-024-exact-dc-arithmetic.md) | 선형 직류 회로의 정확 유리수 연산 | accepted | 명세 확정·구현 대기 |
+| [ADR-024](ADR-024-exact-dc-arithmetic.md) | 선형 직류 회로의 정확 유리수 연산 | accepted | 정확 연산·회로 v5·비용 검증 완료, 예산 초과 정책은 ADR-025 |
+| [ADR-025](ADR-025-bounded-approximate-dc.md) | 계산 예산을 넘는 직류 회로의 명시적 근사 해석 | accepted | 계산 예산·근사·품질 전달·기록 v4 구현 |

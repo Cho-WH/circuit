@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect } from 'vitest';
@@ -16,7 +17,7 @@ describe('quantity graph presentation', () => {
     );
     if (!checked.ok) throw Error('fixture');
     const document = checked.document;
-    document.components.find((c) => c.type === 'dc-voltage-source')!.properties.voltageV = 0.003;
+    document.components.find((c) => c.type === 'dc-voltage-source')!.properties.voltageV = q.store(0.003);
     document.components.find((c) => c.id === 'R1')!.label = '부하';
     const circuit = compileCircuit(document).circuit,
       result = solveCircuit(circuit),

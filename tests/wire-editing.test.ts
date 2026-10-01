@@ -1,6 +1,7 @@
+import * as q from '../src/rational';
 import { describe,it,expect } from 'vitest';
 import source from '../fixtures/ux/wire-editing.json';
-import { cloneDocument, documentMigrator, emptyDocument, type CircuitDocument } from '../src/domain';
+import { cloneDocument, requireDocument, emptyDocument, type CircuitDocument } from '../src/domain';
 import { compactWirePoints, createComponent, wireCrossings, wirePath, wirePoints } from '../src/component-library';
 import { createHistory, executeCommand, previewCommand, undo, redo, insertionCandidates, type Command } from '../src/editor';
 import { compileCircuit } from '../src/connectivity';
@@ -8,7 +9,7 @@ import { solveCircuit } from '../src/simulation';
 import { parseDocument, serializeDocument } from '../src/persistence';
 import { exportSvg } from '../src/export';
 
-const fixture=()=>documentMigrator.migrate(source);
+const fixture=()=>requireDocument(source);
 function apply(document:CircuitDocument,command:Command){const result=executeCommand(createHistory(document),command);if(!result.ok)throw new Error(JSON.stringify(result.diagnostics));return result.history;}
 const solve=(doc:CircuitDocument)=>solveCircuit(compileCircuit(doc).circuit);
 function crossingFixture(){
@@ -19,19 +20,19 @@ function crossingFixture(){
 const join:Command={type:'ConnectCrossing',point:{x:200,y:200},wireIds:['H','V'],junctionId:'J',newWireIds:['H2','V3']};
 describe('wire insertion and explicit crossing edits',()=>{
   it('inserts 6 Ω in the 9 V / 3 Ω fixture without a bypass, previews identically and undoes atomically',()=>{
-    const doc=fixture(),r=createComponent('resistor','R2',{x:300,y:450});r.properties.resistanceOhm=6;
+    const doc=fixture(),r=createComponent('resistor','R2',{x:300,y:450});r.properties.resistanceOhm=q.store(6);
     const candidate=insertionCandidates(doc,r.position)[0];
     const command:Command={type:'InsertComponentOnWire',component:r,wireId:candidate.wireId,segment:candidate.segment,newWireId:'W3'};
-    expect(solve(doc).branchCurrents.R1).toBeCloseTo(3);
+    expect(q.toNumber(solve(doc).branchCurrents.R1)).toBeCloseTo(3);
     const history=apply(doc,command),compiled=compileCircuit(history.present).circuit;
-    expect(solve(history.present).branchCurrents.R1).toBeCloseTo(1);
-    expect(solve(history.present).branchCurrents.R2).toBeCloseTo(-1); // current follows physical right-to-left route
+    expect(q.toNumber(solve(history.present).branchCurrents.R1)).toBeCloseTo(1);
+    expect(q.toNumber(solve(history.present).branchCurrents.R2)).toBeCloseTo(-1); // current follows physical right-to-left route
     expect(compiled.endpointToNet['R2.a']).not.toBe(compiled.endpointToNet['R2.b']);
     expect(history.present.wires).toHaveLength(3);
     expect(previewCommand(doc,command)).toEqual({ok:true,document:history.present});
     expect(history.past).toHaveLength(1);expect(undo(history).present).toEqual(doc);expect(redo(undo(history)).present).toEqual(history.present);
     expect(parseDocument(serializeDocument(history.present))).toMatchObject({ok:true,document:history.present});
-    expect(doc).toEqual({...source,version: 4});
+    expect(doc).toEqual(requireDocument(source));
   });
   it('keeps the unrelated route and the bends outside an inserted vertical component',()=>{
     const doc=fixture(),r=createComponent('dc-voltage-source','V2',{x:800,y:220});

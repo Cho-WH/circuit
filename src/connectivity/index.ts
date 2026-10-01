@@ -1,3 +1,5 @@
+import { from, ZERO, sign } from '../rational';
+import { isStoredScalar, type Rational } from '../domain';
 import {
   diagnostic,
   validateDocument,
@@ -140,19 +142,18 @@ function terminalPair(
 function numericValue(
   component: ComponentInstance,
   diagnostics: Diagnostic[],
-): number | null {
+): Rational | null {
   let propertyName: 'voltageV' | 'resistanceOhm' | null = null;
   if (component.type === 'dc-voltage-source') propertyName = 'voltageV';
   if (component.type === 'resistor' || component.type === 'resistive-load') {
     propertyName = 'resistanceOhm';
   }
-  if (propertyName === null) return 0;
+  if (propertyName === null) return ZERO;
 
   const value = component.properties[propertyName];
   if (
-    typeof value !== 'number' ||
-    !Number.isFinite(value) ||
-    (propertyName === 'resistanceOhm' && value < 0)
+    !isStoredScalar(value) ||
+    (propertyName === 'resistanceOhm' && sign(value) < 0)
   ) {
     diagnostics.push(
       diagnostic('INVALID_COMPONENT_VALUE', [component.id], 'error', {
@@ -161,7 +162,7 @@ function numericValue(
     );
     return null;
   }
-  return value;
+  return from(value);
 }
 
 function hasValidSwitchState(

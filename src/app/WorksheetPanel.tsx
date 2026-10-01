@@ -1,3 +1,4 @@
+import type { ComponentProperties } from '../domain';
 import { saveBlob } from './download';
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -46,7 +47,7 @@ export function WorksheetPanel(props: Props) {
     }catch{props.onNotice('출력을 만들지 못했어요. 다시 시도해 주세요.', 'error');}
     finally{setBusy(false);}
   }
-  function property(values:Record<string,string|number|boolean>){if(component)props.dispatch({type:'SetProperties',id:component.id,properties:values});}
+  function property(values:ComponentProperties){if(component)props.dispatch({type:'SetProperties',id:component.id,properties:values});}
   function scaleCommit(){if(fontScale!==(doc.output?.fontScale??1))props.dispatch({type:'SetOutputScale',scale:fontScale});props.onFontPreview(null);}
   const actual=component?componentPresentation({...component,properties:{...component.properties,labelVisible:true,labelBlank:false,answerVisible:true,answerBlank:false}},props.result):null;
   return <section className="worksheet-panel"><h3>{component?<>{componentDefinitions[component.type].name} <Notation symbol text={component.label}/></>:annotation?annotation.kind==='point'?'점':annotation.kind==='arrow'?'화살표':'글자':'보기 설정'}</h3>

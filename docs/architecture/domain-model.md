@@ -24,16 +24,19 @@
 
 ## 핵심 타입 예시
 
-아래는 현재 v4/number 구현의 예시다. 채택된 다음 수치 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 따른다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 타입·스키마·마이그레이션의 실제 전환은 아직 구현하지 않았다.
+현재 v5 저장·공개 계산 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 따른다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 현재 형식만 지원한다.
 
 ```ts
+interface Rational { readonly numerator: bigint; readonly denominator: bigint }
+interface StoredScalar { numerator: string; denominator: string }
+
 type EndpointRef =
   | { kind: 'terminal'; id: string }
   | { kind: 'junction'; id: string };
 
 interface CircuitDocument {
   format: 'edu-circuit';
-  version: number;
+  version: 5;
   documentId: string;
   title: string;
   components: ComponentInstance[];
@@ -52,9 +55,9 @@ interface CompiledCircuit {
 }
 
 interface SimulationResult {
-  nodeVoltages: Record<string, number>;
-  branchCurrents: Record<string, number>;
-  componentPowers: Record<string, number>;
+  nodeVoltages: Record<string, Rational>;
+  branchCurrents: Record<string, Rational>;
+  componentPowers: Record<string, Rational>;
   diagnostics: Diagnostic[];
 }
 ```
@@ -72,10 +75,10 @@ interface SimulationResult {
 
 ## 값과 좌표
 
-- 저항, 전압, 전류는 Ω, V, A 기준 숫자로 저장한다.
+- 문서의 voltageV·resistanceOhm·resistanceMinOhm·resistanceMaxOhm은 SI 기본 단위의 StoredScalar다. 계산 결과의 전위·전류·전력은 Rational이다.
 - 화면 확대와 무관한 문서 좌표를 사용한다.
 - 회전은 MVP에서 0°, 90°, 180°, 270°다.
-- 현재 구현은 물리 수치에 절대·상대 허용오차를 사용한다. 채택된 SIM-008에서는 0·부호·동일 전위·제약 일치를 정확 비교하며 좌표·화면 기하의 근사 계산과 분리한다.
+- SIM-008에 따라 0·부호·동일 전위·제약 일치를 정확 비교하며 좌표·화면 기하의 근사 계산과 분리한다.
 
 ## 저장하지 않는 값
 
@@ -100,16 +103,14 @@ interface SimulationResult {
 - 연결된 부품 삭제는 단자 자리에 새 분기점을 만들고 도선·주석·기준점의 참조를 함께 옮긴다. 두 단자 사이 도선을 추가하며 기존 경로는 보존한다. 명시적으로 삭제한 도선은 복원하지 않는다. 노드 수동 삭제는 지원하지 않는다(ADR-017/018).
 - 기준점은 존재하는 단자 또는 분기점을 참조하거나 `null`이다.
 
-가변저항의 저장 타입은 호환성을 위해 `resistive-load`를 사용한다. 두 단자와 `resistanceOhm` 속성은 일반 저항과 같으며, UI 이름·기호만 구분한다. 기존 파일의 ID·이름·값은 변경하지 않는다.
+가변저항의 저장 타입은 `resistive-load`를 사용한다. 두 단자와 `resistanceOhm` 속성은 일반 저항과 같으며, UI 이름·기호만 구분한다. ID·이름과 물리값을 별도로 관리한다.
 
-출력 화살표의 v3 `Annotation.arrow`는 직선/직각 형태, 두 변 길이, 회전 각도, 방향 반전을 저장한다. 기존 v2 `end`는 호환용이며 공통 표기 모듈이 원래 선분을 복원한다. v1~v3 파일의 순차 변환은 ADR-012를 따른다.
-
-저장 v4의 선택적 `Annotation.presentation`은 출력 전용 기호·값 표시 속성이다. 기호의 기본값은 기존 content이며 이름·값 이동은 label/answerOffsetX/Y로 기록한다. v3→v4 복제 변환에서 기존 주석을 보존한다.
+출력 화살표의 `Annotation.arrow`는 직선/직각 형태, 두 변 길이, 회전 각도, 방향 반전을 저장한다. 선택적 `Annotation.presentation`은 출력 전용 기호·값 표시 속성이다. 기호의 기본값은 content이며 이름·값 이동은 label/answerOffsetX/Y로 기록한다.
 
 ## 부품별 숫자 표시
 
-ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성이며 미설정 기본은 auto다. 문서에 저장할 부품 표기 속성으로 위치·이름과 함께 저장·복사·실행 취소한다. 숫자값·Fraction 원문·연결·계산식은 바꾸지 않는다. v4 properties 확장 계약을 사용하며 ADR-019를 따른다.
+ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성이며 미설정 기본은 auto다. 문서에 저장할 부품 표기 속성으로 위치·이름과 함께 저장·복사·실행 취소한다. 숫자값·Fraction 원문·연결·계산식은 바꾸지 않는다. v5 properties 계약을 사용하며 ADR-019를 따른다.
 
 ## 가변저항 범위
 
-resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. 기존 v4 확장 속성을 사용하며 이전 파일의 값·기존 순차 변환을 유지한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.
+resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. v5의 정확값 필드를 사용한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.

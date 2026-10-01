@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import type { Point } from '../domain';
 
 /** Speed stays constant; the reference spacing is divided by relative current. */
@@ -18,8 +19,8 @@ export function flowJunctionOpacity(
   };
   return Math.min(fadeStart ? fade(distance) : 1, fadeEnd ? fade(length - distance) : 1);
 }
-export function currentSpacing(amperes: number, scaleAmperes: number): number {
-  return amperes === 0 ? Infinity : flowSpacing / (Math.abs(amperes) / scaleAmperes);
+export function currentSpacing(amperes: q.Scalar, scaleAmperes: q.Scalar): number {
+  return q.sign(amperes) === 0 || q.sign(scaleAmperes) <= 0 ? Infinity : flowSpacing / q.toNumber(q.div(q.abs(amperes), scaleAmperes));
 }
 export function flowLength(points: readonly Point[]): number {
   return points

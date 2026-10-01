@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import { useEffect, useState, type SVGAttributes } from 'react';
 import { notationTokens, notationDisplayText } from '../notation';
 import { parseQuantity, type QuantityUnit } from '../quantity';
@@ -16,7 +17,7 @@ export function SvgNotation({text,symbol=false,x,y,fontSize=14,textAnchor='start
 /** Range fields keep a draft while typing a slash and commit only a complete, valid number. */
 export function QuantityInput({value,onChange,label,unit='',nonNegative=false}:{value:number;onChange:(value:number)=>void;label:string;unit?:QuantityUnit;nonNegative?:boolean}) {
   const [draft,setDraft]=useState(String(value)),[invalid,setInvalid]=useState(false);
-  useEffect(()=>{setDraft(current=>parseQuantity(current,unit)?.value===value?current:String(value));setInvalid(false);},[value,unit]);
-  function commit(){const parsed=parseQuantity(draft,unit);if(!parsed||(nonNegative&&parsed.value<0)){setInvalid(true);return;}onChange(parsed.value);setDraft(parsed.fraction??String(parsed.value));setInvalid(false);}
+  useEffect(()=>{setDraft(current=>!!parseQuantity(current,unit)&&q.equal(parseQuantity(current,unit)!.value,value)?current:String(value));setInvalid(false);},[value,unit]);
+  function commit(){const parsed=parseQuantity(draft,unit);if(!parsed||!Number.isFinite(q.toNumber(parsed.value))||(nonNegative&&q.sign(parsed.value)<0)){setInvalid(true);return;}onChange(q.toNumber(parsed.value));setDraft(parsed.fraction??q.exactText(parsed.value));setInvalid(false);}
   return <div className="quantity-field"><input aria-label={label} aria-invalid={invalid||undefined} value={draft} onChange={e=>{setDraft(e.target.value);setInvalid(false);}} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commit();}else if(e.key==='Escape'){setDraft(String(value));setInvalid(false);}}}/>{!invalid&&draft.includes('/')&&<Notation text={draft}/>}</div>;
 }

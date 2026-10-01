@@ -1,3 +1,5 @@
+import type { ComponentProperties } from '../domain';
+import * as q from '../rational';
 import { parseComponentValue } from './component-value';
 import { Tooltip } from './Tooltip';
 import { ExampleMenu } from './ExampleMenu';
@@ -70,6 +72,7 @@ import { CircuitCanvas } from './CircuitCanvas';
 import { ComponentPalette, type PaletteDrag } from './ComponentPalette';
 import {
   buildPotentialModel,
+  potentialAxisValue,
   buildCurrentModel,
   defaultPotentialPalette,
   makePath,
@@ -541,7 +544,7 @@ export function App() {
     }
     const value = parsed.value;
     if (
-      value === component.properties[definition.property] &&
+      q.equal(value, component.properties[definition.property] as q.Scalar) &&
       (parsed?.fraction ?? '') === (component.properties[definition.property + 'Fraction'] ?? '')
     )
       return;
@@ -744,7 +747,7 @@ export function App() {
           ? Object.fromEntries(
               Object.entries(potential.endpoints).map(([id, v]) => [
                 id,
-                formatQuantity(v.voltage, 'V'),
+                formatQuantity(v.exactVoltage, 'V'),
               ]),
             )
           : undefined
@@ -767,7 +770,7 @@ export function App() {
         const commands: Command[] = [];
         if (edit.label !== c.label) commands.push({ type: 'SetLabel', id, label: edit.label });
         const property = componentDefinitions[c.type].property;
-        const properties: Record<string, number | string | boolean> = {};
+        const properties: ComponentProperties = {};
         if (edit.range) {
           const parameter = adjustableParameter(c);
           if (mode !== 'build' || !parameter) return false;
@@ -962,7 +965,7 @@ export function App() {
               const parameter = adjustableParameter(adjustableComponent)!;
               return (
                 <section
-                  key={`${documentEpoch}:${doc.documentId}:${adjustableComponent.id}:${parameter.min}:${parameter.max}`}
+                  key={`${documentEpoch}:${doc.documentId}:${adjustableComponent.id}:${q.exactText(parameter.min)}:${q.exactText(parameter.max)}`}
                   className="parameter-panel"
                   aria-label="가변저항 조절"
                   hidden={controlledComponent?.id !== adjustableComponent.id}
@@ -982,7 +985,7 @@ export function App() {
                     }
                     onChange={(value, group, fraction) => {
                       if (
-                        value === parameter.value &&
+                        q.equal(value,parameter.value) &&
                         (fraction ?? '') ===
                           (adjustableComponent.properties[parameter.property + 'Fraction'] ?? '')
                       )
@@ -1111,14 +1114,14 @@ export function App() {
                     <span>전위 미정</span>
                   ) : (
                     <>
-                      <span>{formatQuantity(potential.min, 'V')}</span>
+                      <span>{formatQuantity(potentialAxisValue(potential,potential.min), 'V')}</span>
                       <PotentialPalettePicker
                         value={potentialPalette}
                         min={potential.min}
                         max={potential.max}
                         onChange={setPotentialPalette}
                       />
-                      <span>{formatQuantity(potential.max, 'V')}</span>
+                      <span>{formatQuantity(potentialAxisValue(potential,potential.max), 'V')}</span>
                     </>
                   )}
                 </div>
@@ -1528,13 +1531,13 @@ export function App() {
                     </div>
                     <div>
                       <span>
-                        {(result.componentPowers[component.id] ?? 0) < 0
+                        {q.sign(result.componentPowers[component.id] ?? 0) < 0
                           ? '공급 전력'
                           : '소비 전력'}
                       </span>
                       <strong>
                         {formatQuantity(
-                          Math.abs(result.componentPowers[component.id] ?? NaN),
+                          result.componentPowers[component.id] === undefined ? undefined : q.abs(result.componentPowers[component.id]),
                           'W',
                           quantityFormatFor(component.properties),
                         )}

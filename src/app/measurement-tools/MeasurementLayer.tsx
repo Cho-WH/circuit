@@ -1,3 +1,4 @@
+import * as q from '../../rational';
 import { useEffect, useRef, useState } from 'react';
 import type { CircuitDocument, Point } from '../../domain';
 import { anchorPose, measurementHit, type MeasurementAnchor, type MeasurementTool } from './model';
@@ -12,7 +13,7 @@ export interface MeasurementLayerProps {
   cancelKey?:number;
   document:CircuitDocument; tool:MeasurementTool;
   anchors:Record<MeasurementTool,MeasurementAnchor|null>;
-  amperes?:number;
+  amperes?:q.Scalar;
   disconnectSources?:boolean;
   onPlace:(tool:MeasurementTool,anchor:MeasurementAnchor|null)=>void;
   onActivate:(tool:MeasurementTool)=>void;
@@ -39,7 +40,7 @@ export function MeasurementLayer(props:MeasurementLayerProps) {
       onPointerDown={e=>{if(e.button!==0)return;e.stopPropagation();if(drag){suppressClick.current=true;cancel();return;}props.onActivate(which);suppressClick.current=false;setDrag({tool:which,pointerId:e.pointerId,point:pose.point,start:props.point(e.clientX,e.clientY),moved:false});capture.current=e.currentTarget;e.currentTarget.setPointerCapture(e.pointerId);}}
       onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();props.onActivate(which);}if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();e.stopPropagation();props.onPlace(which,null);}}}>
       <g transform={`rotate(${angle})`}><rect x="-20" y="-48" width="40" height="65" fill="transparent"/><circle r="5" stroke={which==='red'?'#bc4541':which==='black'?'#34413a':'#53694b'} strokeWidth="1.5" fill="white"/>{which==='current'?<CurrentGlyph/>:<ProbeGlyph color={which}/>}</g>
-      {which==='current'&&!ghost&&props.amperes!==undefined&&Math.abs(props.amperes)>1e-12&&<g transform={`rotate(${pose.angle+(props.amperes<0?180:0)})`} stroke="#53694b" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M-15 23H15 M9 18L15 23 9 28"/></g>}
+      {which==='current'&&!ghost&&props.amperes!==undefined&&q.direction(props.amperes)!==undefined&&q.sign(props.amperes)!==0&&<g transform={`rotate(${pose.angle+(q.sign(props.amperes)<0?180:0)})`} stroke="#53694b" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M-15 23H15 M9 18L15 23 9 28"/></g>}
     </g>;
   };
   const dragged=drag?measurementHit(doc,drag.point,scale,drag.tool):null;

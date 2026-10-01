@@ -1,7 +1,9 @@
+import * as q from '../rational';
+import { isStoredScalar, type StoredScalar } from '../domain';
 /** Pure SI input and display. Formatting never changes a stored physical value. */
 export type QuantityUnit = 'Ω' | 'V' | 'A' | '';
 export interface ParsedQuantity {
-  value: number;
+  value: StoredScalar;
   fraction?: string;
 }
 export type QuantityMode = 'auto' | 'scientific' | 'plain';
@@ -31,33 +33,6 @@ const pattern = new RegExp(
     '))?\\s*([pnumkMμµ]?)\\s*(Ω|ohm|V|A)?\\s*$',
 );
 
-function decimal(text: string) {
-  const [mantissa, exponent = '0'] = text.toLowerCase().split('e');
-  const power = Number(exponent) - (mantissa.split('.')[1]?.length ?? 0);
-  if (!Number.isSafeInteger(power) || Math.abs(power) > 4096) return null;
-  return { coefficient: BigInt(mantissa.replace('.', '')), power };
-}
-function ratioNumber(n: bigint, d: bigint): number {
-  if (n === 0n) return 0;
-  const negative = n < 0n !== d < 0n;
-  n = n < 0n ? -n : n;
-  d = d < 0n ? -d : d;
-  let exponent = n.toString(2).length - d.toString(2).length;
-  if (exponent >= 0 ? n < d << BigInt(exponent) : n << BigInt(-exponent) < d) exponent--;
-  if (exponent > 1023) return negative ? -Infinity : Infinity;
-  if (exponent < -1075) return negative ? -0 : 0;
-  // Round the exact rational once to the nearest binary64 significand, ties to even.
-  exponent = Math.max(exponent, -1022);
-  const shift = 52 - exponent;
-  const numerator = shift >= 0 ? n << BigInt(shift) : n;
-  const denominator = shift >= 0 ? d : d << BigInt(-shift);
-  let significand = numerator / denominator;
-  const remainder = numerator % denominator;
-  if (2n * remainder > denominator || (2n * remainder === denominator && significand % 2n === 1n))
-    significand++;
-  const value = Number(significand) * 2 ** (exponent - 52);
-  return negative ? -value : value;
-}
 function decimalText(coefficient: bigint, power: number): string {
   if (coefficient === 0n) return '0';
   const sign = coefficient < 0n ? '-' : '';
@@ -76,15 +51,14 @@ export function parseQuantity(input: string, unit: QuantityUnit): ParsedQuantity
   const match = input.match(pattern);
   if (!match) return null;
   if (match[4] && !(unit === 'Ω' ? ['Ω', 'ohm'] : [unit]).includes(match[4])) return null;
-  const a = decimal(match[1]),
-    b = decimal(match[2] ?? '1');
+  const a = q.parseDecimal(match[1]),
+    b = q.parseDecimal(match[2] ?? '1');
   if (!a || !b || b.coefficient === 0n) return null;
   const power = a.power - b.power + powers[match[3]];
   const n = a.coefficient * (power >= 0 ? 10n ** BigInt(power) : 1n);
   const d = b.coefficient * (power < 0 ? 10n ** BigInt(-power) : 1n);
-  const value = ratioNumber(n, d);
-  if (!Number.isFinite(value) || (n !== 0n && value === 0) || (unit === 'Ω' && value < 0))
-    return null;
+  const value = q.store(q.rational(n, d));
+  if (unit === 'Ω' && q.sign(value) < 0) return null;
   if (match[2] === undefined) return { value };
   const sign = b.coefficient < 0n ? -1n : 1n;
   const fraction =
@@ -110,25 +84,54 @@ export function parseQuantity(input: string, unit: QuantityUnit): ParsedQuantity
   return { value, fraction: saved };
 }
 export function storedFraction(
-  properties: Record<string, string | number | boolean>,
+  properties: Record<string, unknown>,
   key: string,
   unit: QuantityUnit,
 ): string | undefined {
   const input = properties[key + 'Fraction'];
   if (typeof input !== 'string') return undefined;
   const parsed = parseQuantity(input, unit);
-  return parsed?.fraction && parsed.value === Number(properties[key]) ? parsed.fraction : undefined;
+  const value = properties[key];
+  return parsed?.fraction && isStoredScalar(value) && q.equal(parsed.value, value)
+    ? parsed.fraction
+    : undefined;
 }
-/** Shortest round-trippable decimal, expanded to avoid e notation. */
-export function plainNumber(value: number): string {
-  if (!Number.isFinite(value)) return '—';
-  const parsed = decimal(String(value));
-  return parsed ? decimalText(parsed.coefficient, parsed.power) : '—';
+/** Exact editable text, separate from rounded readouts and raw CSV values. */
+export function quantityInput(value: q.Scalar): string {
+  const text = q.exactText(value);
+  if (text.length <= 256) return text;
+  const compact = (decimal: string) => {
+    const [whole, fraction = ''] = decimal.split('.');
+    const digits = whole + fraction;
+    const coefficient = digits.replace(/0+$/, '');
+    const power = digits.length - coefficient.length - fraction.length;
+    const significant = coefficient.replace(/^(-?)0+/, '$1');
+    return power ? `${significant}e${power}` : significant;
+  };
+  const candidate = text.split('/').map(compact).join('/');
+  return parseQuantity(candidate, '') ? candidate : text;
 }
-function scientific(value: number, unitPower = 0): string {
-  if (value === 0) return '0';
-  const [mantissa, exponent] = value.toExponential(3).split('e');
-  const superscripts: Record<string, string> = {
+/** Number arguments are display geometry; exact arguments retain all stored digits. */
+export function plainNumber(value: q.Scalar): string {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return '—';
+    const parsed = q.parseDecimal(String(value));
+    return parsed ? decimalText(parsed.coefficient, parsed.power) : '—';
+  }
+  const text = q.exactText(value);
+  return text.includes('/')
+    ? q.trimDecimal(q.fixed(value, Math.max(0, 15 - q.decimalExponent(value))))
+    : text;
+}
+function scientific(value: q.Scalar): string {
+  if (!q.sign(value)) return '0';
+  let exponent = q.decimalExponent(value),
+    mantissa = q.fixed(q.div(value, q.power10(exponent)), 3);
+  if (mantissa.replace('-', '').startsWith('10.')) {
+    exponent++;
+    mantissa = q.fixed(q.div(value, q.power10(exponent)), 3);
+  }
+  const superDigits: Record<string, string> = {
     '-': '⁻',
     '0': '⁰',
     '1': '¹',
@@ -141,51 +144,62 @@ function scientific(value: number, unitPower = 0): string {
     '8': '⁸',
     '9': '⁹',
   };
-  return mantissa + ' × 10' + [...String(Number(exponent) - unitPower)].map((c) => superscripts[c]).join('');
+  return mantissa + ' × 10' + [...String(exponent)].map((c) => superDigits[c]).join('');
 }
-function automaticNumber(value: number): string {
-  const rounded = Number(value.toFixed(2));
-  return value !== 0 && rounded === 0 ? scientific(value) : plainNumber(rounded);
+function valid(value: q.Scalar | undefined): value is q.Scalar {
+  return value !== undefined && (typeof value !== 'number' || Number.isFinite(value));
 }
 export function createQuantityScale(
-  values: readonly number[],
+  values: readonly q.Scalar[],
   unit: string,
   options: QuantityFormatOptions = defaultQuantityFormat,
 ) {
   const mode = options.mode ?? 'auto';
-  const magnitude = values.reduce(
-    (max, v) => (Number.isFinite(v) ? Math.max(max, Math.abs(v)) : max),
-    0,
-  );
-  const outsidePrefixes = magnitude > 0 && (magnitude < 1e-12 || magnitude >= 1e9);
-  let power = mode === 'auto' && magnitude > 0 ? Math.floor(Math.log10(magnitude) / 3) * 3 : 0;
-  power = Math.max(-12, Math.min(6, power));
-  // Promote at a rounding boundary (999.999 Ω becomes 1 kΩ).
-  if (mode === 'auto' && power < 6 && Number((magnitude / 10 ** power).toFixed(2)) >= 1000)
+  const magnitude = values
+    .filter(valid)
+    .reduce<q.Rational>((max, v) => (q.compare(q.abs(v), max) > 0 ? q.abs(v) : max), q.ZERO);
+  const exponent = q.decimalExponent(magnitude),
+    outside = q.sign(magnitude) !== 0 && (exponent < -12 || exponent >= 9);
+  let power =
+    mode === 'auto' && q.sign(magnitude)
+      ? Math.max(-12, Math.min(6, Math.floor(exponent / 3) * 3))
+      : 0;
+  if (
+    mode === 'auto' &&
+    power < 6 &&
+    Number(q.fixed(q.div(magnitude, q.power10(power)), 2)) >= 1000
+  )
     power += 3;
-  if (outsidePrefixes) power = 0;
+  if (outside) power = 0;
   const prefix = mode === 'auto' ? prefixes.find((p) => p.power === power)!.prefix : '';
   return {
     unit: prefix + unit,
-    format(value: number | undefined): string {
-      if (value === undefined || !Number.isFinite(value)) return '—';
-      if (mode === 'scientific' || (mode === 'auto' && outsidePrefixes)) return scientific(value);
-      if (mode === 'plain') return plainNumber(value);
-      const scaled = value / 10 ** power;
-      return value !== 0 && scaled === 0 ? scientific(value, power) : automaticNumber(scaled);
+    format(value: q.Scalar | undefined): string {
+      if (!valid(value)) return '—';
+      const prefix = q.from(value).approximation ? '≈ ' : '';
+      if (mode === 'scientific' || (mode === 'auto' && outside)) return prefix + scientific(value);
+      if (mode === 'plain') return prefix + plainNumber(value);
+      const scaled = q.div(value, q.power10(power)),
+        text = q.trimDecimal(q.fixed(scaled, 2));
+      return prefix + (text === '0' && q.sign(value) !== 0 ? scientific(scaled) : text);
     },
   };
 }
 export function formatQuantity(
-  value: number | undefined,
+  value: q.Scalar | undefined,
   unit: string,
   options: QuantityFormatOptions = defaultQuantityFormat,
 ): string {
-  const scale = createQuantityScale([value ?? NaN], unit, options);
+  const scale = createQuantityScale(value === undefined ? [] : [value], unit, options);
   return (scale.format(value) + ' ' + scale.unit).trimEnd();
 }
 
-export function isQuantityMode(value:unknown):value is QuantityMode {return value==='auto'||value==='scientific'||value==='plain';}
-export function quantityFormatFor(properties?:Record<string,string|number|boolean>,fallback:QuantityFormatOptions=defaultQuantityFormat):QuantityFormatOptions {
-  return isQuantityMode(properties?.quantityMode)?{mode:properties.quantityMode}:fallback;
+export function isQuantityMode(value: unknown): value is QuantityMode {
+  return value === 'auto' || value === 'scientific' || value === 'plain';
+}
+export function quantityFormatFor(
+  properties?: Record<string, unknown>,
+  fallback: QuantityFormatOptions = defaultQuantityFormat,
+): QuantityFormatOptions {
+  return isQuantityMode(properties?.quantityMode) ? { mode: properties.quantityMode } : fallback;
 }

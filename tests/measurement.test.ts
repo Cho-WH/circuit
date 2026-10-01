@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -42,7 +44,8 @@ interface FixtureFile {
 }
 
 function fixture(filename: string): FixtureFile {
-  return JSON.parse(readFileSync(join(root, "fixtures", filename), "utf8")) as FixtureFile;
+  const fixture=JSON.parse(readFileSync(join(root, "fixtures", filename), "utf8")) as FixtureFile;
+  return {...fixture,document:requireDocument(fixture.document)};
 }
 
 function compiledFixture(filename: string) {
@@ -64,7 +67,7 @@ function element(
   value: number,
   closed = false,
 ): CompiledElement {
-  return { id, type, a, b, value, closed };
+  return { id, type, a, b, value: q.from(value), closed };
 }
 
 describe("equivalent resistance", () => {
@@ -82,14 +85,14 @@ describe("equivalent resistance", () => {
     const resistance = expected.equivalentResistance!;
     const a = circuit.endpointToNet[resistance.port.first.id];
     const b = circuit.endpointToNet[resistance.port.second.id];
-    const before = JSON.stringify(circuit);
+    const before = structuredClone(circuit);
 
     const result = equivalentResistance(circuit, a, b, { excludeSourceIds: ["V1"] });
 
     expect(result.status).toBe("finite");
-    expect(result.ohms).toBeCloseTo(resistance.ohm, 9);
+    expect(q.toNumber(result.ohms!)).toBeCloseTo(resistance.ohm, 9);
     expect(result.diagnostics).toEqual([]);
-    expect(JSON.stringify(circuit)).toBe(before);
+    expect(structuredClone(circuit)).toEqual(before);
   });
 
   it.each([
@@ -108,7 +111,7 @@ describe("equivalent resistance", () => {
     const result = equivalentResistance(circuit, a, b);
 
     expect(result.status).toBe("short");
-    expect(result.ohms).toBe(0);
+    expect(result.ohms).toEqual(q.from(0));
     expect(result.diagnostics.map(({ code }) => code)).toContain("RESISTANCE_SHORT");
   });
 
@@ -127,7 +130,7 @@ describe("equivalent resistance", () => {
     const result = equivalentResistance(circuit, "port-a", "port-b");
 
     expect(result.status).toBe("finite");
-    expect(result.ohms).toBeCloseTo(5, 12);
+    expect(q.toNumber(result.ohms!)).toBeCloseTo(5, 12);
     expect(result.diagnostics).toEqual([]);
   });
 
@@ -150,7 +153,7 @@ describe("equivalent resistance", () => {
 
     const short = equivalentResistance(shortCircuit, "a", "b");
     expect(short.status).toBe("short");
-    expect(short.ohms).toBe(0);
+    expect(short.ohms).toEqual(q.from(0));
     expect(short.diagnostics.map(({ code }) => code)).toEqual(["RESISTANCE_SHORT"]);
 
     const invalid = equivalentResistance(openCircuit, "missing", "b");
@@ -168,7 +171,7 @@ describe("equivalent resistance", () => {
     const invalid: CompiledCircuit = {
       ...circuit,
       elements: circuit.elements.map((entry) =>
-        entry.id === "R1" ? { ...entry, value: Number.NaN } : entry,
+        entry.id === "R1" ? { ...entry, value: Number.NaN as unknown as q.Rational } : entry,
       ),
     };
     const result = equivalentResistance(invalid, a, b, { excludeSourceIds: ["V1"] });
@@ -191,10 +194,10 @@ describe("KCL and KVL checks", () => {
       const check = checkKcl(circuit, result, circuitNet.id);
       expect(check.defined).toBe(true);
       expect(check.passes).toBe(true);
-      expect(check.sum).toBeCloseTo(0, 9);
+      expect(q.toNumber(check.sum!)).toBeCloseTo(0, 9);
       expect(check.terms.length).toBeGreaterThan(0);
       expect(check.diagnostics).toEqual([]);
-      expect(Math.abs(check.sum!)).toBeLessThanOrEqual(check.tolerance);
+      expect(Math.abs(q.toNumber(check.sum!))).toBeLessThanOrEqual(check.tolerance);
     }
   });
 
@@ -212,7 +215,7 @@ describe("KCL and KVL checks", () => {
       const check = checkKvl(circuit, result, path.steps);
       expect(check.defined).toBe(true);
       expect(check.passes).toBe(true);
-      expect(check.sum).toBeCloseTo(0, 9);
+      expect(q.toNumber(check.sum!)).toBeCloseTo(0, 9);
       expect(check.terms.map(({ elementId }) => elementId)).toEqual(
         path.steps.map(({ elementId }) => elementId),
       );
@@ -267,20 +270,20 @@ describe("KCL and KVL checks", () => {
     const { circuit, result } = compiledFixture("FIX-03-parallel.json");
     const altered: SimulationResult = {
       ...result,
-      branchCurrents: { ...result.branchCurrents, R1: result.branchCurrents.R1 + 0.5 },
+      branchCurrents: { ...result.branchCurrents, R1: q.add(result.branchCurrents.R1,0.5) },
     };
-    const circuitBefore = JSON.stringify(circuit);
-    const resultBefore = JSON.stringify(altered);
+    const circuitBefore = structuredClone(circuit);
+    const resultBefore = structuredClone(altered);
     const junctionNet = circuit.endpointToNet.JT;
 
     const check = checkKcl(circuit, altered, junctionNet);
 
     expect(check.defined).toBe(true);
     expect(check.passes).toBe(false);
-    expect(check.sum).toBeCloseTo(0.5, 12);
+    expect(q.toNumber(check.sum!)).toBeCloseTo(0.5, 12);
     expect(check.diagnostics.map(({ code }) => code)).toEqual(["CONSERVATION_RESIDUAL"]);
-    expect(JSON.stringify(circuit)).toBe(circuitBefore);
-    expect(JSON.stringify(altered)).toBe(resultBefore);
+    expect(structuredClone(circuit)).toEqual(circuitBefore);
+    expect(structuredClone(altered)).toEqual(resultBefore);
   });
 });
 
@@ -304,9 +307,9 @@ describe("voltage probes", () => {
     expect(forward.ok).toBe(true);
     expect(reverse.ok).toBe(true);
     if (!forward.ok || !reverse.ok) return;
-    expect(forward.value.voltageV).toBeCloseTo(3, 12);
-    expect(reverse.value.voltageV).toBeCloseTo(-3, 12);
-    expect(forward.value.voltageV).toBeCloseTo(-reverse.value.voltageV, 12);
+    expect(q.toNumber(forward.value.voltageV)).toBeCloseTo(3, 12);
+    expect(q.toNumber(reverse.value.voltageV)).toBeCloseTo(-3, 12);
+    expect(q.toNumber(forward.value.voltageV)).toBeCloseTo(q.toNumber(q.neg(reverse.value.voltageV)), 12);
   });
 
   it("returns exactly zero for two probes on the same net", () => {
@@ -320,7 +323,7 @@ describe("voltage probes", () => {
 
     expect(measured.ok).toBe(true);
     if (measured.ok) {
-      expect(measured.value.voltageV).toBe(0);
+      expect(measured.value.voltageV).toEqual(q.from(0));
       expect(measured.value.redNetId).toBe(measured.value.blackNetId);
     }
   });
@@ -333,7 +336,7 @@ describe("voltage probes", () => {
       { kind: "terminal", id: "S1.a" },
       { kind: "terminal", id: "S1.b" },
     );
-    expect(switchVoltage.ok && switchVoltage.value.voltageV).toBeCloseTo(9, 12);
+    expect((switchVoltage.ok ? q.toNumber(switchVoltage.value.voltageV) : NaN)).toBeCloseTo(9, 12);
 
     const ordinary = compiledFixture("FIX-02-series.json");
     const shifted = compiledFixture("FIX-10-reference-shift.json");
@@ -353,8 +356,8 @@ describe("voltage probes", () => {
       endpoints[0],
       endpoints[1],
     );
-    expect(first.ok && first.value.voltageV).toBeCloseTo(9, 12);
-    expect(second.ok && second.value.voltageV).toBeCloseTo(9, 12);
+    expect((first.ok ? q.toNumber(first.value.voltageV) : NaN)).toBeCloseTo(9, 12);
+    expect((second.ok ? q.toNumber(second.value.voltageV) : NaN)).toBeCloseTo(9, 12);
   });
 
   it("withholds numbers for incomplete, invalid, and floating probes", () => {
@@ -412,8 +415,8 @@ describe("temporary series ammeter insertion", () => {
     const compiled = compileCircuit(inserted.value.document);
     const result = solveCircuit(compiled.circuit);
     expect(result.status).toBe("solved");
-    expect(result.branchCurrents.A1).toBeCloseTo(1, 12);
-    expect(result.branchCurrents.R1).toBeCloseTo(1, 12);
+    expect(q.toNumber(result.branchCurrents.A1)).toBeCloseTo(1, 12);
+    expect(q.toNumber(result.branchCurrents.R1)).toBeCloseTo(1, 12);
     inserted.value.document.components.find(({ id }) => id === "A1")!.label = "changed";
     expect(ammeter.label).toBe("A1");
   });
@@ -444,9 +447,9 @@ describe("temporary series ammeter insertion", () => {
     const compiled = compileCircuit(inserted.value.document);
     const result = solveCircuit(compiled.circuit);
     expect(result.status).toBe("solved");
-    expect(Math.abs(result.branchCurrents.A1)).toBeCloseTo(3, 12);
-    expect(result.branchCurrents.R1).toBeCloseTo(1, 12);
-    expect(result.branchCurrents.R2).toBeCloseTo(2, 12);
+    expect(Math.abs(q.toNumber(result.branchCurrents.A1))).toBeCloseTo(3, 12);
+    expect(q.toNumber(result.branchCurrents.R1)).toBeCloseTo(1, 12);
+    expect(q.toNumber(result.branchCurrents.R2)).toBeCloseTo(2, 12);
   });
 
   it("rejects missing targets, unconnected insertion points, non-meters, and duplicate IDs", () => {
@@ -489,7 +492,7 @@ describe("parameter sweeps", () => {
       {
         componentId: "R1",
         property: "resistanceOhm",
-        values: [9, 18, 0],
+        values: [9, 18, 0].map(q.from),
         xLabel: "저항",
         xUnit: "Ω",
         yLabel: "전류",
@@ -505,13 +508,13 @@ describe("parameter sweeps", () => {
     expect(swept.value).toEqual(
       expect.objectContaining({ xLabel: "저항", xUnit: "Ω", yLabel: "전류", yUnit: "A" }),
     );
-    expect(swept.value.samples[0]).toEqual({ x: 9, y: 1, diagnostics: [] });
-    expect(swept.value.samples[1].x).toBe(18);
-    expect(swept.value.samples[1].y).toBeCloseTo(0.5, 12);
-    expect(swept.value.samples[2].x).toBe(0);
+    expect(swept.value.samples[0]).toEqual({ x: q.from(9), y: q.ONE, diagnostics: [] });
+    expect(swept.value.samples[1].x).toEqual(q.from(18));
+    expect(q.toNumber(swept.value.samples[1].y!)).toBeCloseTo(0.5, 12);
+    expect(swept.value.samples[2].x).toEqual(q.from(0));
     expect(swept.value.samples[2].y).toBeNull();
     expect(swept.value.samples[2].diagnostics[0].parameters).toEqual(
-      expect.objectContaining({ sampleIndex: 2, x: 0 }),
+      expect.objectContaining({ sampleIndex: 2, x: "0" }),
     );
   });
 
@@ -522,7 +525,7 @@ describe("parameter sweeps", () => {
       {
         componentId: "R1",
         property: "resistanceOhm",
-        values: [9, 18],
+        values: [9, 18].map(q.from),
         xLabel: "R",
         xUnit: "Ω",
         yLabel: "V",
@@ -536,14 +539,14 @@ describe("parameter sweeps", () => {
       dcEngine,
     );
     expect(probe.ok && probe.value.yUnit).toBe("V");
-    if (probe.ok) expect(probe.value.samples.map(({ y }) => y)).toEqual([9, 9]);
+    if (probe.ok) expect(probe.value.samples.map(({ y }) => y)).toEqual([q.from(9), q.from(9)]);
 
     const power = parameterSweep(
       document,
       {
         componentId: "R1",
         property: "resistanceOhm",
-        values: [9, 18],
+        values: [9, 18].map(q.from),
         xLabel: "R",
         xUnit: "Ω",
         yLabel: "P",
@@ -553,7 +556,7 @@ describe("parameter sweeps", () => {
       dcEngine,
     );
     expect(power.ok && power.value.yUnit).toBe("W");
-    if (power.ok) expect(power.value.samples.map(({ y }) => y)).toEqual([9, 4.5]);
+    if (power.ok) expect(power.value.samples.map(({ y }) => y)).toEqual([q.from(9), q.from(4.5)]);
   });
 
   it("rejects unsafe sample counts, values, axes, units, targets, and property mismatches", () => {
@@ -561,7 +564,7 @@ describe("parameter sweeps", () => {
     const base = {
       componentId: "R1",
       property: "resistanceOhm" as const,
-      values: [9],
+      values: [q.from(9)],
       xLabel: "R",
       xUnit: "Ω" as const,
       yLabel: "I",
@@ -569,9 +572,10 @@ describe("parameter sweeps", () => {
     };
     const invalidRequests = [
       { ...base, values: [] },
-      { ...base, values: Array.from({ length: 101 }, (_, index) => index + 1) },
-      { ...base, values: [-1] },
-      { ...base, values: [Number.NaN] },
+      { ...base, values: [9 as unknown as q.Rational] },
+      { ...base, values: Array.from({ length: 101 }, (_, index) => q.from(index + 1)) },
+      { ...base, values: [q.from(-1)] },
+      { ...base, values: [Number.NaN as unknown as q.Rational] },
       { ...base, xLabel: " " },
       { ...base, xUnit: "V" as const },
       { ...base, componentId: "missing" },
@@ -590,17 +594,17 @@ describe("measurement records and CSV", () => {
       condition: "R=9 Ω",
       source: "simulation",
       quantity: "current",
-      value: 1,
+      value: q.from(1),
       unit: "A",
       targetIds: ["R1"],
       recordedAt: "2026-09-23T00:00:00.000Z",
     });
-    document.components.find(({ id }) => id === "R1")!.properties.resistanceOhm = 18;
+    document.components.find(({ id }) => id === "R1")!.properties.resistanceOhm = q.store(18);
     const second = createMeasurementRecord(document, {
       condition: "R=18 Ω",
       source: "simulation",
       quantity: "current",
-      value: 0.5,
+      value: q.from(0.5),
       unit: "A",
       targetIds: ["R1"],
       recordedAt: "2026-09-23T00:01:00.000Z",
@@ -609,10 +613,10 @@ describe("measurement records and CSV", () => {
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
-    expect(first.value.documentSnapshot.components[1].properties.resistanceOhm).toBe(9);
-    expect(second.value.documentSnapshot.components[1].properties.resistanceOhm).toBe(18);
+    expect(first.value.documentSnapshot.components[1].properties.resistanceOhm).toEqual(q.store(9));
+    expect(second.value.documentSnapshot.components[1].properties.resistanceOhm).toEqual(q.store(18));
     expect(first.value.recordedAt).toBe("2026-09-23T00:00:00.000Z");
-    expect(second.value.value).toBe(0.5);
+    expect(second.value.value).toEqual(q.store(0.5));
   });
 
   it("rejects inconsistent units, nonfinite values, and invalid snapshots", () => {
@@ -622,7 +626,7 @@ describe("measurement records and CSV", () => {
         condition: "bad unit",
         source: "simulation",
         quantity: "current",
-        value: 1,
+        value: q.from(1),
         unit: "V",
         targetIds: ["R1"],
       }).ok,
@@ -632,7 +636,7 @@ describe("measurement records and CSV", () => {
         condition: "bad value",
         source: "external",
         quantity: "voltage",
-        value: Number.POSITIVE_INFINITY,
+        value: Number.POSITIVE_INFINITY as unknown as q.Rational,
         unit: "V",
         targetIds: ["probe"],
       }).ok,
@@ -645,7 +649,7 @@ describe("measurement records and CSV", () => {
       condition: '=HYPERLINK("https://example.invalid"),\nstudent',
       source: "external",
       quantity: "voltage",
-      value: -0.25,
+      value: q.from(-0.25),
       unit: "V",
       targetIds: ["@probe", "V1.p"],
       recordedAt: "2026-09-23T00:02:00.000Z",
@@ -658,7 +662,7 @@ describe("measurement records and CSV", () => {
     if (!exported.ok) return;
     const [header, ...bodyLines] = exported.value.split("\r\n");
     expect(header).toBe(
-      "condition,documentId,source,quantity,value,unit,targetIds,recordedAt,documentSnapshot",
+      "condition,documentId,source,quantity,value,unit,targetIds,recordedAt,documentSnapshot,quality,approximation",
     );
     const body = bodyLines.join("\r\n");
     expect(body).toContain('"\'=HYPERLINK(""https://example.invalid""),');
@@ -673,7 +677,7 @@ describe("measurement records and CSV", () => {
       condition: "valid",
       source: "simulation",
       quantity: "resistance",
-      value: 9,
+      value: q.from(9),
       unit: "Ω",
       targetIds: ["R1"],
     });

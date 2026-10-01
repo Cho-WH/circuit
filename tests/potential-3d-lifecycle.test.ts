@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -49,7 +51,7 @@ beforeEach(() => {
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function mount(strict = false) {
-  const circuit = JSON.parse(readFileSync('fixtures/FIX-02-series.json', 'utf8')).document as CircuitDocument;
+  const circuit = requireDocument(JSON.parse(readFileSync('fixtures/FIX-02-series.json', 'utf8')).document) as CircuitDocument;
   const compiled = compileCircuit(circuit).circuit, ready = vi.fn(), entered = vi.fn(), error = vi.fn();
   let props: Potential3DProps = { document: circuit, potential: buildPotentialModel(circuit, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V_1 · −극 단자', sourceView: { x: 100, y: 200, width: 500, height: 400 }, onReady: ready, onEntered: entered, onError: error };
   const update = async (next: Partial<Potential3DProps>) => { props = {...props,...next}; await act(async () => { const scene=createElement(Potential3D, props); root.render(strict?createElement(StrictMode,null,scene):scene); }); };
@@ -66,7 +68,7 @@ describe('3D prepared first frame and camera lifetime', () => {
   it('retains the floor, GPU geometry, camera and ticks while a bounded resistance changes', async () => {
     const { circuit, update, ready, entered } = await mount();
     const variable = circuit.components.find(c => c.id === 'R1')!;
-    variable.type = 'resistive-load'; variable.properties = { resistanceOhm: 3, resistanceMinOhm: 3, resistanceMaxOhm: 6 };
+    variable.type = 'resistive-load'; variable.properties = { resistanceOhm: q.store(3), resistanceMinOhm: q.store(3), resistanceMaxOhm: q.store(6) };
     const model = () => { const c = compileCircuit(circuit).circuit; return buildPotentialModel(circuit, c, solveCircuit(c)); };
     await update({ document: structuredClone(circuit), potential: model(), selectedIds: ['R1'], heightRange: { min: 0, max: 9 } });
     await act(async () => resolveFont()); await act(async () => images.at(-1)!.onload!());
@@ -77,7 +79,7 @@ describe('3D prepared first frame and camera lifetime', () => {
     const count = images.length, ticks = host.querySelectorAll('.axis-tag');
     expect(host.querySelector('.scene-selection')).toBeNull();
     expect(host.textContent).not.toContain('단자 순서 기준');
-    variable.properties.resistanceOhm = 6;
+    variable.properties.resistanceOhm = q.store(6);
     await update({ document: structuredClone(circuit), potential: model() });
     expect(scene.children[0].children[0]).toBe(floor); expect(images).toHaveLength(count);
     const after: unknown[] = []; content.traverse(o => { if ('geometry' in o) after.push(o.geometry); });

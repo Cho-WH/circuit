@@ -3,13 +3,13 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import source from '../fixtures/ux/wire-editing.json';
-import { documentMigrator, emptyDocument, type CircuitDocument } from '../src/domain';
+import { requireDocument, emptyDocument, type CircuitDocument } from '../src/domain';
 import { createHistory, executeCommands, undo, redo, type Command } from '../src/editor';
 import { compactWirePoints, wirePoints, wireCrossings } from '../src/component-library';
 import { compileCircuit } from '../src/connectivity';
 import { branchHintEnd, connectionCommands, endpointTarget, useContextWiring, wiringTargets } from '../src/app/wiring';
 
-const fixture = () => documentMigrator.migrate(source);
+const fixture = () => requireDocument(source);
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 afterEach(() => { if(root)act(()=>root!.unmount());host?.remove();root=undefined;vi.unstubAllGlobals(); });

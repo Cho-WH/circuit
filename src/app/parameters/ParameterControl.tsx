@@ -1,8 +1,13 @@
+import * as q from '../../rational';
 import { useEffect, useState } from 'react';
 import { PlaybackButton } from '../PlaybackButton';
 import type { ComponentInstance } from '../../domain';
-import { componentValueInput, type AdjustableParameter } from '../../component-library';
-import { formatQuantity } from '../../quantity';
+import {
+  componentValueInput,
+  parameterValueAt,
+  type AdjustableParameter,
+} from '../../component-library';
+import { quantityInput, formatQuantity } from '../../quantity';
 import { parseComponentValue } from '../component-value';
 import { Notation } from '../Notation';
 import { useLiveValue } from './useLiveValue';
@@ -18,11 +23,15 @@ export function ParameterControl({
   component: ComponentInstance;
   parameter: AdjustableParameter;
   disabled: boolean;
-  onChange: (value: number, group?: object, fraction?: string) => boolean;
+  onChange: (value: q.StoredScalar, group?: object, fraction?: string) => boolean;
   onAdjustingChange?: (id: string, adjusting: boolean) => void;
 }) {
   const { min, max, value, unit, label } = parameter;
-  const live = useLiveValue(value, min, max, onChange);
+  const position = q.toNumber(q.mul(q.div(q.sub(value, min), q.sub(max, min)), 1000));
+  const live = useLiveValue(position, 0, 1000, (step, group) =>
+    onChange(parameterValueAt(parameter, step), group),
+  );
+  const displayed = live.adjusting ? parameterValueAt(parameter, live.displayed) : value;
   useEffect(() => {
     onAdjustingChange?.(component.id, live.adjusting);
     return () => onAdjustingChange?.(component.id, false);
@@ -58,7 +67,7 @@ export function ParameterControl({
           <input
             id={`parameter-${component.id}`}
             aria-label={`${component.label} ${label}`}
-            value={editing ? draft : live.running ? String(live.displayed) : draft}
+            value={editing ? draft : live.running ? quantityInput(displayed) : draft}
             aria-invalid={!!error}
             onFocus={() => {
               live.finish();
@@ -92,14 +101,13 @@ export function ParameterControl({
         max="1000"
         step="1"
         aria-label={`${component.label} ${label} 조절`}
-        aria-valuetext={formatQuantity(live.displayed, unit)}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={live.displayed}
-        value={((live.displayed - min) / (max - min)) * 1000}
+        aria-valuetext={formatQuantity(displayed, unit)}
+        aria-valuemin={Number.isFinite(q.toNumber(min)) ? q.toNumber(min) : undefined}
+        aria-valuemax={Number.isFinite(q.toNumber(max)) ? q.toNumber(max) : undefined}
+        aria-valuenow={Number.isFinite(q.toNumber(displayed)) ? q.toNumber(displayed) : undefined}
+        value={live.displayed}
         onChange={(e) => {
-          const next = min + (max - min) * (Number(e.target.value) / 1000);
-          live.change(Math.max(min, Math.min(max, Number(next.toPrecision(10)))));
+          live.change(Number(e.target.value));
           // Native range commit can arrive after pointerup (including a rounded duplicate).
           // It confirms the final value; it must not reopen the adjustment session.
           if (e.nativeEvent.type === 'change') live.finish();

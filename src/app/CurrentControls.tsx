@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import { useMemo, useState } from 'react';
 import { PlaybackButton } from './PlaybackButton';
 import type { CircuitDocument } from '../domain';
@@ -7,7 +8,7 @@ import { formatQuantity } from '../quantity';
 import { Notation } from './Notation';
 import './current-controls.css';
 
-export function useCurrentDisplay(model: CurrentModel, scaleAmperes = model.maxMagnitude || 1, changing = false) {
+export function useCurrentDisplay(model: CurrentModel, scaleAmperes = q.sign(model.maxMagnitude) ? model.maxMagnitude : 1, changing = false) {
   const [paused, setPaused] = useState(false);
   const [widthScale, setWidthScale] = useState(1);
   const display: CurrentDisplay = useMemo(
@@ -43,8 +44,8 @@ export function CurrentSettings({
   const selected = display.model.samples.find((s) => s.id === selectedId),
     value = selected?.value;
   const direction =
-    value?.status === 'known' && value.amperes !== 0
-      ? (value.amperes > 0 ? [value.from, value.to] : [value.to, value.from]).map((ref) =>
+    value?.status === 'known' && q.sign(value.amperes) !== 0
+      ? (q.sign(value.amperes) > 0 ? [value.from, value.to] : [value.to, value.from]).map((ref) =>
           endpointName(document, ref.id),
         )
       : null;
@@ -75,7 +76,9 @@ export function CurrentSettings({
             </strong>
             <span>
               {value?.status === 'known' ? (
-                <Notation text={formatQuantity(Math.abs(value.amperes), 'A')} />
+                <Notation text={formatQuantity(q.abs(value.amperes), 'A')} />
+              ) : value?.status === 'uncertain' ? (
+                '전류 방향 불확실'
               ) : value?.status === 'undefined' ? (
                 '전류 미정 · 이상적 도선 고리'
               ) : (
@@ -87,7 +90,7 @@ export function CurrentSettings({
                 <Notation symbol text={direction[0]} /> → <Notation symbol text={direction[1]} />
               </span>
             )}
-            {value?.status === 'known' && value.amperes === 0 && <span>흐르는 전류 없음</span>}
+            {value?.status === 'known' && q.sign(value.amperes) === 0 && <span>흐르는 전류 없음</span>}
           </>
         )}
       </div>

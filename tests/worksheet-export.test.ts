@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 import { formatQuantity } from '../src/quantity';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -69,7 +70,7 @@ describe('worksheet component presentation', () => {
     expect(componentPresentation(resistor, result).value).toBeNull();
     resistor.properties.answerVisible = true;
     resistor.properties.answerBlank = false;
-    resistor.properties.resistanceOhm = 12;
+    resistor.properties.resistanceOhm = q.store(12);
     resistor.label = 'R_new';
     expect(componentPresentation(resistor, result)).toMatchObject({ label: '□', value: '12 Ω' });
     resistor.properties.labelBlank = false;
@@ -471,19 +472,6 @@ describe('free output layout', () => {
     expect(componentPresentation(history.present.components.find(c=>c.id==='R1')!).value).toBeNull();
     apply({type:'SetOutputScale',scale:0.5});
     expect(exportSvg(history.present,{circuitOnly:true})).not.toContain('I₁');
-  });
-
-  it('migrates old annotations without mutating the v1 source and preserves its problem appearance', () => {
-    const raw=JSON.parse(readFileSync(resolve(process.cwd(),'fixtures','FIX-02-series.json'),'utf8')).document;
-    raw.annotations=[{id:'old',kind:'note',anchor:{kind:'terminal',id:'R1.a'},content:'문제',visibility:'problem'},{id:'teacher',kind:'note',anchor:{kind:'terminal',id:'R1.a'},content:'정답',visibility:'answer'}];
-    const snapshot=JSON.stringify(raw), parsed=parseDocument(snapshot);
-    expect(parsed.ok).toBe(true);if(!parsed.ok)return;
-    expect(parsed.document.version).toBe(4);
-    expect(parsed.document.annotations.map(a=>a.visibility)).toEqual(['always','hidden']);
-    expect(JSON.stringify(raw)).toBe(snapshot);
-    expect(parseDocument(serializeDocument(parsed.document))).toEqual(parsed);
-    expect(exportSvg(parsed.document)).toContain('>문제</text>');
-    expect(exportSvg(parsed.document)).not.toContain('>정답</text>');
   });
 
   it('rejects a free decoration without a position and invalid scale without adding history', () => {

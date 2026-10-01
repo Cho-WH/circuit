@@ -1,3 +1,5 @@
+import { quantityInput } from '../quantity';
+import * as q from '../rational';
 import { SwitchStateButton } from './SwitchStateButton';
 import { normalizeComponentLabel } from '../domain';
 import { useEffect, useRef, useState } from 'react';
@@ -16,7 +18,7 @@ import { ParameterRangeInputs, parseParameterRange, type ParameterRange } from '
 
 export interface ComponentEdit {
   label: string;
-  value?: number;
+  value?: q.StoredScalar;
   fraction?: string;
   range?: ParameterRange;
 }
@@ -51,7 +53,7 @@ export function InlineComponentEditor({
     label: editingComponent.label,
     draft: componentValueInput(editingComponent),
     error: '',
-    range: { min: String(parameter?.min ?? ''), max: String(parameter?.max ?? '') },
+    range: { min: parameter ? quantityInput(parameter.min) : '', max: parameter ? quantityInput(parameter.max) : '' },
   }));
   const inlineInput = useRef<HTMLInputElement>(null);
   useEffect(() => {

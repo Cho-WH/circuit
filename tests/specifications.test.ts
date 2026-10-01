@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
@@ -8,7 +9,7 @@ import { parse as parseYaml } from "yaml";
 import {
   cloneDocument,
   diagnostic,
-  documentMigrator,
+  requireDocument,
   DocumentError,
   emptyDocument,
   validateDocument,
@@ -101,6 +102,8 @@ type ProductPrinciplesFile = {
 const root = resolve(process.cwd());
 const fixturesDirectory = join(root, "fixtures");
 const invalidFixturesDirectory = join(root, "tests", "fixtures", "invalid");
+
+function currentDocument(document: unknown): PublicCircuitDocument { return requireDocument(document); }
 
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
@@ -240,7 +243,7 @@ describe("canonical specification fixtures", () => {
   });
 
   it.each(canonicalFixtures)("$fixture.id satisfies fixture and CircuitDocument schemas", ({ fixture }) => {
-    expect(validateFixture({...fixture,document:documentMigrator.migrate(fixture.document)}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
   });
 
   it("uses unique fixture IDs that agree with their filenames", () => {
@@ -328,7 +331,7 @@ describe("requirement and rule references", () => {
 describe("public CircuitDocument contract", () => {
   it.each(canonicalFixtures)("accepts $fixture.id through the public domain validator", ({ fixture }) => {
     const result = validateDocument(fixture.document);
-    expect(result).toEqual({ ok: true, document: {...fixture.document,version: 4} });
+    expect(result).toEqual({ ok: true, document: currentDocument(fixture.document) });
   });
 
   it.each(canonicalFixtures)("clones $fixture.id without changing its JSON meaning", ({ fixture }) => {
@@ -352,7 +355,7 @@ describe("public CircuitDocument contract", () => {
     const document: PublicCircuitDocument = {
       $schema: "https://example.invalid/edu-circuit/circuit-document.schema.json",
       format: "edu-circuit",
-      version: 4,
+      version: 5,
       documentId: "contract-parity",
       title: "계약 일치",
       components: [
@@ -362,7 +365,7 @@ describe("public CircuitDocument contract", () => {
           label: "R1",
           position: { x: 10, y: 20 },
           rotation: 270,
-          properties: { resistanceOhm: 1_000, editable: true, unit: "ohm" },
+          properties: { resistanceOhm: q.store(1_000), editable: true, unit: "ohm" },
           terminals: [
             { id: "R1.a", role: "a", localPosition: { x: -10, y: 0 } },
             { id: "R1.b", role: "b", localPosition: { x: 10, y: 0 } },
@@ -400,25 +403,17 @@ describe("public CircuitDocument contract", () => {
     expect(value.affectedIds).toEqual(["missing"]);
   });
 
-  it("migrates v1 by validation and cloning without mutating the source", () => {
-    const fixture = canonicalFixtures[0].fixture;
-    const source = fixture.document as PublicCircuitDocument;
-
-    expect(documentMigrator.canMigrate(1)).toBe(true);
-    expect(documentMigrator.canMigrate(2)).toBe(true);
-    expect(documentMigrator.canMigrate(3)).toBe(true);
-    expect(documentMigrator.canMigrate(5)).toBe(false);
-    const migrated = documentMigrator.migrate(source);
-    expect(migrated).toStrictEqual({...source,version: 4});
-    expect(migrated).not.toBe(source);
+  it.each([1, 2, 3, 4, 6])("rejects unsupported document version %s without conversion", (version) => {
+    const source = { ...canonicalFixtures[0].fixture.document, version };
+    expect(validateDocument(source)).toMatchObject({ ok: false, diagnostics: [{ code: 'INVALID_DOCUMENT' }] });
   });
 
-  it("rejects invalid input during migration with structured diagnostics", () => {
+  it("rejects invalid current-format input with structured diagnostics", () => {
     const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "dangling-endpoint.json"));
 
-    expect(() => documentMigrator.migrate(fixture.document)).toThrow(DocumentError);
+    expect(() => requireDocument(fixture.document)).toThrow(DocumentError);
     try {
-      documentMigrator.migrate(fixture.document);
+      requireDocument(fixture.document);
     } catch (error) {
       expect(error).toBeInstanceOf(DocumentError);
       expect((error as DocumentError).diagnostics).toEqual(
@@ -496,7 +491,7 @@ describe("invalid specification fixtures", () => {
   it("rejects IDs duplicated across document element kinds", () => {
     const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "duplicate-document-id.json"));
 
-    expect(validateFixture({...fixture,document:{...fixture.document,version: 4}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
     expect(documentIntegrityErrors(fixture.document)).toContain(
       "duplicate id shared-id (component, junction)",
     );
@@ -505,7 +500,7 @@ describe("invalid specification fixtures", () => {
   it("rejects a wire endpoint that refers to a missing terminal", () => {
     const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "dangling-endpoint.json"));
 
-    expect(validateFixture({...fixture,document:{...fixture.document,version: 4}}), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
+    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
     expect(documentIntegrityErrors(fixture.document)).toContain(
       "wire W1 end references unknown terminal missing-terminal",
     );

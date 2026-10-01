@@ -1,3 +1,4 @@
+import * as q from '../../rational';
 import type { CircuitDocument } from '../../domain';
 import type { AdjustableParameter } from '../../component-library';
 import { buildCurrentModel } from '../../visualization';
@@ -31,9 +32,9 @@ export function parameterScales(
   id: string,
   parameter: AdjustableParameter,
 ) {
-  const voltages = [0],
-    relativeVoltages = [0],
-    currents = [0];
+  const voltages: q.Scalar[] = [0],
+    relativeVoltages: q.Scalar[] = [0],
+    currents: q.Scalar[] = [0];
   // With one positive resistor varied and all other elements fixed, solved quantities
   // are fractional-linear functions of R; their extrema occur at the range endpoints.
   for (const value of [parameter.min, parameter.max]) {
@@ -50,16 +51,20 @@ export function parameterScales(
     };
     const { compilation, result } = analyze(sample);
     const reference = result.nodeVoltages[compilation.circuit.referenceNetId ?? ''] ?? 0;
-    for (const voltage of Object.values(result.nodeVoltages).filter(Number.isFinite)) {
+    for (const voltage of Object.values(result.nodeVoltages).filter(q.isRational)) {
       voltages.push(voltage);
-      relativeVoltages.push(voltage - reference);
+      relativeVoltages.push(q.sub(voltage, reference));
     }
     currents.push(buildCurrentModel(sample, compilation, result).maxMagnitude);
   }
-  const range = (values: number[]) => ({ min: Math.min(...values), max: Math.max(...values) });
+  const range = (values: q.Scalar[]) => ({
+    min: values.reduce<q.Scalar>((a, b) => (q.compare(a, b) < 0 ? a : b), 0),
+    max: values.reduce<q.Scalar>((a, b) => (q.compare(a, b) > 0 ? a : b), 0),
+  });
+  const current = currents.reduce<q.Scalar>((a, b) => (q.compare(a, b) > 0 ? a : b), 0);
   return {
     voltage: range(voltages),
     height: range(relativeVoltages),
-    current: Math.max(...currents) || 1,
+    current: q.sign(current) ? current : q.ONE,
   };
 }

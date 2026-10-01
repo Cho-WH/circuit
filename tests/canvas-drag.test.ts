@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -194,7 +195,7 @@ describe('live canvas drag geometry', () => {
     expect(host.querySelector('.inline-name-preview sub')!.textContent).toBe('1');
     change(name,' ');act(()=>name.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));expect(commit).not.toHaveBeenCalled();
     change(name,'R_1');act(()=>name.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value:.75,fraction:'3/4'});
+    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value: q.store(.75),fraction:'3/4'});
     act(()=>host.querySelector('[aria-label="R_1 값 편집"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true})));
     const again=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 이름"]')!;change(again,'R_{eq}');
     act(()=>again.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
@@ -203,13 +204,13 @@ describe('live canvas drag geometry', () => {
   it('reopens an explicit fraction and rejects a zero denominator without changing it',()=>{
     const commit=vi.fn(()=>true),c=setup({onCommitComponent:commit});
     const doc=structuredClone(c.original),r=doc.components.find(c=>c.id==='R1')!;
-    r.properties.resistanceOhm=.75;r.properties.resistanceOhmFraction='3/4';c.render({document:doc});
+    r.properties.resistanceOhm=q.store(.75);r.properties.resistanceOhmFraction='3/4';c.render({document:doc});
     act(()=>host.querySelector('[aria-label="R_1 값 편집"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true})));
     const input=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 값"]')!;
     expect(input.value).toBe('3/4');
     const submit=(value:string)=>{act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));};
     submit('3/0');expect(commit).not.toHaveBeenCalled();expect(input.getAttribute('aria-invalid')).toBe('true');
-    submit('2/3');expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value:2/3,fraction:'2/3'});
+    submit('2/3');expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value:q.store(q.rational(2n,3n)),fraction:'2/3'});
   });
 
   it('edits a value next to the circuit, keeps invalid input open and cancels with Escape',()=>{
@@ -222,7 +223,7 @@ describe('live canvas drag geometry', () => {
     change('wrong');act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
     expect(commit).not.toHaveBeenCalled();expect(input.getAttribute('aria-invalid')).toBe('true');
     change('1k');act(()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value:1000});expect(host.querySelector('.inline-value-editor')).toBeNull();
+    expect(commit).toHaveBeenCalledExactlyOnceWith('R1',{label:'R_1',value: q.store(1000)});expect(host.querySelector('.inline-value-editor')).toBeNull();
     act(()=>value.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
     input=host.querySelector<HTMLInputElement>('[aria-label="R_1 회로 위 값"]')!;
     act(()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));

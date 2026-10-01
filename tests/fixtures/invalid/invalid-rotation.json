@@ -5,7 +5,7 @@
   "purpose": "CircuitDocument 스키마가 직각이 아닌 회전을 거부하는지 검증",
   "document": {
     "format": "edu-circuit",
-    "version": 1,
+    "version": 5,
     "documentId": "invalid-rotation",
     "title": "허용되지 않은 회전",
     "components": [
@@ -13,12 +13,26 @@
         "id": "R1",
         "type": "resistor",
         "label": "R1",
-        "position": { "x": 0, "y": 0 },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
         "rotation": 45,
-        "properties": { "resistanceOhm": 10 },
+        "properties": {
+          "resistanceOhm": {
+            "numerator": "10",
+            "denominator": "1"
+          }
+        },
         "terminals": [
-          { "id": "R1.a", "role": "a" },
-          { "id": "R1.b", "role": "b" }
+          {
+            "id": "R1.a",
+            "role": "a"
+          },
+          {
+            "id": "R1.b",
+            "role": "b"
+          }
         ]
       }
     ],
@@ -30,7 +44,10 @@
   },
   "expected": {
     "status": "error",
-    "tolerance": { "absolute": 0, "relative": 0 },
+    "tolerance": {
+      "absolute": 0,
+      "relative": 0
+    },
     "probeVoltagesV": {},
     "branchCurrentsA": {},
     "componentVoltagesV": {},

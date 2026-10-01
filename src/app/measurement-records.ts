@@ -1,3 +1,4 @@
+import * as q from '../rational';
 import type { MeasurementEntry } from '../persistence';
 import {
   componentDefinitions,
@@ -52,7 +53,7 @@ export function conditionValues(entry: MeasurementEntry): { label: string; value
         {
           label: c.label,
           value: formatQuantity(
-            Number(c.properties[definition.property]),
+            c.properties[definition.property] as q.Scalar,
             definition.unit,
             quantityFormatForTargets(doc, [c.id]),
           ),
@@ -98,9 +99,10 @@ export function measurementDirection(entry: MeasurementEntry): string {
   const { record: r } = entry;
   const name = (id: string) => endpointName(r.documentSnapshot, id);
   if (entry.currentDirection) {
-    if (r.value === 0) return '0 A · 방향 없음';
+    if (r.value !== null && q.direction(r.value) === undefined) return '방향 불확실';
+    if (r.value !== null && q.sign(r.value) === 0) return '0 A · 방향 없음';
     const { from, to } = entry.currentDirection;
-    return (r.value ?? 0) < 0
+    return q.sign(r.value ?? 0) < 0
       ? `${name(to.id)} → ${name(from.id)}`
       : `${name(from.id)} → ${name(to.id)}`;
   }
@@ -110,7 +112,7 @@ export function measurementDirection(entry: MeasurementEntry): string {
 export function measurementValue(entry: MeasurementEntry): string {
   const r = entry.record;
   return formatQuantity(
-    r.quantity === 'current' && r.value !== null ? Math.abs(r.value) : (r.value ?? undefined),
+    r.quantity === 'current' && r.value !== null ? q.abs(r.value) : (r.value ?? undefined),
     r.unit,
     quantityFormatForTargets(r.documentSnapshot, r.targetIds),
   );

@@ -36,7 +36,7 @@
 9. 진단은 안정적인 코드와 관련 요소 ID를 반환한다. 사용자 문구를 계산 함수 안에 넣지 않는다.
 10. 학생 조작 제한은 버튼 숨김이 아니라 명령 실행 단계에서 검사한다.
 11. 출력은 현재 화면 캡처가 아니라 `CircuitDocument`와 공통 기호 정의에서 다시 생성한다.
-12. 저장 형식이 바뀌면 순차 마이그레이션과 이전 fixture 호환 테스트를 제공한다.
+12. 저장은 현재 정확값 형식만 지원한다. 스키마 변경 시 지원 버전을 명시하고 현재 형식의 왕복과 지원 밖 입력의 거부를 확인한다.
 
 ## 4. 작업별 필수 참조
 
@@ -46,7 +46,7 @@
 | 회로 데이터 변경 | `docs/architecture/domain-model.md`, `schemas/circuit-document.schema.json`, `ADR-010`, `ADR-012` |
 | 모듈 경계·공개 계약 | `docs/architecture/modules.md`, `ADR-008`, `ADR-010` |
 | 연결 판정 | `docs/architecture/domain-model.md`, `docs/architecture/modules.md`, `SIM-001` |
-| 직류 계산 | `docs/physics/ideal-dc-model.md`, `docs/architecture/modules.md`, `SIM-002~007`, 관련 fixture |
+| 직류 계산 | `docs/physics/ideal-dc-model.md`, `docs/physics/exact-dc-arithmetic.md`, `docs/architecture/modules.md`, `SIM-002~008`, `ADR-024`, `ADR-025`, 관련 fixture |
 | 전위 시각화 | `docs/physics/potential-visualization.md`, `VIS-001~007`, `ADR-006` |
 | 전류 시각화 | `docs/physics/current-visualization.md`, `VIS-006`, `CV-01~05`, `ADR-020` |
 | 회로 편집기 | `docs/ux/interactions.md`, `EDT-001~007`, `ADR-001`, `ADR-002` |
@@ -64,7 +64,7 @@
 1. 관련 요구사항 ID를 식별한다.
 2. 연결된 물리 규칙, 모듈, fixture, ADR을 확인한다.
 3. 실패 조건과 수용 기준을 먼저 구체화한다.
-4. 공개 타입 또는 스키마 변경 시 마이그레이션 영향을 확인한다.
+4. 공개 타입 또는 스키마 변경 시 저장·불러오기와 지원 버전의 영향을 확인한다.
 5. 변경으로 발생할 수 있는 실제 오류를 확인하는 검증을 선택한다. 기존 테스트를 우선 활용하고, 새로운 동작과 버그 재발 방지에 필요한 테스트를 추가한다.
 6. 관련 문서와 fixture가 여전히 일치하는지 검증한다.
 

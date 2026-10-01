@@ -1,3 +1,4 @@
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -73,8 +74,8 @@ async function probeResistor() {
 it('adjusts resistance beside the probes and records exact conditions without restarting 3D', async () => {
   const doc = layoutExample(examples.find(e => e.id === 'FIX-02')!.document);
   const variable = doc.components.find(c => c.id === 'R1')!;
-  variable.type = 'resistive-load'; variable.properties = { resistanceOhm: 3, resistanceMinOhm: 3, resistanceMaxOhm: 6 };
-  doc.components.find(c => c.id === 'R2')!.properties.resistanceOhm = 3;
+  variable.type = 'resistive-load'; variable.properties = { resistanceOhm: q.store(3), resistanceMinOhm: q.store(3), resistanceMaxOhm: q.store(6) };
+  doc.components.find(c => c.id === 'R2')!.properties.resistanceOhm = q.store(3);
   saveLocal(doc);
   await act(async () => root.render(createElement(App)));
   await click('분석하기');
@@ -99,8 +100,8 @@ it('adjusts resistance beside the probes and records exact conditions without re
   expect(observed.measurement?.red?.endpointId).toBe('R1.a');
   await click('측정값 기록');
   const records = loadMeasurementNotebook().entries;
-  expect(records.map(e => e.record.value)).toEqual([4.5, 6]);
-  expect(records.map(e => e.record.documentSnapshot.components.find(c => c.id === 'R1')!.properties.resistanceOhm)).toEqual([3, 6]);
+  expect(records.map(e => e.record.value === null ? null : q.toNumber(e.record.value))).toEqual([4.5, 6]);
+  expect(records.map(e => q.toNumber(e.record.documentSnapshot.components.find(c => c.id === 'R1')!.properties.resistanceOhm as q.Scalar))).toEqual([3, 6]);
 });
 
 it('shows only the selected adjustable component and clears it in both views without moving probes', async () => {
@@ -108,7 +109,7 @@ it('shows only the selected adjustable component and clears it in both views wit
   for (const id of ['R1', 'R2']) {
     const c = doc.components.find(c => c.id === id)!;
     c.type = 'resistive-load';
-    c.properties = { resistanceOhm: id === 'R1' ? 3 : 6, resistanceMinOhm: 1, resistanceMaxOhm: 10 };
+    c.properties = { resistanceOhm: q.store(id === 'R1' ? 3 : 6), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(10) };
   }
   saveLocal(doc);
   await act(async () => root.render(createElement(App)));
@@ -328,7 +329,7 @@ it('keeps voltage probes, polarity, display preferences and recording across 2D/
   expect(observed.measurement?.label).toBe('-3 V');
   expect(observed.measurement?.red?.endpointId).toBe('R1.b');
   await click('측정값 기록');
-  expect(loadMeasurementNotebook().entries[0].record.value).toBe(-3);
+  expect(loadMeasurementNotebook().entries[0].record.value).toEqual(q.store(-3));
   await click('빨강 탐침');
   expect(button('2D').getAttribute('aria-pressed')).toBe('true');
   expect(button('빨강 탐침').getAttribute('aria-pressed')).toBe('true');

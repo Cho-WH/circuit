@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 // @vitest-environment happy-dom
 import { act, createElement, Fragment } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -10,8 +12,8 @@ import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 
 let root: Root, host: HTMLDivElement, last: CurrentDisplay;
-const doc = JSON.parse(readFileSync('fixtures/FIX-03-parallel.json', 'utf8'))
-  .document as CircuitDocument;
+const doc = requireDocument(JSON.parse(readFileSync('fixtures/FIX-03-parallel.json', 'utf8'))
+  .document) as CircuitDocument;
 const compilation = compileCircuit(doc),
   model = buildCurrentModel(doc, compilation, solveCircuit(compilation.circuit));
 function Harness({
@@ -57,7 +59,7 @@ const click = async (text: string) =>
 describe('shared current controls', () => {
   it('automatically rescales edits while pause and thickness remain independent', async () => {
     await render();
-    expect(last.scaleAmperes).toBe(3);
+    expect(last.scaleAmperes).toEqual(q.from(3));
     const input = host.querySelector('input')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '2');
@@ -68,10 +70,10 @@ describe('shared current controls', () => {
     await click('흐름 일시 정지');
     for (const maxMagnitude of [0, 1e-9, 6]) {
       await render({ current: { ...model, maxMagnitude } });
-      if (maxMagnitude > 0) expect(last.scaleAmperes).toBe(maxMagnitude);
+      if (maxMagnitude > 0) expect(q.toNumber(last.scaleAmperes)).toBe(maxMagnitude);
       else {
-        expect(Number.isFinite(last.scaleAmperes)).toBe(true);
-        expect(last.scaleAmperes).toBeGreaterThan(0);
+        expect(Number.isFinite(q.toNumber(last.scaleAmperes))).toBe(true);
+        expect(q.sign(last.scaleAmperes)).toBeGreaterThan(0);
       }
       expect(last.widthScale).toBe(2);
       expect(last.paused).toBe(true);

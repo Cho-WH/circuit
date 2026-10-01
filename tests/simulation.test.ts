@@ -1,3 +1,5 @@
+import { requireDocument } from '../src/domain';
+import * as q from '../src/rational';
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -48,6 +50,7 @@ const fixtures = readdirSync(join(root, "fixtures"))
     (name) =>
       JSON.parse(readFileSync(join(root, "fixtures", name), "utf8")) as CircuitFixture,
   );
+fixtures.forEach(f=>{f.document=requireDocument(f.document);});
 const fixturesById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
 
 function emptyResult(diagnostics: Diagnostic[]): SimulationResult {
@@ -85,16 +88,17 @@ function runDocument(document: CircuitDocument): CircuitRun {
   };
 }
 
-function expectClose(actual: number | undefined, expected: number, tolerance: Tolerance): void {
+function expectClose(value: q.Scalar | undefined, expected: q.Scalar, tolerance: Tolerance): void {
+  const actual=value===undefined?undefined:q.toNumber(value); const expectedNumber=q.toNumber(expected);
   expect(actual, "expected a finite numeric result").toBeTypeOf("number");
   expect(Number.isFinite(actual)).toBe(true);
-  const allowedError = tolerance.absolute + tolerance.relative * Math.abs(expected);
-  expect(Math.abs((actual as number) - expected)).toBeLessThanOrEqual(allowedError);
+  const allowedError = tolerance.absolute + tolerance.relative * Math.abs(expectedNumber);
+  expect(Math.abs((actual as number) - expectedNumber)).toBeLessThanOrEqual(allowedError);
 }
 
 function expectResultMap(
-  actual: Record<string, number>,
-  expected: Record<string, number>,
+  actual: Record<string, q.Scalar>,
+  expected: Record<string, q.Scalar>,
   tolerance: Tolerance,
 ): void {
   for (const [id, value] of Object.entries(expected)) {
@@ -135,13 +139,13 @@ function seriesDocument(
 ): CircuitDocument {
   return {
     format: "edu-circuit",
-    version: 4,
+    version: 5,
     documentId: `series-${middle.id}`,
     title: `직렬 ${middle.id}`,
     components: [
-      component("V1", "dc-voltage-source", { voltageV: 9 }),
+      component("V1", "dc-voltage-source", { voltageV: q.store(9) }),
       middle,
-      component("R1", "resistor", { resistanceOhm }),
+      component("R1", "resistor", { resistanceOhm: q.store(resistanceOhm) }),
     ],
     wires: [
       {
@@ -173,11 +177,11 @@ function seriesDocument(
 function parallelDocument(second: ComponentInstance, sourceVoltage = 9): CircuitDocument {
   return {
     format: "edu-circuit",
-    version: 4,
+    version: 5,
     documentId: `parallel-${second.id}`,
     title: `병렬 ${second.id}`,
     components: [
-      component("V1", "dc-voltage-source", { voltageV: sourceVoltage }),
+      component("V1", "dc-voltage-source", { voltageV: q.store(sourceVoltage) }),
       second,
     ],
     wires: [
@@ -232,21 +236,21 @@ describe("canonical circuit fixtures", () => {
       const { circuit, result } = runDocument(fixture.document);
       expect(result.status).toBe("solved");
 
-      const netCurrent = new Map(circuit.nets.map(({ id }) => [id, 0]));
+      const netCurrent = new Map(circuit.nets.map(({ id }) => [id, q.ZERO]));
       for (const element of circuit.elements) {
         const current = result.branchCurrents[element.id];
         if (current === undefined) continue;
-        netCurrent.set(element.a, (netCurrent.get(element.a) ?? 0) + current);
-        netCurrent.set(element.b, (netCurrent.get(element.b) ?? 0) - current);
+        netCurrent.set(element.a, q.add(netCurrent.get(element.a) ?? 0,current));
+        netCurrent.set(element.b, q.sub(netCurrent.get(element.b) ?? 0,current));
       }
       for (const [netId, sum] of netCurrent) {
         expectClose(sum, 0, fixture.expected.tolerance);
-        expect(Number.isFinite(result.nodeVoltages[netId])).toBe(true);
+        expect(q.isRational(result.nodeVoltages[netId])).toBe(true);
       }
 
       const totalPower = Object.values(result.componentPowers).reduce(
-        (sum, power) => sum + power,
-        0,
+        (sum, power) => q.add(sum,power),
+        q.ZERO,
       );
       expectClose(totalPower, 0, fixture.expected.tolerance);
     },
@@ -260,30 +264,30 @@ describe("adjustable learning examples", () => {
   ])('$id shows the intended current and voltage changes across its range', ({ id, min, max, fixed, currents, voltages }) => {
     const document = structuredClone(fixturesById.get(id)!.document);
     const variable = document.components.find(component => component.type === 'resistive-load')!;
-    expect(variable.properties.resistanceMinOhm).toBe(min);
-    expect(variable.properties.resistanceMaxOhm).toBe(max);
-    expect(document.components.find(component => component.id === 'R1')!.properties.resistanceOhm).toBe(fixed);
+    expect(variable.properties.resistanceMinOhm).toEqual(q.store(min));
+    expect(variable.properties.resistanceMaxOhm).toEqual(q.store(max));
+    expect(document.components.find(component => component.id === 'R1')!.properties.resistanceOhm).toEqual(q.store(fixed));
     for (const [index, resistance] of [min, max].entries()) {
-      variable.properties.resistanceOhm = resistance;
+      variable.properties.resistanceOhm = q.store(resistance);
       const { result } = runDocument(document);
       expect(result.status).toBe('solved');
-      expect(result.branchCurrents[variable.id]).toBeCloseTo(currents[index], 9);
-      expect(result.componentVoltages[variable.id]).toBeCloseTo(voltages[index], 9);
-      expect(result.branchCurrents.R1).toBeCloseTo(id === 'FIX-11' ? currents[index] : 2, 9);
-      expect(-result.branchCurrents.V1).toBeCloseTo(id === 'FIX-11' ? currents[index] : currents[index] + 2, 9);
+      expect(q.toNumber(result.branchCurrents[variable.id])).toBeCloseTo(currents[index], 9);
+      expect(q.toNumber(result.componentVoltages[variable.id])).toBeCloseTo(voltages[index], 9);
+      expect(q.toNumber(result.branchCurrents.R1)).toBeCloseTo(id === 'FIX-11' ? currents[index] : 2, 9);
+      expect(q.toNumber(q.neg(result.branchCurrents.V1))).toBeCloseTo(id === 'FIX-11' ? currents[index] : currents[index] + 2, 9);
     }
   });
 
   it('balances unequal bridge arms at 400 ohms and reverses center current on either side', () => {
     const document = structuredClone(fixturesById.get('FIX-09')!.document);
     const variable = document.components.find(component => component.type === 'resistive-load')!;
-    expect(variable.properties).toMatchObject({ resistanceOhm: 400, resistanceMinOhm: 100, resistanceMaxOhm: 1000 });
+    expect(variable.properties).toMatchObject({ resistanceOhm: q.store(400), resistanceMinOhm: q.store(100), resistanceMaxOhm: q.store(1000) });
     for (const resistance of [100, 400, 1000]) {
-      variable.properties.resistanceOhm = resistance;
+      variable.properties.resistanceOhm = q.store(resistance);
       const { result } = runDocument(document);
       expect(result.status).toBe('solved');
-      if (resistance === 400) expect(result.branchCurrents.R5).toBeCloseTo(0, 9);
-      else expect(Math.sign(result.branchCurrents.R5)).toBe(resistance < 400 ? 1 : -1);
+      if (resistance === 400) expect(q.toNumber(result.branchCurrents.R5)).toBeCloseTo(0, 9);
+      else expect(q.sign(result.branchCurrents.R5)).toBe(resistance < 400 ? 1 : -1);
     }
   });
 });
@@ -333,7 +337,7 @@ describe("determinism and reference choice", () => {
       const baseNet = baseRun.circuit.endpointToNet[endpointId];
       const shiftedNet = shiftedRun.circuit.endpointToNet[endpointId];
       expectClose(
-        baseRun.result.nodeVoltages[baseNet] - shiftedRun.result.nodeVoltages[shiftedNet],
+        q.sub(baseRun.result.nodeVoltages[baseNet],shiftedRun.result.nodeVoltages[shiftedNet]),
         6,
         shifted.expected.tolerance,
       );
@@ -342,10 +346,10 @@ describe("determinism and reference choice", () => {
 
   it("preserves source polarity and passive-sign power for a negative source value", () => {
     const document = seriesDocument(
-      component("R0", "resistor", { resistanceOhm: 0 }),
+      component("R0", "resistor", { resistanceOhm: q.store(0) }),
       9,
     );
-    document.components.find(({ id }) => id === "V1")!.properties.voltageV = -9;
+    document.components.find(({ id }) => id === "V1")!.properties.voltageV = q.store(-9);
     const { result } = runDocument(document);
 
     expect(result.status).toBe("solved");
@@ -360,10 +364,10 @@ describe("determinism and reference choice", () => {
 describe("matrix scaling", () => {
   it("solves resistors separated by twelve orders of magnitude", () => {
     const document = seriesDocument(
-      component("Rsmall", "resistor", { resistanceOhm: 1e-6 }),
+      component("Rsmall", "resistor", { resistanceOhm: q.store(1e-6) }),
       1e6,
     );
-    document.components.find(({ id }) => id === "V1")!.properties.voltageV = 1;
+    document.components.find(({ id }) => id === "V1")!.properties.voltageV = q.store(1);
     const { result } = runDocument(document);
     const expectedCurrent = 1 / (1e-6 + 1e6);
 
@@ -388,8 +392,8 @@ describe("matrix scaling", () => {
   ] as const)("keeps a %s resistance solution finite", (_name, resistance, expectedCurrent) => {
     const fixture = fixturesById.get("FIX-01")!;
     const document: CircuitDocument = JSON.parse(JSON.stringify(fixture.document)) as CircuitDocument;
-    document.components.find(({ id }) => id === "V1")!.properties.voltageV = 1;
-    document.components.find(({ id }) => id === "R1")!.properties.resistanceOhm = resistance;
+    document.components.find(({ id }) => id === "V1")!.properties.voltageV = q.store(1);
+    document.components.find(({ id }) => id === "R1")!.properties.resistanceOhm = q.store(resistance);
     const { result } = runDocument(document);
 
     expect(result.status).toBe("solved");
@@ -397,8 +401,8 @@ describe("matrix scaling", () => {
       absolute: Math.abs(expectedCurrent) * 1e-9,
       relative: 1e-9,
     });
-    expect(Object.values(result.nodeVoltages).every(Number.isFinite)).toBe(true);
-    expect(Object.values(result.componentPowers).every(Number.isFinite)).toBe(true);
+    expect(Object.values(result.nodeVoltages).every(q.isRational)).toBe(true);
+    expect(Object.values(result.componentPowers).every(q.isRational)).toBe(true);
   });
 });
 
@@ -406,12 +410,12 @@ describe("explicit connectivity", () => {
   it("does not join wires merely because their waypoint coordinates cross", () => {
     const document: CircuitDocument = {
       format: "edu-circuit",
-      version: 4,
+      version: 5,
       documentId: "crossing-wires",
       title: "교차하지만 연결되지 않은 도선",
       components: [
-        component("R1", "resistor", { resistanceOhm: 1 }, -50),
-        component("R2", "resistor", { resistanceOhm: 1 }, 50),
+        component("R1", "resistor", { resistanceOhm: q.store(1) }, -50),
+        component("R2", "resistor", { resistanceOhm: q.store(1) }, 50),
       ],
       wires: [
         {
@@ -479,7 +483,7 @@ describe("ideal zero-volt constraints", () => {
   it.each([
     ["closed switch", component("S1", "switch", { state: "closed" }), "S1"],
     ["ammeter", component("A1", "ammeter", {}), "A1"],
-    ["zero-ohm resistor", component("R0", "resistor", { resistanceOhm: 0 }), "R0"],
+    ["zero-ohm resistor", component("R0", "resistor", { resistanceOhm: q.store(0) }), "R0"],
   ] as const)("solves a %s in series and reports its current", (_name, idealElement, id) => {
     const { result } = runDocument(seriesDocument(idealElement));
 
@@ -499,7 +503,7 @@ describe("ideal zero-volt constraints", () => {
 
   it("reports a redundant equal-voltage source constraint as singular", () => {
     const document = parallelDocument(
-      component("V2", "dc-voltage-source", { voltageV: 9 }),
+      component("V2", "dc-voltage-source", { voltageV: q.store(9) }),
       9,
     );
     const { result } = runDocument(document);
@@ -512,14 +516,14 @@ describe("ideal zero-volt constraints", () => {
   it("does not invent individual currents for parallel zero-volt constraints", () => {
     const document: CircuitDocument = {
       format: "edu-circuit",
-      version: 4,
+      version: 5,
       documentId: "parallel-zero-volt-constraints",
       title: "병렬 0 V 제약",
       components: [
-        component("V1", "dc-voltage-source", { voltageV: 9 }),
+        component("V1", "dc-voltage-source", { voltageV: q.store(9) }),
         component("S1", "switch", { state: "closed" }, -20),
         component("S2", "switch", { state: "closed" }, 20),
-        component("R1", "resistor", { resistanceOhm: 9 }),
+        component("R1", "resistor", { resistanceOhm: q.store(9) }),
       ],
       wires: [
         { id: "W1", start: { kind: "terminal", id: "V1.a" }, end: { kind: "junction", id: "J1" }, waypoints: [] },
@@ -547,7 +551,7 @@ describe("ideal zero-volt constraints", () => {
 
   it("reports inconsistent parallel voltage constraints", () => {
     const document = parallelDocument(
-      component("V2", "dc-voltage-source", { voltageV: 5 }),
+      component("V2", "dc-voltage-source", { voltageV: q.store(5) }),
       9,
     );
     const { result } = runDocument(document);
@@ -560,7 +564,7 @@ describe("ideal zero-volt constraints", () => {
 
 describe("invalid physical values", () => {
   it.each([
-    ["negative resistance", component("X1", "resistor", { resistanceOhm: -1 })],
+    ["negative resistance", component("X1", "resistor", { resistanceOhm: q.store(-1) })],
     ["missing resistance", component("X1", "resistor", {})],
     ["wrong resistance type", component("X1", "resistor", { resistanceOhm: "9" })],
     ["non-finite resistance", component("X1", "resistor", { resistanceOhm: Infinity })],
@@ -573,27 +577,27 @@ describe("invalid physical values", () => {
 
     expect(compilation.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: "INVALID_COMPONENT_VALUE", affectedIds: ["X1"] }),
+        expect.objectContaining(_name.includes("type") || _name.includes("non-finite")
+          ? { code: "INVALID_DOCUMENT" }
+          : { code: "INVALID_COMPONENT_VALUE", affectedIds: ["X1"] }),
       ]),
     );
     expect(compilation.diagnostics.some(({ severity }) => severity === "error")).toBe(true);
   });
 
-  it("rejects finite inputs whose computed power overflows", () => {
+  it("keeps exact power beyond the floating-point range", () => {
     const fixture = fixturesById.get("FIX-01")!;
     const document: CircuitDocument = JSON.parse(JSON.stringify(fixture.document)) as CircuitDocument;
-    document.components.find(({ id }) => id === "V1")!.properties.voltageV = 1e308;
+    document.components.find(({ id }) => id === "V1")!.properties.voltageV = q.store(1e308);
 
     const { result } = runDocument(document);
-    expect(result.status).toBe("error");
-    expect(result.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "ILL_CONDITIONED_SYSTEM" })]),
-    );
-    expectNoNumericalResults(result);
+    expect(result.status).toBe("solved");
+    expect(result.componentPowers.R1).toEqual(q.rational(10n ** 616n, 9n));
+    expect(q.sum(Object.values(result.componentPowers))).toEqual(q.ZERO);
   });
 
   it("rejects components with more than two terminals", () => {
-    const invalid = component("X1", "resistor", { resistanceOhm: 9 });
+    const invalid = component("X1", "resistor", { resistanceOhm: q.store(9) });
     invalid.terminals.push({ id: "X1.c", role: "c" });
     const compilation = compileCircuit(seriesDocument(invalid));
 
@@ -614,7 +618,7 @@ describe("invalid physical values", () => {
         { id: "N1", endpointIds: [], wireIds: [] },
       ],
       elements: [
-        { id: "R1", type: "resistor", a: "N1", b: "N0", value, closed: true },
+        { id: "R1", type: "resistor", a: "N1", b: "N0", value: (Number.isFinite(value)?q.from(value):value as unknown as q.Rational), closed: true },
       ],
       endpointToNet: {},
       referenceNetId: "N0",

@@ -1,6 +1,9 @@
-import { storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
+import type { ComponentProperties } from '../domain';
+import * as q from '../rational';
+import { isStoredScalar } from '../domain';
+import { quantityInput, storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
-export { adjustableParameter, type AdjustableParameter } from './parameters';
+export { parameterValueAt, adjustableParameter, type AdjustableParameter } from './parameters';
 import { compactWirePoints } from '../wire-geometry';
 export { compactWirePoints } from '../wire-geometry';
 import { notationTokens, notationDisplayText } from '../notation';
@@ -18,7 +21,7 @@ export function createComponent(type: ComponentType, id: string, position: Point
   const source = type === 'dc-voltage-source';
   return {
     id, type, label: type === 'resistive-load' ? id.replace(/^VR(\d+)$/, 'VR_$1') : id, position, rotation: source ? 90 : 0,
-    properties: source ? { voltageV: 9 } : type === 'resistive-load' ? { resistanceOhm: 10, resistanceMinOhm: 1, resistanceMaxOhm: 100 } : type === 'resistor' ? { resistanceOhm: 10 } : type === 'switch' ? { state: 'open' } : {},
+    properties: source ? { voltageV: q.store(9) } : type === 'resistive-load' ? { resistanceOhm: q.store(10), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(100) } : type === 'resistor' ? { resistanceOhm: q.store(10) } : type === 'switch' ? { state: 'open' } : {},
     terminals: [{ id: `${id}.a`, role: source ? 'positive' : 'a' }, { id: `${id}.b`, role: source ? 'negative' : 'b' }],
   };
 }
@@ -166,7 +169,7 @@ export function componentValue(component: ComponentInstance, options?: QuantityF
   const def = componentDefinitions[component.type];
   if (component.type === 'switch') return component.properties.state === 'closed' ? '닫힘' : '열림';
   const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
-  return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(Number(component.properties[def.property]), def.unit, options) : def.name;
+  return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(isStoredScalar(component.properties[def.property]) ? component.properties[def.property] as q.StoredScalar : undefined, def.unit, options) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
 export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean } = {}): string {
@@ -185,7 +188,7 @@ export function documentBounds(document: CircuitDocument, margin = 80) {
   return { x: minX - margin, y: minY - margin, width: Math.max(200, Math.max(...points.map(p => p.x)) - minX + 2 * margin), height: Math.max(200, Math.max(...points.map(p => p.y)) - minY + 2 * margin) };
 }
 
-export function presentationText(properties:Record<string,string|number|boolean>,actual:string,prefix:string):string|null {
+export function presentationText(properties:ComponentProperties,actual:string,prefix:string):string|null {
     const display = properties[`${prefix}Display`] ?? 'value';
     if (properties[`${prefix}Visible`] === false || display === 'hidden') return null;
     if (properties[`${prefix}Blank`] === true) return '□';
@@ -220,7 +223,7 @@ export function annotationPlacements(document: CircuitDocument): { annotation: A
 /** Raw edit string retains intentional fractions; generated calculation values do not acquire them. */
 export function componentValueInput(component: ComponentInstance): string {
   const def=componentDefinitions[component.type];
-  return def.property ? storedFraction(component.properties,def.property,def.unit) ?? String(component.properties[def.property]) : '';
+  return def.property ? storedFraction(component.properties,def.property,def.unit) ?? quantityInput(component.properties[def.property] as q.Scalar) : '';
 }
 
 export function notationWidth(text:string,fontSize:number):number {
