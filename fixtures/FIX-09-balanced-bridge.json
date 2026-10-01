@@ -2,18 +2,18 @@
   "$schema": "../schemas/fixture.schema.json",
   "id": "FIX-09",
   "title": "휘트스톤 브릿지",
-  "purpose": "대칭 절점 전위와 중앙 전류 0 조건 검증",
+  "purpose": "서로 다른 저항의 비가 같을 때 브리지 균형과 중앙 전류 방향 전환 확인",
   "document": {
     "format": "edu-circuit",
     "version": 1,
     "documentId": "fix-09",
     "title": "휘트스톤 브릿지",
     "components": [
-      {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":0,"y":0},"rotation":0,"properties":{"voltageV":10},"terminals":[{"id":"V1.p","role":"positive"},{"id":"V1.n","role":"negative"}]},
+      {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":0,"y":0},"rotation":0,"properties":{"voltageV":12},"terminals":[{"id":"V1.p","role":"positive"},{"id":"V1.n","role":"negative"}]},
       {"id":"R1","type":"resistor","label":"R1","position":{"x":160,"y":-90},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R1.a","role":"a"},{"id":"R1.b","role":"b"}]},
-      {"id":"R2","type":"resistor","label":"R2","position":{"x":160,"y":10},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R2.a","role":"a"},{"id":"R2.b","role":"b"}]},
-      {"id":"R3","type":"resistor","label":"R3","position":{"x":340,"y":-90},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R3.a","role":"a"},{"id":"R3.b","role":"b"}]},
-      {"id":"R4","type":"resistor","label":"R4","position":{"x":340,"y":10},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R4.a","role":"a"},{"id":"R4.b","role":"b"}]},
+      {"id":"R2","type":"resistor","label":"R2","position":{"x":160,"y":10},"rotation":0,"properties":{"resistanceOhm":200},"terminals":[{"id":"R2.a","role":"a"},{"id":"R2.b","role":"b"}]},
+      {"id":"R3","type":"resistor","label":"R3","position":{"x":340,"y":-90},"rotation":0,"properties":{"resistanceOhm":200},"terminals":[{"id":"R3.a","role":"a"},{"id":"R3.b","role":"b"}]},
+      {"id":"R4","type":"resistive-load","label":"VR1","position":{"x":340,"y":10},"rotation":0,"properties":{"resistanceOhm":400,"resistanceMinOhm":100,"resistanceMaxOhm":1000},"terminals":[{"id":"R4.a","role":"a"},{"id":"R4.b","role":"b"}]},
       {"id":"R5","type":"resistor","label":"R5","position":{"x":250,"y":-40},"rotation":0,"properties":{"resistanceOhm":100},"terminals":[{"id":"R5.a","role":"a"},{"id":"R5.b","role":"b"}]}
     ],
     "wires": [
@@ -43,12 +43,12 @@
   "expected":{
     "status":"solved",
     "tolerance":{"absolute":1e-09,"relative":1e-09},
-    "probeVoltagesV":{"JT":10,"JL":5,"JR":5,"JB":0},
-    "branchCurrentsA":{"R1":0.05,"R2":0.05,"R3":0.05,"R4":0.05,"R5":0},
-    "componentVoltagesV":{"R1":5,"R2":5,"R3":5,"R4":5,"R5":0},
-    "componentPowersW":{"R1":0.25,"R2":0.25,"R3":0.25,"R4":0.25,"R5":0},
+    "probeVoltagesV":{"JT":12,"JL":8,"JR":8,"JB":0},
+    "branchCurrentsA":{"R1":0.04,"R2":0.04,"R3":0.02,"R4":0.02,"R5":0},
+    "componentVoltagesV":{"R1":4,"R2":8,"R3":4,"R4":8,"R5":0},
+    "componentPowersW":{"R1":0.16,"R2":0.32,"R3":0.08,"R4":0.16,"R5":0},
     "diagnostics":[],
     "invariants":["KCL","KVL","BRIDGE_BALANCED","PASSIVE_POWER_NONNEGATIVE"],
-    "equivalentResistance":{"port":{"first":{"kind":"terminal","id":"V1.p"},"second":{"kind":"terminal","id":"V1.n"}},"ohm":100}
+    "equivalentResistance":{"port":{"first":{"kind":"terminal","id":"V1.p"},"second":{"kind":"terminal","id":"V1.n"}},"ohm":200}
   }
 }

@@ -3,25 +3,6 @@
   top: 12px;
   left: 12px;
   z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.current-pause:hover {
-  background: #eeeee7;
-  color: var(--ink);
-}
-.current-pause[aria-pressed='true'] {
-  background: #e9eee3;
-  color: var(--accent);
 }
 .current-settings .current-readout {
   display: flex;
@@ -34,10 +15,4 @@
 .current-settings .current-direction {
   flex-basis: 100%;
   color: var(--muted);
-}
-@media (pointer: coarse) {
-  .current-pause {
-    width: 44px;
-    height: 44px;
-  }
 }

@@ -294,9 +294,9 @@ describe("requirement and rule references", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("provides the complete FIX-01 through FIX-10 baseline without duplicate IDs", () => {
+  it("provides the complete FIX-01 through FIX-12 baseline without duplicate IDs", () => {
     const actual = canonicalFixtures.map(({ fixture }) => fixture.id).sort();
-    const expected = Array.from({ length: 10 }, (_unused, index) =>
+    const expected = Array.from({ length: 12 }, (_unused, index) =>
       `FIX-${String(index + 1).padStart(2, "0")}`,
     );
     expect(actual).toEqual(expected);

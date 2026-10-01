@@ -14,6 +14,7 @@ import {
   type FlowViewport,
 } from '../visualization';
 import './styles.css';
+import { createMarkVisibility } from './mark-visibility';
 
 export type { ProjectedCurrentPath } from '../visualization';
 export interface CurrentOverlay {
@@ -40,7 +41,6 @@ interface TrackView {
   retiring?: Train;
   pending: number | null;
   blendStart: number | null;
-  density: number;
 }
 const samePoints = (a: Point[], b: Point[]) =>
   a.length === b.length && a.every((p, i) => p.x === b[i].x && p.y === b[i].y);
@@ -76,6 +76,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
     disposed = false;
   let frame = 0,
     previous: number | null = null;
+  let currentSignature: string | null = null;
   const media = window.matchMedia('(prefers-reduced-motion: reduce)');
   function spacing(track: CurrentTrack) {
     const desired = currentSpacing(track.amperes, display!.scaleAmperes),
@@ -126,6 +127,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
       value.marks[i].style.display = 'none';
   }
   function draw() {
+    if (visibility.hidden) return;
     for (const view of tracks.values()) {
       drawTrain(view, view.train);
       if (view.retiring) drawTrain(view, view.retiring);
@@ -155,7 +157,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
     view.blendStart = now;
   }
   const canAnimate = () =>
-    active && !disposed && !display?.paused && !media.matches && !doc.hidden && tracks.size > 0;
+    active && !disposed && !display?.paused && !media.matches && !doc.hidden && !visibility.hidden && tracks.size > 0;
   function tick(now: number) {
     frame = 0;
     if (!canAnimate()) {
@@ -169,7 +171,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
       view.train.phase += delta;
       if (view.retiring) view.retiring.phase += delta;
       // Reflow once after interaction, never on every camera frame.
-      if (view.pending !== null && now - view.pending >= 140) reflow(view, now);
+      if (!visibility.suppressed && view.pending !== null && now - view.pending >= 140) reflow(view, now);
       if (view.retiring && view.blendStart !== null) {
         const alpha = Math.min(1, Math.max(0, (now - view.blendStart) / 220));
         view.train.group.style.opacity = String(alpha);
@@ -196,6 +198,18 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
     svg.dataset.motion = canAnimate() ? 'running' : 'paused';
     draw();
   }
+  const visibility = createMarkVisibility(marks, () => {
+    for (const view of tracks.values()) {
+      view.retiring?.group.remove();
+      view.retiring = undefined;
+      view.blendStart = null;
+      view.pending = null;
+      view.train.metric = view.track.points;
+      view.train.spacing = spacing(view.track);
+      view.train.phase = 0;
+      view.train.group.style.opacity = '1';
+    }
+  }, sync);
   media.addEventListener?.('change', sync);
   doc.addEventListener('visibilitychange', sync);
   return {
@@ -204,6 +218,15 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
       viewport = size;
       display = nextDisplay;
       active = visible;
+      // Compare electrical data, never projected coordinates or model object identity.
+      const signature = JSON.stringify([display.scaleAmperes, paths.map(({ path }) => {
+        const value = path.sample.value;
+        return [path.id, value.status, value.status === 'known'
+          ? [value.amperes, value.from.id, value.to.id] : null];
+      }).sort((a, b) => String(a[0]).localeCompare(String(b[0])))]);
+      visibility.update(currentSignature !== null && signature !== currentSignature,
+        !!display.changing, currentSignature === null || display.paused || media.matches || !active || doc.hidden);
+      currentSignature = signature;
       svg.setAttribute('viewBox', `0 0 ${Math.max(1, size.width)} ${Math.max(1, size.height)}`);
       svg.style.visibility = active ? 'visible' : 'hidden';
       const liveBands = new Set<string>();
@@ -258,14 +281,15 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
           junctionColors.set(value.to.id, path.color);
         }
       }
+      const directions = new Map(paths.map(({ path }) => [path.id,
+        path.sample.value.status === 'known' ? Math.sign(path.sample.value.amperes) : 0]));
       for (const track of buildCurrentTracks(paths)) {
         const length = flowLength(track.points);
         if (!Number.isFinite(length) || length === 0) continue;
-        const key = track.ids.join(' '),
-          density = currentSpacing(track.amperes, display.scaleAmperes);
+        const key = track.ids.map(id => `${id}:${directions.get(id)}`).join(' ');
         liveTracks.add(key);
         let view = tracks.get(key);
-        if (!view || view.density !== density || view.train.metric.length !== track.points.length) {
+        if (!view || view.train.metric.length !== track.points.length) {
           view?.train.group.remove();
           view?.retiring?.group.remove();
           view = {
@@ -274,8 +298,8 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
             train: train(track),
             pending: null,
             blendStart: null,
-            density,
           };
+          if (visibility.suppressed) view.train.group.style.opacity = '0';
           tracks.set(key, view);
         } else {
           if (!samePoints(view.track.points, track.points)) {
@@ -319,6 +343,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
     },
     dispose() {
       disposed = true;
+      visibility.dispose();
       cancelAnimationFrame(frame);
       media.removeEventListener?.('change', sync);
       doc.removeEventListener('visibilitychange', sync);

@@ -1,5 +1,6 @@
 import { storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
+export { adjustableParameter, type AdjustableParameter } from './parameters';
 import { compactWirePoints } from '../wire-geometry';
 export { compactWirePoints } from '../wire-geometry';
 import { notationTokens, notationDisplayText } from '../notation';
@@ -16,8 +17,8 @@ export const componentDefinitions: Record<ComponentType, { name: string; short: 
 export function createComponent(type: ComponentType, id: string, position: Point): ComponentInstance {
   const source = type === 'dc-voltage-source';
   return {
-    id, type, label: id, position, rotation: source ? 90 : 0,
-    properties: source ? { voltageV: 9 } : type === 'resistor' || type === 'resistive-load' ? { resistanceOhm: 10 } : type === 'switch' ? { state: 'open' } : {},
+    id, type, label: type === 'resistive-load' ? id.replace(/^VR(\d+)$/, 'VR_$1') : id, position, rotation: source ? 90 : 0,
+    properties: source ? { voltageV: 9 } : type === 'resistive-load' ? { resistanceOhm: 10, resistanceMinOhm: 1, resistanceMaxOhm: 100 } : type === 'resistor' ? { resistanceOhm: 10 } : type === 'switch' ? { state: 'open' } : {},
     terminals: [{ id: `${id}.a`, role: source ? 'positive' : 'a' }, { id: `${id}.b`, role: source ? 'negative' : 'b' }],
   };
 }

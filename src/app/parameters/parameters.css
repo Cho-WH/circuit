@@ -1,0 +1,119 @@
+.parameter-panel {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 18px;
+}
+.parameter-panel .section-heading {
+  margin-bottom: 12px;
+}
+.parameter-panel h2 {
+  margin: 0;
+}
+.parameter-name {
+  display: block;
+  font-size: 17px;
+  margin: 0 0 10px;
+}
+.parameter-control {
+  border: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+}
+.parameter-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.parameter-value-row > label {
+  white-space: nowrap;
+}
+.parameter-value-row .unit-input {
+  width: 95px;
+  min-width: 0;
+  flex: 1;
+}
+.parameter-value-row input {
+  min-width: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.parameter-slider {
+  width: 100%;
+  margin: 9px 0 3px;
+  padding: 0;
+  min-height: 22px;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.parameter-panel .section-heading > .parameter-name {
+  padding: 0;
+  margin: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 16px;
+}
+@media (min-width: 641px) {
+  .parameter-panel {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .parameter-panel .section-heading {
+    margin-bottom: 8px;
+  }
+  .parameter-slider {
+    margin: 5px 0 0;
+  }
+  .parameter-options {
+    margin-top: 8px;
+  }
+}
+.parameter-limits {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+.parameter-options {
+  position: relative;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.parameter-range {
+  margin: 14px 0;
+}
+.parameter-range-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.parameter-range-fields label {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.parameter-range-fields .unit-input {
+  margin-top: 5px;
+}
+.parameter-range-fields input {
+  min-width: 0;
+  width: 100%;
+}
+.parameter-error {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #a23c35;
+  margin: 8px 0 0;
+}
+
+.inline-value-editor > .parameter-range-fields {
+  display: grid;
+  align-items: start;
+  gap: 8px;
+}

@@ -223,7 +223,7 @@ export function MeasurementTable({
                       <td>
                         <button
                           className="record-location"
-                          title={`기록 당시 회로 보기 · ${measurementDirection(entry)}`}
+                          data-tooltip={`기록 당시 회로 보기 · ${measurementDirection(entry)}`}
                           onClick={() => setPreviewId(entry.id)}
                         >
                           <Notation text={measurementLocation(entry)} />

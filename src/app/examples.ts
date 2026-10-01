@@ -15,20 +15,20 @@ const series: ExampleLayout = {
   routes: { W1: [[240, 220]], W4: [[860, 220], [860, 460], [240, 460]] },
 };
 
+const parallel: ExampleLayout = {
+  // Equal-width horizontal branches, with a centered source on the bottom rail.
+  components: { V1: [560, 520, 0], R1: [560, 200, 0], R2: [560, 360, 0] },
+  junctions: { JT: [320, 360], JB: [800, 360] },
+  routes: { W1: [[320, 520]], W2: [[320, 200]], W4: [[800, 200]], W6: [[800, 520]] },
+};
+
 const layouts: Record<string, ExampleLayout> = {
   'fix-01': {
     components: { V1: [240, 340, 90], R1: [520, 220, 0] },
     routes: { W1: [[240, 220]], W2: [[800, 220], [800, 460], [240, 460]] },
   },
   'fix-02': series,
-  'fix-03': {
-    // Equal-width horizontal branches, with a centered source on the bottom rail.
-    components: { V1: [560, 520, 0], R1: [560, 200, 0], R2: [560, 360, 0] },
-    junctions: { JT: [320, 360], JB: [800, 360] },
-    routes: {
-      W1: [[320, 520]], W2: [[320, 200]], W4: [[800, 200]], W6: [[800, 520]],
-    },
-  },
+  'fix-03': parallel,
   'fix-04': {
     components: { V1: [580, 540, 0], R1: [400, 300, 0], R2: [680, 200, 0], R3: [680, 400, 0] },
     junctions: { JM: [520, 300], JG: [840, 300] },
@@ -51,6 +51,8 @@ const layouts: Record<string, ExampleLayout> = {
     routes: { W1: [[240, 200]], W6: [[800, 200]], W9: [[800, 520]], W12: [[240, 520]] },
   },
   'fix-10': series,
+  'fix-11': series,
+  'fix-12': parallel,
 };
 
 export function layoutExample(input: CircuitDocument): CircuitDocument {

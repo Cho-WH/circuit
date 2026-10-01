@@ -201,7 +201,7 @@ function parallelDocument(second: ComponentInstance, sourceVoltage = 9): Circuit
   };
 }
 
-describe("FIX-01 through FIX-10", () => {
+describe("canonical circuit fixtures", () => {
   it.each(fixtures)("matches $id status, diagnostics, and expected values", (fixture) => {
     const { circuit, result } = runDocument(fixture.document);
     const expected = fixture.expected;
@@ -251,6 +251,41 @@ describe("FIX-01 through FIX-10", () => {
       expectClose(totalPower, 0, fixture.expected.tolerance);
     },
   );
+});
+
+describe("adjustable learning examples", () => {
+  it.each([
+    { id: 'FIX-11', min: 1, max: 5, fixed: 1, currents: [3, 1], voltages: [3, 5] },
+    { id: 'FIX-12', min: 1, max: 6, fixed: 3, currents: [6, 1], voltages: [6, 6] },
+  ])('$id shows the intended current and voltage changes across its range', ({ id, min, max, fixed, currents, voltages }) => {
+    const document = structuredClone(fixturesById.get(id)!.document);
+    const variable = document.components.find(component => component.type === 'resistive-load')!;
+    expect(variable.properties.resistanceMinOhm).toBe(min);
+    expect(variable.properties.resistanceMaxOhm).toBe(max);
+    expect(document.components.find(component => component.id === 'R1')!.properties.resistanceOhm).toBe(fixed);
+    for (const [index, resistance] of [min, max].entries()) {
+      variable.properties.resistanceOhm = resistance;
+      const { result } = runDocument(document);
+      expect(result.status).toBe('solved');
+      expect(result.branchCurrents[variable.id]).toBeCloseTo(currents[index], 9);
+      expect(result.componentVoltages[variable.id]).toBeCloseTo(voltages[index], 9);
+      expect(result.branchCurrents.R1).toBeCloseTo(id === 'FIX-11' ? currents[index] : 2, 9);
+      expect(-result.branchCurrents.V1).toBeCloseTo(id === 'FIX-11' ? currents[index] : currents[index] + 2, 9);
+    }
+  });
+
+  it('balances unequal bridge arms at 400 ohms and reverses center current on either side', () => {
+    const document = structuredClone(fixturesById.get('FIX-09')!.document);
+    const variable = document.components.find(component => component.type === 'resistive-load')!;
+    expect(variable.properties).toMatchObject({ resistanceOhm: 400, resistanceMinOhm: 100, resistanceMaxOhm: 1000 });
+    for (const resistance of [100, 400, 1000]) {
+      variable.properties.resistanceOhm = resistance;
+      const { result } = runDocument(document);
+      expect(result.status).toBe('solved');
+      if (resistance === 400) expect(result.branchCurrents.R5).toBeCloseTo(0, 9);
+      else expect(Math.sign(result.branchCurrents.R5)).toBe(resistance < 400 ? 1 : -1);
+    }
+  });
 });
 
 describe("determinism and reference choice", () => {

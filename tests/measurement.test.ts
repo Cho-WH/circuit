@@ -75,6 +75,8 @@ describe("equivalent resistance", () => {
     "FIX-04-series-parallel.json",
     "FIX-09-balanced-bridge.json",
     "FIX-10-reference-shift.json",
+    "FIX-11-variable-divider.json",
+    "FIX-12-variable-parallel.json",
   ])("matches the fixture load resistance when the port source is removed: %s", (filename) => {
     const { circuit, expected } = compiledFixture(filename);
     const resistance = expected.equivalentResistance!;

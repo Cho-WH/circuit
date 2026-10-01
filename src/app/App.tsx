@@ -1,3 +1,5 @@
+import { parseComponentValue } from './component-value';
+import { Tooltip } from './Tooltip';
 import { ExampleMenu } from './ExampleMenu';
 import { SwitchStateButton } from './SwitchStateButton';
 import { saveBlob } from './download';
@@ -11,7 +13,7 @@ import {
   type MeasurementTool,
 } from './measurement-tools';
 import { probeCurrent, probeVoltage } from '../measurement';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Zap,
   MousePointer2,
@@ -48,7 +50,15 @@ import {
   symbolMarkup,
   endpointName,
   quantityFormatForTargets,
+  adjustableParameter,
 } from '../component-library';
+import {
+  ParameterControl,
+  ParameterRangeFields,
+  parameterRangeProperties,
+  parameterContext,
+  parameterScales,
+} from './parameters';
 import { copySelection, type Command, type PastePayload } from '../editor';
 import { parseDocument, serializeDocument } from '../persistence';
 import { useCircuitSession, type WorkspaceMode } from './useCircuitSession';
@@ -74,7 +84,7 @@ import { WorksheetPanel } from './WorksheetPanel';
 import { OutputCanvas, type OutputTool } from './OutputCanvas';
 import type { VoltageMeasurement } from '../potential-3d';
 import type { ExportOptions } from '../export';
-import { parseQuantity, formatQuantity, quantityFormatFor, type QuantityMode } from '../quantity';
+import { formatQuantity, quantityFormatFor, type QuantityMode } from '../quantity';
 import { Notation } from './Notation';
 import { PotentialSettings, defaultPotentialSettings } from './PotentialSettings';
 import { QuickStartDialog } from './QuickStartDialog';
@@ -111,6 +121,7 @@ export function App() {
   const [mode, setMode] = useState<Mode>('build');
   const {
     history,
+    documentEpoch,
     saveStatus,
     execute,
     placeComponent,
@@ -205,7 +216,57 @@ export function App() {
   const settingsTrigger = useRef<HTMLButtonElement>(null);
   const valueInput = useRef<HTMLInputElement>(null);
   const idCounter = useRef(1);
+  const [comparisonParameterId, setComparisonParameterId] = useState('');
+  const [adjustingParameters, setAdjustingParameters] = useState<Set<string>>(() => new Set());
+  const onParameterAdjusting = useCallback((id: string, adjusting: boolean) => {
+    setAdjustingParameters(previous => {
+      if (previous.has(id) === adjusting) return previous;
+      const next = new Set(previous);
+      if (adjusting) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
+  useEffect(() => setComparisonParameterId(''), [documentEpoch]);
+  const adjustableComponents = doc.components.filter((c) => adjustableParameter(c));
+  const controlledComponent = adjustableComponents.find(
+    (c) => selected.length === 1 && c.id === selected[0] && adjustableParameter(c),
+  );
+  // Closing the controls preserves the comparison scale while automatic changes continue.
+  const comparisonComponent =
+    controlledComponent ?? adjustableComponents.find((c) => c.id === comparisonParameterId);
+  const comparisonParameter = comparisonComponent
+    ? adjustableParameter(comparisonComponent)!
+    : null;
+  useEffect(() => {
+    if (controlledComponent) setComparisonParameterId(controlledComponent.id);
+  }, [controlledComponent?.id]);
+  const scaleContext =
+    mode === 'analysis' && comparisonComponent && comparisonParameter
+      ? parameterContext(doc, comparisonComponent.id, comparisonParameter)
+      : null;
+  const comparisonScales = useMemo(
+    () =>
+      scaleContext && comparisonComponent && comparisonParameter
+        ? parameterScales(doc, comparisonComponent.id, comparisonParameter)
+        : null,
+    [scaleContext],
+  );
   const { compilation, result } = useMemo(() => analyze(doc), [doc]);
+  const voltageReading = useMemo(
+    () =>
+      probeVoltage(
+        compilation,
+        result,
+        anchorEndpoint(doc, measurementAnchors.red),
+        anchorEndpoint(doc, measurementAnchors.black),
+      ),
+    [doc, compilation, result, redProbe, blackProbe],
+  );
+  const voltageLabel = formatQuantity(
+    voltageReading.ok ? voltageReading.value.voltageV : undefined,
+    'V',
+    quantityFormatForTargets(doc, [redProbe, blackProbe]),
+  );
   const voltageMeasurement = useMemo<VoltageMeasurement | undefined>(() => {
     if (mode !== 'analysis' || measurementKind !== 'voltage') return undefined;
     const probe = (anchor: MeasurementAnchor | null) => {
@@ -213,26 +274,11 @@ export function App() {
         endpoint = anchorEndpoint(doc, anchor);
       return pose && endpoint ? { point: pose.point, endpointId: endpoint.id } : null;
     };
-    const red = probe(storedMeasurementAnchors.red),
-      black = probe(storedMeasurementAnchors.black);
-    const reading = probeVoltage(
-      compilation,
-      result,
-      anchorEndpoint(doc, storedMeasurementAnchors.red),
-      anchorEndpoint(doc, storedMeasurementAnchors.black),
-    );
-    return {
-      red,
-      black,
-      label: reading.ok
-        ? formatQuantity(
-            reading.value.voltageV,
-            'V',
-            quantityFormatForTargets(doc, [red?.endpointId ?? '', black?.endpointId ?? '']),
-          )
-        : null,
-    };
-  }, [doc, compilation, result, storedMeasurementAnchors, measurementKind, mode]);
+    const red = probe(measurementAnchors.red),
+      black = probe(measurementAnchors.black);
+    return { red, black, label: voltageReading.ok ? voltageLabel : null };
+  }, [doc, storedMeasurementAnchors, voltageReading, voltageLabel, measurementKind, mode]);
+
   const currents = useMemo(
     () => buildCurrentModel(doc, compilation, result),
     [doc, compilation, result],
@@ -241,14 +287,18 @@ export function App() {
     display: currentDisplay,
     setPaused: setCurrentPaused,
     setWidthScale: setCurrentWidthScale,
-  } = useCurrentDisplay(currents);
+  } = useCurrentDisplay(currents, comparisonScales?.current, adjustingParameters.size > 0);
   const potential = useMemo(
     () =>
       buildPotentialModel(doc, compilation.circuit, result, {
         palette: potentialPalette,
-        ...(fixedRange ? { range: { min: rangeMin, max: rangeMax } } : {}),
+        ...(fixedRange
+          ? { range: { min: rangeMin, max: rangeMax } }
+          : comparisonScales
+            ? { range: comparisonScales.voltage }
+            : {}),
       }),
-    [doc, compilation, result, potentialPalette, fixedRange, rangeMin, rangeMax],
+    [doc, compilation, result, potentialPalette, fixedRange, rangeMin, rangeMax, comparisonScales],
   );
   const paths = useMemo(() => suggestPaths(compilation.circuit), [compilation]);
   const path = customPathIds.length
@@ -309,12 +359,12 @@ export function App() {
       { x: 20, y: 20 },
     );
     if (dispatch({ type: 'Paste', ...payload })) {
-      setSelected(payload.components.map((c) => c.id));
+      setSelection(payload.components.map((c) => c.id));
       setClipboard(payload);
     }
   }
   function remove() {
-    if (dispatch({ type: 'DeleteElements', ids: selected })) setSelected([]);
+    if (dispatch({ type: 'DeleteElements', ids: selected })) setSelection([]);
   }
   function cancelTool() {
     setMeasurementKind(null);
@@ -343,19 +393,19 @@ export function App() {
       } else if (mode === 'worksheet') {
         if (event.key === 'Escape') {
           cancelTool();
-          setSelected([]);
+          setSelection([]);
         } else if (event.key === 'Delete' || event.key === 'Backspace') {
           event.preventDefault();
           dispatch({
             type: 'DeleteElements',
             ids: selected.filter((id) => doc.annotations.some((a) => a.id === id)),
           });
-          setSelected([]);
+          setSelection([]);
         }
         return;
       } else if (modifier && event.key.toLowerCase() === 'a') {
         event.preventDefault();
-        setSelected(doc.components.map((c) => c.id));
+        setSelection(doc.components.map((c) => c.id));
       } else if (modifier && event.key.toLowerCase() === 'c') {
         event.preventDefault();
         copy();
@@ -364,7 +414,7 @@ export function App() {
         paste();
       } else if (event.key === 'Escape') {
         cancelTool();
-        setSelected([]);
+        setSelection([]);
       } else if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         remove();
@@ -410,7 +460,7 @@ export function App() {
       setNotice('부품을 놓을 수 없어요. 삽입 공간과 편집 권한을 확인해 주세요.', 'error');
       return;
     }
-    setSelected([c.id]);
+    setSelection([c.id]);
     cancelTool();
   }
   const currentAnchor = anchorPose(doc, measurementAnchors.current)
@@ -445,8 +495,7 @@ export function App() {
       return;
     }
     if (mode === 'analysis') {
-      setSelectedNet(compilation.circuit.endpointToNet[endpoint.id]);
-      setSelected([]);
+      selectNet(compilation.circuit.endpointToNet[endpoint.id]);
       return;
     }
   }
@@ -458,16 +507,9 @@ export function App() {
       );
       return;
     }
-    if (mode === 'analysis') {
-      const wire = doc.wires.find((w) => w.id === id);
-      if (wire) {
-        setSelectedNet(compilation.circuit.endpointToNet[wire.start.id]);
-        setSelected([id]);
-      }
-      return;
-    }
-    setSelected([id]);
+    selectElement(id);
   }
+
   function commitWiring(commands: readonly Command[]) {
     if (mode !== 'build') return false;
     const applied = execute(commands);
@@ -492,14 +534,12 @@ export function App() {
   }
   function applyValue() {
     if (!component || !definition?.property) return;
-    const parsed = parseQuantity(valueDraft, definition.unit);
-    const value = parsed?.value ?? null;
-    if (value === null || (definition.unit === 'Ω' && value < 0)) {
-      setNotice(
-        `유효한 값을 입력하세요. 예: ${definition.unit === 'Ω' ? '10, 1k, 1.5 kΩ' : '9, 1.5 V'}. 이전 값은 유지됩니다.`,
-      );
+    const parsed = parseComponentValue(component, valueDraft);
+    if (!parsed.ok) {
+      setNotice(parsed.error);
       return;
     }
+    const value = parsed.value;
     if (
       value === component.properties[definition.property] &&
       (parsed?.fraction ?? '') === (component.properties[definition.property + 'Fraction'] ?? '')
@@ -536,18 +576,27 @@ export function App() {
   ) : null;
   function replace(document: CircuitDocument) {
     if (dispatch({ type: 'ReplaceDocument', document })) {
-      setSelected([]);
+      setSelection([]);
       cancelTool();
-      setSelectedNet(null);
-      setHovered(null);
       setCustomPathIds([]);
       setActivePath(0);
     }
   }
+  function setSelection(ids: string[], net: string | null = null) {
+    setSelected(ids);
+    setSelectedNet(net);
+    setHovered(null);
+  }
+  function selectNet(netId: string) {
+    setSelection([], netId);
+  }
   function selectElement(id: string | null, additive?: boolean) {
     if (measurementActive) {
-      if (id && measurementKind === 'current' && doc.components.some((c) => c.id === id))
-        placeMeasurement('current', { kind: 'component', id });
+      if (id === null) setSelection([]);
+      else if (doc.components.some((c) => c.id === id)) {
+        setSelection([id]);
+        if (measurementKind === 'current') placeMeasurement('current', { kind: 'component', id });
+      }
       return;
     }
     if (tool === 'path' && id) {
@@ -555,10 +604,10 @@ export function App() {
       setHovered(id);
       return;
     }
-    if (mode === 'analysis') setSelectedNet(null);
+    const wire = mode === 'analysis' ? doc.wires.find((w) => w.id === id) : undefined;
     if (mode === 'worksheet' && id && window.matchMedia('(min-width: 641px)').matches)
       setDetailsOpen(true);
-    setSelected(
+    setSelection(
       id === null
         ? []
         : additive
@@ -566,6 +615,7 @@ export function App() {
             ? selected.filter((x) => x !== id)
             : [...selected, id]
           : [id],
+      wire ? compilation.circuit.endpointToNet[wire.start.id] : null,
     );
   }
   function downloadJson() {
@@ -634,7 +684,7 @@ export function App() {
         showOperatingState ? (
           <div
             className="potential-reference"
-            title={`접지(0V): ${doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'}`}
+            data-tooltip={`접지(0V): ${doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'}`}
           >
             <span>접지(0V):</span>
             <Notation
@@ -717,17 +767,18 @@ export function App() {
         const commands: Command[] = [];
         if (edit.label !== c.label) commands.push({ type: 'SetLabel', id, label: edit.label });
         const property = componentDefinitions[c.type].property;
-        if (
-          property &&
-          edit.value !== undefined &&
-          (edit.value !== c.properties[property] ||
-            (edit.fraction ?? '') !== (c.properties[property + 'Fraction'] ?? ''))
-        )
-          commands.push({
-            type: 'SetProperties',
-            id,
-            properties: { [property]: edit.value, [property + 'Fraction']: edit.fraction ?? '' },
-          });
+        const properties: Record<string, number | string | boolean> = {};
+        if (edit.range) {
+          const parameter = adjustableParameter(c);
+          if (mode !== 'build' || !parameter) return false;
+          Object.assign(properties, parameterRangeProperties(parameter, edit.range));
+        }
+        if (property && edit.value !== undefined) {
+          properties[property] = edit.value;
+          properties[property + 'Fraction'] = edit.fraction ?? '';
+        }
+        if (Object.entries(properties).some(([key, value]) => (c.properties[key] ?? '') !== value))
+          commands.push({ type: 'SetProperties', id, properties });
         const applied = execute(commands);
         if (!applied.ok) return false;
         return true;
@@ -743,7 +794,7 @@ export function App() {
           : undefined
       }
       onValue={(id) => {
-        setSelected([id]);
+        setSelection([id]);
         setDetailsOpen(true);
         window.setTimeout(() => valueInput.current?.focus(), 0);
       }}
@@ -755,6 +806,7 @@ export function App() {
     <div
       className={`app-shell mode-${mode}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
     >
+      <Tooltip />
       <header className="topbar">
         <a className="brand" aria-label="회로 실험실" href="#" onClick={(e) => e.preventDefault()}>
           <span className="brand-mark">
@@ -905,6 +957,54 @@ export function App() {
             ref={setMeasurementConsoleHost}
             hidden={mode !== 'analysis'}
           />
+          {mode === 'analysis' &&
+            adjustableComponents.map((adjustableComponent) => {
+              const parameter = adjustableParameter(adjustableComponent)!;
+              return (
+                <section
+                  key={`${documentEpoch}:${doc.documentId}:${adjustableComponent.id}:${parameter.min}:${parameter.max}`}
+                  className="parameter-panel"
+                  aria-label="가변저항 조절"
+                  hidden={controlledComponent?.id !== adjustableComponent.id}
+                >
+                  <div className="section-heading">
+                    <h2>가변저항</h2>
+                    <span className="parameter-name">
+                      <Notation symbol text={adjustableComponent.label} />
+                    </span>
+                  </div>
+                  <ParameterControl
+                    onAdjustingChange={onParameterAdjusting}
+                    component={adjustableComponent}
+                    parameter={parameter}
+                    disabled={
+                      !!doc.activity && !doc.activity.allowedCommands.includes('SetProperties')
+                    }
+                    onChange={(value, group, fraction) => {
+                      if (
+                        value === parameter.value &&
+                        (fraction ?? '') ===
+                          (adjustableComponent.properties[parameter.property + 'Fraction'] ?? '')
+                      )
+                        return true;
+                      return execute(
+                        {
+                          type: 'SetProperties',
+                          id: adjustableComponent.id,
+                          properties: {
+                            [parameter.property]: value,
+                            [parameter.property + 'Fraction']: fraction ?? '',
+                            [parameter.minimumProperty]: parameter.min,
+                            [parameter.maximumProperty]: parameter.max,
+                          },
+                        },
+                        group,
+                      ).ok;
+                    }}
+                  />
+                </section>
+              );
+            })}
         </aside>
         <main className="canvas-column">
           <div className="editor-toolbar" hidden={mode !== 'build'}>
@@ -918,7 +1018,7 @@ export function App() {
                   key={id}
                   aria-pressed={tool === id && !placement}
                   className={tool === id && !placement ? 'active' : ''}
-                  title={label}
+                  data-tooltip={label}
                   aria-label={label}
                   onClick={() => {
                     setTool(id);
@@ -935,7 +1035,7 @@ export function App() {
             <div className="tool-group">
               <button
                 aria-label="실행 취소"
-                title="실행 취소 Ctrl+Z"
+                data-tooltip="실행 취소 Ctrl+Z"
                 disabled={!history.past.length}
                 onClick={() => undoEdit()}
               >
@@ -943,7 +1043,7 @@ export function App() {
               </button>
               <button
                 aria-label="다시 실행"
-                title="다시 실행 Ctrl+Shift+Z"
+                data-tooltip="다시 실행 Ctrl+Shift+Z"
                 disabled={!history.future.length}
                 onClick={() => redoEdit()}
               >
@@ -1032,13 +1132,13 @@ export function App() {
               kind={measurementKind}
               onExit={() => chooseMeasurement(null)}
               enabled={measurementEnabled}
-              onEditPositions={analysisView === '3d' ? () => setPotentialView('2d') : undefined}
               isolated={isolated}
               panel={analysisPanel}
               onPanel={setAnalysisPanel}
               document={doc}
               compilation={compilation}
-              result={result}
+              voltageReading={voltageReading}
+              voltageLabel={voltageLabel}
               active={mode === 'analysis'}
               red={redProbe}
               black={blackProbe}
@@ -1047,10 +1147,15 @@ export function App() {
               currentReading={currentReading}
               onReset={() => setMeasurementAnchors({ red: null, black: null, current: null })}
               onSwap={() => setMeasurementAnchors((a) => ({ ...a, red: a.black, black: a.red }))}
-              onActiveProbe={setActiveProbe}
+              onActiveProbe={(probe) => {
+                setActiveProbe(probe);
+                setPotentialView('2d');
+              }}
             >
               {mode === 'analysis' && (
                 <PotentialWorkspace
+                  sceneIdentity={`${documentEpoch}:${doc.documentId}`}
+                  heightRange={comparisonScales?.height}
                   overlayControls={
                     showOperatingState && showCurrent ? (
                       <CurrentControls paused={currentDisplay.paused} onPause={setCurrentPaused} />
@@ -1077,18 +1182,8 @@ export function App() {
                   referenceLabel={
                     doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'
                   }
-                  onSelect={
-                    measurementKind === 'voltage'
-                      ? undefined
-                      : (id) => {
-                          setHovered(id);
-                          setSelected([id]);
-                          const wire = doc.wires.find((w) => w.id === id);
-                          setSelectedNet(
-                            wire ? compilation.circuit.endpointToNet[wire.start.id] : null,
-                          );
-                        }
-                  }
+                  onSelect={selectElement}
+                  onSelectNet={measurementKind === 'voltage' ? undefined : selectNet}
                 >
                   {circuitCanvas}
                 </PotentialWorkspace>
@@ -1223,7 +1318,7 @@ export function App() {
                     {ids.length > 0 && (
                       <button
                         onClick={() => {
-                          setSelected(ids);
+                          setSelection(ids);
                           setFocusIds([...ids]);
                         }}
                       >
@@ -1264,7 +1359,7 @@ export function App() {
               document={doc}
               result={result}
               selected={selected}
-              onSelect={(id) => setSelected([id])}
+              onSelect={(id) => setSelection([id])}
               dispatch={dispatch}
               onNotice={setNotice}
               tool={outputTool}
@@ -1305,7 +1400,7 @@ export function App() {
                 <select
                   aria-label="값을 바꿀 부품"
                   value={component?.id ?? ''}
-                  onChange={(e) => setSelected(e.target.value ? [e.target.value] : [])}
+                  onChange={(e) => setSelection(e.target.value ? [e.target.value] : [])}
                 >
                   <option value="">부품 선택</option>
                   {doc.components.map((c) => (
@@ -1371,6 +1466,15 @@ export function App() {
                           : '9, 1.5 V처럼 입력할 수 있어요.'}
                       </p>
                     </form>
+                  )}
+                  {mode === 'build' && adjustableParameter(component) && (
+                    <ParameterRangeFields
+                      key={`range-${component.id}`}
+                      component={component}
+                      onChange={(properties) =>
+                        dispatch({ type: 'SetProperties', id: component.id, properties })
+                      }
+                    />
                   )}
                   {!definition.property && quantityControl}
                   {component.type === 'switch' && (

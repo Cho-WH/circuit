@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as THREE from 'three';
-import { Vector3 } from 'three';
+import { Vector3, Raycaster, Ray } from 'three';
 import type { CircuitDocument } from '../src/domain';
 import { Potential3D, automaticHeight, fitPotentialHeight, type Potential3DProps } from '../src/potential-3d';
 import { compileCircuit } from '../src/connectivity';
@@ -63,6 +63,29 @@ async function advanceFrame(now: number) {
 }
 
 describe('3D prepared first frame and camera lifetime', () => {
+  it('retains the floor, GPU geometry, camera and ticks while a bounded resistance changes', async () => {
+    const { circuit, update, ready, entered } = await mount();
+    const variable = circuit.components.find(c => c.id === 'R1')!;
+    variable.type = 'resistive-load'; variable.properties = { resistanceOhm: 3, resistanceMinOhm: 3, resistanceMaxOhm: 6 };
+    const model = () => { const c = compileCircuit(circuit).circuit; return buildPotentialModel(circuit, c, solveCircuit(c)); };
+    await update({ document: structuredClone(circuit), potential: model(), selectedIds: ['R1'], heightRange: { min: 0, max: 9 } });
+    await act(async () => resolveFont()); await act(async () => images.at(-1)!.onload!());
+    await advanceFrame(performance.now() + 2000);
+    const [scene, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
+    const content = scene.children[1], floor = scene.children[0].children[0], position = camera.position.clone();
+    const geometries: unknown[] = []; content.traverse(o => { if ('geometry' in o) geometries.push(o.geometry); });
+    const count = images.length, ticks = host.querySelectorAll('.axis-tag');
+    expect(host.querySelector('.scene-selection')).toBeNull();
+    expect(host.textContent).not.toContain('단자 순서 기준');
+    variable.properties.resistanceOhm = 6;
+    await update({ document: structuredClone(circuit), potential: model() });
+    expect(scene.children[0].children[0]).toBe(floor); expect(images).toHaveLength(count);
+    const after: unknown[] = []; content.traverse(o => { if ('geometry' in o) after.push(o.geometry); });
+    expect(after).toHaveLength(geometries.length); after.forEach((geometry, i) => expect(geometry).toBe(geometries[i]));
+    expect(camera.position.equals(position)).toBe(true);
+    expect([...host.querySelectorAll('.axis-tag')]).toEqual([...ticks]);
+    expect(host.textContent).toContain('6 Ω'); expect(ready).toHaveBeenCalledOnce(); expect(entered).toHaveBeenCalledOnce();
+  });
   it('gently attracts a live drag without jumping on start or trapping slow movements', async () => {
     await mount(); await act(async()=>resolveFont()); await act(async()=>images[0].onload!());
     await advanceFrame(performance.now()+2000);
@@ -137,7 +160,22 @@ describe('3D prepared first frame and camera lifetime', () => {
     const currentDisplay={model,scaleAmperes:model.maxMagnitude,widthScale:1,paused:false};
     const floorBefore = (observed.render.mock.lastCall![0] as THREE.Scene).children[0].children[0];
     const imageCount = images.length;
+    const sceneBefore = observed.render.mock.lastCall![0] as THREE.Scene;
+    const pathMaterials: THREE.Material[] = [];
+    sceneBefore.traverse(object => {
+      if (object.userData.primitive === 'tube' || object.userData.primitive === 'dot')
+        pathMaterials.push((object as THREE.Mesh).material as THREE.Material);
+    });
+    expect(pathMaterials.length).toBeGreaterThan(0);
+    const versions = pathMaterials.map(material => material.version);
     await update({currentDisplay});expect(host.querySelectorAll('.current-flow-overlay')).toHaveLength(1);
+    pathMaterials.forEach((material, i) => {
+      expect(material.transparent).toBe(true);
+      expect(material.opacity).toBe(0);
+      expect(material.depthWrite).toBe(false);
+      // An already compiled opaque shader must be invalidated, not just given zero opacity.
+      expect(material.version).toBe(versions[i] + 1);
+    });
     const width=host.querySelector('[data-current-id="R1"] .current-flow-band')?.getAttribute('stroke-width');
     expect(width).toBe('14');
     const [scene] = observed.render.mock.lastCall as [THREE.Scene,THREE.Camera];
@@ -149,9 +187,16 @@ describe('3D prepared first frame and camera lifetime', () => {
     expect(wireMeshes.every(mesh=>(mesh.material as THREE.Material).opacity===0)).toBe(true);
 
     await update({potential:buildPotentialModel(circuit,compiled,result,{scale:40}),currentDisplay:{...currentDisplay,paused:true}});
+    pathMaterials.forEach((material, i) => expect(material.version).toBe(versions[i] + 1));
     expect(host.querySelector('[data-current-id="R1"] .current-flow-band')?.getAttribute('stroke-width')).toBe(width);
     expect(host.querySelector('.current-flow-overlay')?.getAttribute('data-motion')).toBe('paused');
     await update({currentDisplay:undefined});expect(host.querySelector('.current-flow-overlay')).toBeNull();
+    pathMaterials.forEach((material, i) => {
+      expect(material.transparent).toBe(false);
+      expect(material.opacity).toBe(1);
+      expect(material.depthWrite).toBe(true);
+      expect(material.version).toBe(versions[i] + 2);
+    });
     expect(scene.children[0].children[0]).toBe(floorBefore);
     expect(images).toHaveLength(imageCount);
     expect(observed.frames.size).toBe(0);
@@ -171,6 +216,52 @@ describe('3D prepared first frame and camera lifetime', () => {
     expect(select).not.toHaveBeenCalled();
     act(()=>label.dispatchEvent(new MouseEvent('click',{bubbles:true,detail:0})));
     expect(select).toHaveBeenCalledExactlyOnceWith('R1');
+    select.mockClear();
+    vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([]);
+    vi.spyOn(Ray.prototype, 'intersectPlane').mockReturnValue(null);
+    const stage = host.querySelector('.potential-stage')!;
+    const background = (type: string, x = 100) => act(() => stage.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, pointerId: 3, button: 0, clientX: x, clientY: 100,
+    })));
+    background('pointerdown'); background('pointerup');
+    expect(select).toHaveBeenCalledExactlyOnceWith(null);
+    select.mockClear();
+    background('pointerdown'); background('pointermove', 150); background('pointerup', 150);
+    expect(select).not.toHaveBeenCalled();
+  });
+  it('selects nets from voltage labels and terminal dots without substituting component or wire IDs', async () => {
+    reduced = true;
+    const { update } = await mount();
+    const select = vi.fn(), selectNet = vi.fn();
+    await update({ onSelect: select, onSelectNet: selectNet });
+    await act(async () => resolveFont()); await act(async () => images.at(-1)!.onload!());
+    await advanceFrame(performance.now() + 2000);
+    const label = host.querySelector<HTMLElement>('.net-tag[data-selection-net]')!;
+    const net = label.dataset.selectionNet!;
+    expect(label.dataset.selectionId).toBeUndefined();
+    act(() => label.click());
+    expect(selectNet).toHaveBeenCalledExactlyOnceWith(net);
+    selectNet.mockClear();
+    const pointer = (target: Element, type: string, x = 100) => act(() => target.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, pointerId: 1, pointerType: 'touch', button: 0, clientX: x, clientY: 100,
+    })));
+    pointer(label, 'pointerdown'); pointer(label, 'pointerup');
+    expect(selectNet).toHaveBeenCalledExactlyOnceWith(net);
+    selectNet.mockClear();
+    pointer(label, 'pointerdown'); pointer(label, 'pointermove', 150); pointer(label, 'pointerup', 150);
+    expect(selectNet).not.toHaveBeenCalled();
+    const scene = observed.render.mock.lastCall![0] as THREE.Scene;
+    let dot: THREE.Object3D | undefined;
+    scene.traverse(object => { if (object.userData.primitive === 'dot' && object.userData.netId === net) dot = object; });
+    expect(dot).toBeDefined();
+    expect(dot!.userData.id).toBeUndefined();
+    vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([{ distance: 1, point: new Vector3(), object: dot! }]);
+    const stage = host.querySelector('.potential-stage')!;
+    pointer(stage, 'pointerdown'); pointer(stage, 'pointerup');
+    expect(selectNet).toHaveBeenCalledExactlyOnceWith(net);
+    expect(select).not.toHaveBeenCalled();
+    await update({ voltageMeasurement: { red: null, black: null, label: null }, onSelectNet: undefined, onSelect: undefined });
+    expect(host.querySelector('.net-tag[data-selection-net]')).toBeNull();
   });
   it('cleans imperative labels on effect teardown, including StrictMode remounts',async()=>{
     reduced=true;

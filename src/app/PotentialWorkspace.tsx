@@ -4,6 +4,7 @@ import './potential-workspace.css';
 
 export type PotentialWorkspaceStatus = '2d' | 'preparing' | 'entering' | 'ready' | 'failed';
 export interface PotentialWorkspaceProps extends Potential3DProps {
+  sceneIdentity?: string;
   active: boolean;
   overlayControls?: ReactNode;
   children: ReactNode;
@@ -41,11 +42,12 @@ function SceneAttempt({ onState, ...props }: Potential3DProps & { onState: (stat
     onEntered={() => { if (live.current) latest.current('ready'); }} onError={failure}/>}</SceneBoundary>;
 }
 
-export function PotentialWorkspace({ active, children, overlayControls, onReturnTo2D, onStatusChange, ...scene }: PotentialWorkspaceProps) {
-  const [state, setState] = useState<{ document: Potential3DProps['document']; status: PotentialWorkspaceStatus }>({ document: scene.document, status: 'preparing' });
+export function PotentialWorkspace({ active, children, overlayControls, onReturnTo2D, onStatusChange, sceneIdentity, ...scene }: PotentialWorkspaceProps) {
+  const identity = sceneIdentity ?? scene.document;
+  const [state, setState] = useState<{ document: typeof identity; status: PotentialWorkspaceStatus }>({ document: identity, status: 'preparing' });
   const [attempt, setAttempt] = useState(0), [waiting, setWaiting] = useState(false);
-  const documentKey = useMemo(() => ++revision, [scene.document]);
-  const status = !active ? '2d' : state.document === scene.document ? state.status : 'preparing';
+  const documentKey = useMemo(() => ++revision, [identity]);
+  const status = !active ? '2d' : state.document === identity ? state.status : 'preparing';
   const showing = active && (status === 'entering' || status === 'ready');
   const statusCallback = useRef(onStatusChange); statusCallback.current = onStatusChange;
   useEffect(() => { statusCallback.current?.(status); }, [status]);
@@ -56,16 +58,16 @@ export function PotentialWorkspace({ active, children, overlayControls, onReturn
     return () => window.clearTimeout(timer);
   }, [status, documentKey, attempt]);
   // A return to 2D must invalidate ready state before the next preparation starts.
-  useEffect(() => { if (!active) setState({ document: scene.document, status: 'preparing' }); }, [active, scene.document]);
+  useEffect(() => { if (!active) setState({ document: identity, status: 'preparing' }); }, [active, identity]);
   return <div className="potential-workspace" data-status={status}>
     <div className="potential-workspace-2d" aria-hidden={showing || undefined} inert={showing || undefined} style={{ visibility: showing ? 'hidden' : 'visible' }}>
       {children}
     </div>
     {active && status !== 'failed' && <div className="potential-workspace-3d" aria-hidden={!showing || undefined} inert={!showing || undefined} style={{ visibility: showing ? 'visible' : 'hidden' }}>
-      <SceneAttempt key={`${documentKey}:${attempt}`} {...scene} onState={next => setState({ document: scene.document, status: next })}/>
+      <SceneAttempt key={`${documentKey}:${attempt}`} {...scene} onState={next => setState({ document: identity, status: next })}/>
     </div>}
     {overlayControls}
     {active && status === 'preparing' && waiting && <div className="potential-preparation" role="status"><span>3D를 준비하고 있어요</span><button onClick={onReturnTo2D}>취소</button></div>}
-    {status === 'failed' && <div className="potential-preparation potential-failure" role="status"><span>3D를 열지 못했어요</span><button onClick={() => { setState({ document: scene.document, status: 'preparing' }); setAttempt(value => value + 1); }}>다시 시도</button><button onClick={onReturnTo2D}>2D 보기</button></div>}
+    {status === 'failed' && <div className="potential-preparation potential-failure" role="status"><span>3D를 열지 못했어요</span><button onClick={() => { setState({ document: identity, status: 'preparing' }); setAttempt(value => value + 1); }}>다시 시도</button><button onClick={onReturnTo2D}>2D 보기</button></div>}
   </div>;
 }

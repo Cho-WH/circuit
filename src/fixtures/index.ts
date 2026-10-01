@@ -6,9 +6,11 @@ import mixed from '../../fixtures/FIX-04-series-parallel.json';
 import openSwitch from '../../fixtures/FIX-05-open-switch.json';
 import bridge from '../../fixtures/FIX-09-balanced-bridge.json';
 import referenceShift from '../../fixtures/FIX-10-reference-shift.json';
+import variableDivider from '../../fixtures/FIX-11-variable-divider.json';
+import variableParallel from '../../fixtures/FIX-12-variable-parallel.json';
 
 // The learning menu is curated separately from diagnostic and editing test fixtures.
-export const examples = [single, series, parallel, mixed, openSwitch, bridge, referenceShift]
+export const examples = [single, series, parallel, mixed, openSwitch, variableDivider, variableParallel, bridge, referenceShift]
   .map(({ id, title, document }) => {
     const example=documentMigrator.migrate(document);
     for(const component of example.components)component.label=component.label.replace(/^([A-Za-z]+)(\d+)$/, '$1_$2');

@@ -1378,6 +1378,7 @@ export function CircuitCanvas(props: CanvasProps) {
         <InlineComponentEditor
           key={editingComponent.id}
           component={editingComponent}
+          editParameterRange={!props.readOnly}
           point={editorPoint}
           viewport={viewport}
           drawingScale={drawingScale}

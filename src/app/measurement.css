@@ -9,9 +9,27 @@
 .probe-choice i{width:5px;height:5px;border:1px solid #9ca393;border-radius:50%}.probe-choice i.attached{background:var(--accent);border-color:var(--accent)}
 .measure-icon-button{min-width:40px;min-height:44px;padding:8px;color:var(--muted)}
 .current-tool{display:flex;align-items:center;gap:10px;font-size:14px;min-width:140px}
-.measure-result{display:flex;align-items:center;justify-content:flex-end;gap:20px;min-width:180px;padding-left:20px;border-left:1px solid var(--line);font-variant-numeric:tabular-nums}
-.measure-result output{font-family:'Libertinus Math',serif;font-size:32px;font-weight:400;white-space:nowrap}
-.measure-console .record-reading{padding:8px 10px;background:var(--accent,#53694b);color:white;font-size:13px;white-space:nowrap}
+.measure-readout{container:measurement-device / inline-size;width:100%;min-width:0;max-width:300px;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:7px}
+.measure-lcd{container-type:inline-size;padding:12px 13px 9px;border-top:2px solid #bac5a8;border-radius:5px;background:#dce3cc;color:#273a25;box-shadow:inset 0 1px 4px #283a252b}
+.measure-lcd-caption{display:block;font-size:12px;font-weight:500;line-height:1.35}
+.measure-lcd output{display:flex;align-items:baseline;justify-content:flex-end;min-height:60px;gap:8px;font-variant-numeric:tabular-nums;line-height:1.3}
+.measure-lcd-value{min-width:0;overflow-wrap:anywhere;text-align:right;font-family:'Cascadia Mono','SFMono-Regular',Consolas,monospace;font-size:46px;font-weight:500;letter-spacing:-1.5px}
+.measure-lcd-unit{flex:none;min-width:15px;font-size:21px;font-weight:500;line-height:1;white-space:nowrap}
+.measure-record-row{display:flex;align-items:center;gap:4px;margin-top:8px;white-space:nowrap}
+.measure-record-label{font-size:12px;font-weight:600;margin-right:3px}
+.measure-record-row button{min-height:32px;padding:6px;gap:3px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--accent);font-size:12px;white-space:nowrap}
+.measure-record-row button:hover,.measure-record-row button[aria-expanded=true]{background:#e9eee3}
+.measure-record-row svg{flex:none;width:14px;height:14px}
+.measure-record-row .measure-exit{margin-left:auto;width:28px;color:var(--muted)}
+@media(min-width:641px){.analysis-console-host .measure-readout{width:calc(100% + 24px);max-width:none;margin-inline:-12px}}
+@container measurement-device (max-width:170px){
+ .measure-record-row{gap:2px}
+ .measure-record-label{font-size:11px;margin-right:0}
+ .measure-record-row button{font-size:11px;gap:2px;padding:6px 3px}
+ .measure-record-row svg{width:13px;height:13px}
+ .measure-record-row .measure-exit{width:24px;min-width:24px}
+}
+@media(pointer:coarse){.measure-record-row button{min-height:44px}.measure-record-row .measure-exit{min-width:40px}}
 .record-reading:disabled{opacity:.45}
 .measure-diagnostics{flex-basis:100%;border-top:1px solid var(--line);padding-top:4px}
 .measure-circuit{position:relative;flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:white}
@@ -22,7 +40,7 @@
 .measurement-handle.is-preview{pointer-events:none}
 .notebook-toggle{gap:6px;white-space:nowrap;font-size:13px;min-height:36px}
 .notebook-toggle[aria-expanded=true]{background:#e8ecdf;color:var(--ink)}
-.analysis-console-host .notebook-toggle{width:100%;margin-top:12px}
+.analysis-console-host .notebook-toggle.standalone{width:100%;margin-top:12px}
 
 /* A fixed-height drawer lets repeated captures keep the circuit viewport steady. */
 .measure-notebook{flex:0 0 auto;height:clamp(180px,34vh,300px);min-width:0;display:flex;flex-direction:column;border-top:1px solid var(--line);background:var(--surface);padding:10px 16px}
@@ -50,7 +68,7 @@
 .record-preview-circuit{height:min(440px,55vh);min-height:160px;display:flex}.record-preview-circuit .canvas-shell{flex:1;min-height:0}.record-preview-circuit .canvas-bottom-bar,.record-preview-circuit .canvas-selection-tools{display:none}
 @media(max-width:640px){
  .measure-console{gap:4px 8px;padding:4px 10px}.measure-connections{flex-basis:100%;gap:6px;flex-wrap:wrap}.probe-pair{flex:1;gap:2px}.probe-choice{flex:1;min-width:76px;padding:2px 6px}
- .measure-result{flex:1;min-width:0;gap:16px;padding:2px 0;border:0;justify-content:space-between}.measure-result output{font-size:30px}.current-tool{flex:1;min-width:0}
+ .measure-readout{max-width:none}.current-tool{flex:1;min-width:0}
  .measure-notebook{padding:8px;height:240px}.record-scroll table{min-width:650px}.record-table-status{display:none}.record-actions button{font-size:11px}.notebook-heading{gap:4px}
 }
 
@@ -66,11 +84,3 @@
 .record-scroll td:first-child{color:var(--muted);font-size:12px}.record-scroll td.record-value{width:140px}
 
 .probe-choice{display:flex;align-items:center;justify-content:center}
-.measure-edit-positions{font-size:12px;color:var(--accent);border:1px solid var(--line);border-radius:4px;padding:8px 10px}.analysis-console-host .measure-edit-positions{width:100%}
-
-@media(min-width:641px){
- .analysis-console-host .measure-console.is-3d{gap:10px}
- .analysis-console-host .measure-console.is-3d .probe-choice{flex-direction:row;min-height:42px;gap:4px;font-size:12px}
- .analysis-console-host .measure-console.is-3d .probe-choice svg{width:20px;height:32px}
- .analysis-console-host .measure-console.is-3d .probe-choice i{position:static}
-}

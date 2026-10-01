@@ -1,0 +1,17 @@
+.control-tooltip {
+  position: fixed;
+  z-index: 150;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 8px 12px;
+  border: 1px solid #deded5;
+  border-radius: 10px;
+  background: #fffef9;
+  color: var(--ink, #30382f);
+  box-shadow: 0 3px 12px #30382f12;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}

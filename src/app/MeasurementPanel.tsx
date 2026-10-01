@@ -3,16 +3,10 @@ import { Notation } from './Notation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { AnalysisPanel, MeasurementKind } from './AnalysisTools';
-import type {
-  CircuitDocument,
-  CompileResult,
-  EndpointRef,
-  SimulationResult,
-  Diagnostic,
-} from '../domain';
+import type { CircuitDocument, CompileResult, EndpointRef, Diagnostic } from '../domain';
 import { equivalentResistance } from '../simulation';
 import { quantityFormatForTargets } from '../component-library';
-import { probeVoltage, createMeasurementRecord } from '../measurement';
+import { createMeasurementRecord } from '../measurement';
 import {
   ProbeGlyph,
   CurrentGlyph,
@@ -20,8 +14,8 @@ import {
   type MeasurementAnchor,
   type MeasurementTool,
 } from './measurement-tools';
-import type { CurrentReading, MeasurementResult } from '../measurement';
-import { ArrowLeftRight, RotateCcw, Plus, NotebookPen, Unplug, X } from 'lucide-react';
+import type { CurrentReading, MeasurementResult, ProbeVoltage } from '../measurement';
+import { ArrowLeftRight, RotateCcw, Plus, NotebookPen, Unplug, Power } from 'lucide-react';
 import './measurement.css';
 import { diagnosticText } from './diagnostic-text';
 import { useMeasurementRecords } from './useMeasurementRecords';
@@ -37,7 +31,8 @@ interface Props {
   children: ReactNode;
   document: CircuitDocument;
   compilation: CompileResult;
-  result: SimulationResult;
+  voltageReading: MeasurementResult<ProbeVoltage>;
+  voltageLabel: string;
   active: boolean;
   red: string;
   black: string;
@@ -48,7 +43,6 @@ interface Props {
   onSwap: () => void;
   onActiveProbe: (probe: 'red' | 'black') => void;
   consoleHost?: HTMLElement | null;
-  onEditPositions?: () => void;
 }
 function Diagnostics({ items }: { items: Diagnostic[] }) {
   return (
@@ -71,7 +65,7 @@ export function MeasurementPanel(props: Props) {
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
-  const { document: doc, compilation, result, red, black } = props;
+  const { document: doc, compilation, red, black } = props;
   const { kind, panel, onPanel, enabled, isolated } = props;
   const showNotebook = panel === 'records';
 
@@ -89,7 +83,7 @@ export function MeasurementPanel(props: Props) {
     ...doc.junctions.map((j) => ({ kind: 'junction' as const, id: j.id })),
   ];
   const ref = (id: string): EndpointRef | null => endpoints.find((e) => e.id === id) ?? null;
-  const voltage = probeVoltage(compilation, result, ref(red), ref(black));
+  const voltage = props.voltageReading;
   const redNet = compilation.circuit.endpointToNet[red],
     blackNet = compilation.circuit.endpointToNet[black];
   const excluded = compilation.circuit.elements
@@ -173,23 +167,52 @@ export function MeasurementPanel(props: Props) {
         : measuredTarget && !props.currentReading.ok
           ? props.currentReading.diagnostics
           : [];
-  const measurementConsole = (
-    <div className={`measure-console${props.onEditPositions ? ' is-3d' : ''}`} hidden={!enabled}>
+  const formattedReading =
+    kind === 'resistance' && resistance?.status === 'open'
+      ? '∞ Ω'
+      : kind === 'voltage'
+        ? props.voltageLabel
+        : formatQuantity(
+            reading,
+            unit,
+            quantityFormatForTargets(
+              doc,
+              kind === 'current' ? [measuredTarget?.id ?? ''] : [red, black],
+            ),
+          );
+  // Keep the shared formatter's value and SI prefix intact; only separate typography.
+  const unitStart = formattedReading.lastIndexOf(' ');
+  const displayValue = formattedReading.slice(0, unitStart);
+  const displayUnit = formattedReading.slice(unitStart + 1);
+  const recordsToggle = (
+    <button
+      className={`notebook-toggle${enabled ? '' : ' standalone'}`}
+      aria-label={`기록 보기 ${entries.length}`}
+      data-tooltip="측정 기록 보기"
+      aria-expanded={showNotebook}
+      aria-controls="measurement-notebook"
+      onClick={() => onPanel(showNotebook ? null : 'records')}
+    >
+      <NotebookPen size={14} />
+      {enabled ? '보기' : `기록 보기 ${entries.length}`}
+    </button>
+  );
+  const measurementConsole = enabled ? (
+    <div className="measure-console">
       <div className="measure-connections">
         {kind !== 'current' ? (
           <div className="probe-pair">
             {(['red', 'black'] as const).map((color) => {
               const name = color === 'red' ? '빨강' : '검정',
                 attached = Boolean(ref(color === 'red' ? red : black));
-              const ProbeControl = props.onEditPositions ? 'div' : 'button';
               return (
-                <ProbeControl
+                <button
                   key={color}
-                  className={`probe-choice probe-${color}${!props.onEditPositions && props.activeProbe === color ? ' is-active' : ''}`}
+                  className={`probe-choice probe-${color}${props.activeProbe === color ? ' is-active' : ''}`}
                   aria-label={`${name} 탐침`}
-                  aria-pressed={props.onEditPositions ? undefined : props.activeProbe === color}
-                  onClick={props.onEditPositions ? undefined : () => props.onActiveProbe(color)}
-                  title={anchorName(doc, props.anchors[color]) || `${name} 탐침 놓기`}
+                  aria-pressed={props.activeProbe === color}
+                  onClick={() => props.onActiveProbe(color)}
+                  data-tooltip={anchorName(doc, props.anchors[color]) || `${name} 탐침 놓기`}
                 >
                   <svg width="28" height="44" viewBox="-14 -46 28 50" aria-hidden="true">
                     <ProbeGlyph color={color} />
@@ -199,13 +222,13 @@ export function MeasurementPanel(props: Props) {
                     className={attached ? 'attached' : ''}
                     aria-label={attached ? '연결됨' : '연결 안 됨'}
                   />
-                </ProbeControl>
+                </button>
               );
             })}
             <button
               className="measure-icon-button"
               aria-label="두 탐침 맞바꾸기"
-              title="두 탐침 맞바꾸기"
+              data-tooltip="두 탐침 맞바꾸기"
               onClick={props.onSwap}
             >
               <ArrowLeftRight size={17} />
@@ -228,16 +251,14 @@ export function MeasurementPanel(props: Props) {
             </span>
           </div>
         )}
-        {!props.onEditPositions && (
-          <button
-            className="measure-icon-button"
-            aria-label="측정 위치 지우기"
-            title="측정 위치 지우기"
-            onClick={props.onReset}
-          >
-            <RotateCcw size={16} />
-          </button>
-        )}
+        <button
+          className="measure-icon-button"
+          aria-label="측정 위치 지우기"
+          data-tooltip="측정 위치 지우기"
+          onClick={props.onReset}
+        >
+          <RotateCcw size={16} />
+        </button>
         {isolated && (
           <span className="isolation-state">
             <Unplug size={15} />
@@ -245,60 +266,59 @@ export function MeasurementPanel(props: Props) {
           </span>
         )}
       </div>
-      {props.onEditPositions && (
-        <button className="measure-edit-positions" onClick={props.onEditPositions}>
-          2D에서 위치 변경
-        </button>
-      )}
-      <div className={`measure-result${ready ? ' ready' : ''}`}>
-        <output aria-label="측정값" aria-live="polite">
-          {kind === 'resistance' && resistance?.status === 'open'
-            ? '∞ Ω'
-            : formatQuantity(
-                reading,
-                unit,
-                quantityFormatForTargets(
-                  doc,
-                  kind === 'current' ? [measuredTarget?.id ?? ''] : [red, black],
-                ),
-              )}
-        </output>
-        <button
-          className="record-reading"
-          aria-label="측정값 기록"
-          title="측정값 기록"
-          disabled={!ready}
-          onClick={record}
-        >
-          <Plus size={15} />
-          {message === '측정값을 기록했어요.' ? '기록됨' : '기록'}
-        </button>
+      <div className="measure-readout">
+        <div className="measure-lcd">
+          <span className="measure-lcd-caption">
+            {kind === 'voltage' ? '전압' : kind === 'current' ? '전류' : '저항'}
+          </span>
+          <output aria-label="측정값" aria-live="polite" aria-atomic="true">
+            <span
+              className="measure-lcd-value"
+              style={{
+                fontSize: `clamp(18px, calc((100cqi - 34px) / ${Math.max(1, displayValue.length * 0.62)}), 46px)`,
+              }}
+            >
+              {displayValue}
+            </span>{' '}
+            <span className="measure-lcd-unit">{displayUnit}</span>
+          </output>
+        </div>
+        <div className="measure-record-row" role="group" aria-label="측정 기록과 도구 종료">
+          <span className="measure-record-label">기록</span>
+          <button
+            className="record-reading"
+            aria-label="측정값 기록"
+            data-tooltip="측정값 기록"
+            disabled={!ready}
+            onClick={record}
+          >
+            <Plus size={14} />
+            {message === '측정값을 기록했어요.' ? '완료' : '추가'}
+          </button>
+          {recordsToggle}
+          <button
+            className="measure-exit"
+            onClick={props.onExit}
+            aria-label="도구 종료"
+            data-tooltip="도구 종료 · Esc"
+          >
+            <Power size={16} />
+          </button>
+        </div>
       </div>
       <span className="measurement-sr-only" role="status">
         {message}
       </span>
-      <button className="measure-exit" onClick={props.onExit} title="도구 종료 · Esc">
-        <X size={15} />
-        도구 종료
-      </button>
       {enabled && diagnostics.length > 0 && (
         <div className="measure-diagnostics" role="status">
           <Diagnostics items={diagnostics} />
         </div>
       )}
     </div>
-  );
-  const recordsToggle = (
+  ) : null;
+  const recordsFooter = (
     <>
-      <button
-        className="notebook-toggle"
-        aria-expanded={showNotebook}
-        aria-controls="measurement-notebook"
-        onClick={() => onPanel(showNotebook ? null : 'records')}
-      >
-        <NotebookPen size={15} />
-        기록 보기 {entries.length}
-      </button>
+      {!enabled && recordsToggle}
       {storageWarning && !showNotebook && (
         <p className="record-storage-warning" role="status">
           {storageWarning}
@@ -316,7 +336,7 @@ export function MeasurementPanel(props: Props) {
           {createPortal(
             <>
               {!compact && measurementConsole}
-              {recordsToggle}
+              {recordsFooter}
             </>,
             props.consoleHost,
           )}
@@ -325,7 +345,7 @@ export function MeasurementPanel(props: Props) {
       ) : (
         <>
           {measurementConsole}
-          {recordsToggle}
+          {recordsFooter}
         </>
       )}
       <div className="measure-circuit">{props.children}</div>

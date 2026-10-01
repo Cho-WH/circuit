@@ -10,7 +10,8 @@ import { MeasurementLayer, type MeasurementAnchor } from '../src/app/measurement
 import { layoutExample } from '../src/app/examples';
 import { examples } from '../src/fixtures';
 import { loadMeasurementNotebook } from '../src/persistence';
-import { probeCurrent } from '../src/measurement';
+import { formatQuantity } from '../src/quantity';
+import { probeCurrent, probeVoltage } from '../src/measurement';
 import { anchorPose } from '../src/app/measurement-tools';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
@@ -18,9 +19,19 @@ import type { CircuitDocument } from '../src/domain';
 const document = JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document as CircuitDocument;
 const compilation = compileCircuit(document), result = solveCircuit(compilation.circuit);
 const noop = () => {};
+function voltageProps(red: string, black: string) {
+  const voltageReading = probeVoltage(compilation, result, red ? { kind: 'terminal', id: red } : null, black ? { kind: 'terminal', id: black } : null);
+  return { voltageReading, voltageLabel: formatQuantity(voltageReading.ok ? voltageReading.value.voltageV : undefined, 'V') };
+}
+
 const canvasProps: CanvasProps = {document,selected:[],tool:'probe',placement:null,onSelect:noop,onMove:noop,onPlace:noop,onEndpoint:noop,onWire:noop,onValue:noop,onSwitch:noop,onBackground:noop};
 function panel(red:string,black:string) {
-  return renderToStaticMarkup(createElement(MeasurementPanel, {document,compilation,result,active:true,kind:'voltage',enabled:true,isolated:false,onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red',onActiveProbe:noop,anchors:{red:{kind:'endpoint',id:'R1.a',endpointKind:'terminal'},black:{kind:'endpoint',id:'R1.b',endpointKind:'terminal'},current:null},currentReading:{ok:false,diagnostics:[]},onReset:noop,onSwap:noop,children:null}));
+  return renderToStaticMarkup(createElement(MeasurementPanel, {document,compilation,...voltageProps(red,black),active:true,kind:'voltage',enabled:true,isolated:false,onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red',onActiveProbe:noop,anchors:{red:{kind:'endpoint',id:'R1.a',endpointKind:'terminal'},black:{kind:'endpoint',id:'R1.b',endpointKind:'terminal'},current:null},currentReading:{ok:false,diagnostics:[]},onReset:noop,onSwap:noop,children:null}));
+}
+function outputText(html:string) {
+  const host=globalThis.document.createElement('div');
+  host.innerHTML=html;
+  return host.querySelector('output')?.textContent;
 }
 describe('measurement workspace',()=>{
   beforeEach(()=>localStorage.clear());
@@ -81,12 +92,12 @@ describe('measurement workspace',()=>{
   });
   it('keeps recording disabled until both voltage probes are connected',()=>{
     const html=panel('R1.a','');
-    expect(html).toMatch(/<output[^>]*>— V<\/output>/);
+    expect(outputText(html)).toBe('— V');
     expect(html).toMatch(/<button[^>]*aria-label="측정값 기록"[^>]*disabled/);
   });
   it('shows the signed physical reading in the prominent result for either probe order',()=>{
-    expect(panel('R1.a','R1.b')).toMatch(/<output[^>]*>3 V<\/output>/);
-    expect(panel('R1.b','R1.a')).toMatch(/<output[^>]*>-3 V<\/output>/);
+    expect(outputText(panel('R1.a','R1.b'))).toBe('3 V');
+    expect(outputText(panel('R1.b','R1.a'))).toBe('-3 V');
   });
   it.each(['voltage', 'resistance', 'current'] as const)('restores exact %s wire positions after recording and remount', (kind) => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -102,7 +113,7 @@ describe('measurement workspace',()=>{
     };
     const expected = kind === 'current' ? {red:null,black:null,current:anchors.current} : {red:anchors.red,black:anchors.black,current:null};
     const positions = Object.entries(expected).filter(([, anchor]) => anchor).map(([tool, anchor]) => [tool, anchorPose(doc, anchor)!.point] as const);
-    const render = () => root.render(createElement(MeasurementPanel, {document:doc,compilation,result,active:true,kind,enabled:true,isolated:kind==='resistance',onExit:noop,panel:'records',onPanel:noop,red:'V1.p',black:'R1.b',activeProbe:'red',onActiveProbe:noop,anchors,currentReading:probeCurrent(doc,compilation,result,{kind:'wire',id:'W1'}),onReset:noop,onSwap:noop,children:null}));
+    const render = () => root.render(createElement(MeasurementPanel, {document:doc,compilation,...voltageProps('V1.p','R1.b'),active:true,kind,enabled:true,isolated:kind==='resistance',onExit:noop,panel:'records',onPanel:noop,red:'V1.p',black:'R1.b',activeProbe:'red',onActiveProbe:noop,anchors,currentReading:probeCurrent(doc,compilation,result,{kind:'wire',id:'W1'}),onReset:noop,onSwap:noop,children:null}));
     try {
       act(render);
       act(() => host.querySelector<HTMLButtonElement>('[aria-label="측정값 기록"]')!.click());
@@ -125,7 +136,7 @@ describe('measurement workspace',()=>{
     let root=createRoot(host);
     let panelState: import('../src/app/AnalysisTools').AnalysisPanel = null;
     const onPanel=(next: typeof panelState)=>{panelState=next;render(true);};
-    const render=(active:boolean)=>root.render(createElement(MeasurementPanel,{document,compilation,result,active,kind:'voltage',enabled:true,isolated:false,onExit:noop,panel:panelState,onPanel,red:'R1.a',black:'R1.b',activeProbe:'red',onActiveProbe:noop,anchors:{red:{kind:'endpoint',id:'R1.a',endpointKind:'terminal'},black:{kind:'endpoint',id:'R1.b',endpointKind:'terminal'},current:null},currentReading:{ok:false,diagnostics:[]},onReset:noop,onSwap:noop,children:null}));
+    const render=(active:boolean)=>root.render(createElement(MeasurementPanel,{document,compilation,...voltageProps('R1.a','R1.b'),active,kind:'voltage',enabled:true,isolated:false,onExit:noop,panel:panelState,onPanel,red:'R1.a',black:'R1.b',activeProbe:'red',onActiveProbe:noop,anchors:{red:{kind:'endpoint',id:'R1.a',endpointKind:'terminal'},black:{kind:'endpoint',id:'R1.b',endpointKind:'terminal'},current:null},currentReading:{ok:false,diagnostics:[]},onReset:noop,onSwap:noop,children:null}));
     try {
       act(()=>render(true));
       const notebook=host.querySelector<HTMLElement>('[aria-label="측정표"]')!;

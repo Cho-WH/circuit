@@ -128,7 +128,7 @@ export function QuantityDisplaySelect({
         type="button"
         className="quantity-apply-all"
         onClick={onApplyAll}
-        title="현재 표시 방식을 모든 부품에 적용"
+        data-tooltip="현재 표시 방식을 모든 부품에 적용"
       >
         전체 적용
       </button>

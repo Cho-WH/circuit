@@ -37,6 +37,23 @@ afterEach(() => {
 });
 
 describe('committed circuit session', () => {
+  it('groups live values and preserves the final value for redo', () => {
+    const doc = emptyDocument('live');
+    doc.components = [createComponent('resistive-load', 'VR1', { x: 100, y: 100 })];
+    saveLocal(doc); render('analysis');
+    const gesture = {};
+    act(() => {
+      for (const value of [12, 20, 40]) session.execute({ type: 'SetProperties', id: 'VR1', properties: { resistanceOhm: value } }, gesture);
+    });
+    expect(session.history.past).toHaveLength(1);
+    expect(session.history.present.components[0].properties.resistanceOhm).toBe(40);
+    act(() => session.undo());
+    expect(session.history.present.components[0].properties.resistanceOhm).toBe(10);
+    act(() => session.redo());
+    expect(session.history.present.components[0].properties.resistanceOhm).toBe(40);
+    act(() => session.execute({ type: 'SetProperties', id: 'VR1', properties: { resistanceOhm: 50 } }, {}));
+    expect(session.history.past).toHaveLength(2);
+  });
   it('keeps consecutive edits in one event and undoes a batch as one step', () => {
     render();
     act(() => {

@@ -18,7 +18,8 @@ export type WorkspaceMode = 'build' | 'analysis' | 'worksheet';
 
 function allowedInMode(document: CircuitDocument, mode: WorkspaceMode, command: Command) {
   if (command.type === 'ReplaceDocument') return true;
-  if (mode === 'analysis') return ['SetProperties', 'SetLabel', 'SetReference'].includes(command.type);
+  if (mode === 'analysis')
+    return ['SetProperties', 'SetLabel', 'SetReference'].includes(command.type);
   if (mode !== 'worksheet') return true;
   switch (command.type) {
     case 'SetProperties':
@@ -47,6 +48,8 @@ export function useCircuitSession(mode: WorkspaceMode) {
     return createHistory(saved?.ok ? saved.document : layoutExample(examples[1].document));
   });
   const current = useRef(history);
+  const group = useRef<{ token: object; base: History; past: History['past'] } | null>(null);
+  const [documentEpoch, setDocumentEpoch] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed'>('saving');
 
   function publish(next: History) {
@@ -54,7 +57,7 @@ export function useCircuitSession(mode: WorkspaceMode) {
     setHistory(next);
   }
 
-  function execute(command: Command | readonly Command[]): ExecuteCommandResult {
+  function execute(command: Command | readonly Command[], token?: object): ExecuteCommandResult {
     const commands: readonly Command[] = 'type' in command ? [command] : command;
     const denied = commands.find((item) => !allowedInMode(current.current.present, mode, item));
     if (denied)
@@ -66,7 +69,21 @@ export function useCircuitSession(mode: WorkspaceMode) {
       'type' in command
         ? executeCommand(current.current, command)
         : executeCommands(current.current, command);
-    if (result.ok) publish(result.history);
+    if (result.ok) {
+      if (token && group.current?.token !== token)
+        group.current = { token, base: current.current, past: result.history.past };
+      if (!token) group.current = null;
+      if (group.current) {
+        const base = group.current.base;
+        result.history =
+          JSON.stringify(base.present) === JSON.stringify(result.history.present)
+            ? base
+            : { ...result.history, past: group.current.past };
+      }
+      if (commands.some((item) => item.type === 'ReplaceDocument'))
+        setDocumentEpoch((value) => value + 1);
+      publish(result.history);
+    }
     return result;
   }
 
@@ -105,13 +122,16 @@ export function useCircuitSession(mode: WorkspaceMode) {
 
   return {
     history,
+    documentEpoch,
     saveStatus,
     execute,
     placeComponent,
     undo: () => {
+      group.current = null;
       publish(undo(current.current));
     },
     redo: () => {
+      group.current = null;
       publish(redo(current.current));
     },
   };

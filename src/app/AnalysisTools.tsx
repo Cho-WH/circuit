@@ -27,7 +27,7 @@ export function AnalysisTools({
             key={value}
             className={`component-tile${kind === value ? ' chosen' : ''}`}
             aria-pressed={kind === value}
-            onClick={() => onChoose(kind === value ? null : value)}
+            onClick={() => onChoose(kind === value && !threeDimensional ? null : value)}
           >
             <span className="tile-symbol">
               {value === 'current' ? (

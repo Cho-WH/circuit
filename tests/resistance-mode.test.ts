@@ -8,6 +8,8 @@ import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { createComponent } from '../src/component-library';
 import { layoutExample } from '../src/app/examples';
+import { probeVoltage } from '../src/measurement';
+import { formatQuantity } from '../src/quantity';
 import { MeasurementPanel } from '../src/app/MeasurementPanel';
 import { CircuitCanvas, type CanvasProps } from '../src/app/CircuitCanvas';
 import type { CircuitDocument } from '../src/domain';
@@ -16,9 +18,15 @@ const noop=()=>{};
 const example=(id:string)=>layoutExample(examples.find(e=>e.id===id)!.document);
 function props(document:CircuitDocument,red:string,black:string,kind:'voltage'|'resistance'='resistance') {
   const compilation=compileCircuit(document);
-  return {document,compilation,result:solveCircuit(compilation.circuit),active:true,kind,enabled:true,isolated:kind==='resistance',onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red' as const,onActiveProbe:noop,anchors:{red:null,black:null,current:null},currentReading:{ok:false as const,diagnostics:[]},onReset:noop,onSwap:noop,children:null};
+  const voltageReading = probeVoltage(compilation, solveCircuit(compilation.circuit), red ? { kind: 'terminal', id: red } : null, black ? { kind: 'terminal', id: black } : null);
+  const voltageLabel = formatQuantity(voltageReading.ok ? voltageReading.value.voltageV : undefined, 'V');
+  return {document,compilation,voltageReading,voltageLabel,active:true,kind,enabled:true,isolated:kind==='resistance',onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red' as const,onActiveProbe:noop,anchors:{red:null,black:null,current:null},currentReading:{ok:false as const,diagnostics:[]},onReset:noop,onSwap:noop,children:null};
 }
-const reading=(doc:CircuitDocument,a:string,b:string)=>renderToStaticMarkup(createElement(MeasurementPanel,props(doc,a,b))).match(/<output[^>]*>(.*?)<\/output>/)?.[1];
+function reading(doc:CircuitDocument,a:string,b:string,kind:'voltage'|'resistance'='resistance') {
+  const host=globalThis.document.createElement('div');
+  host.innerHTML=renderToStaticMarkup(createElement(MeasurementPanel,props(doc,a,b,kind)));
+  return host.querySelector('output')?.textContent;
+}
 describe('resistance mode source disconnection',()=>{
   it('reads 3 Ω, 6 Ω and 9 Ω in series without changing the circuit or voltage readings',()=>{
     const doc=example('FIX-02'),before=JSON.stringify(doc);
@@ -27,7 +35,7 @@ describe('resistance mode source disconnection',()=>{
     expect(reading(doc,'V1.p','V1.n')).toBe('9 Ω');
     expect(reading(doc,'R1.b','R1.a')).toBe('3 Ω');
     expect(JSON.stringify(doc)).toBe(before);
-    expect(renderToStaticMarkup(createElement(MeasurementPanel,props(doc,'V1.p','V1.n','voltage')))).toMatch(/<output[^>]*>9 V<\/output>/);
+    expect(reading(doc,'V1.p','V1.n','voltage')).toBe('9 V');
   });
   it('retains parallel paths instead of reporting a component property',()=>{
     const doc=example('FIX-03');

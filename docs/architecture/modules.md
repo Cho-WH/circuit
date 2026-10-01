@@ -1,5 +1,9 @@
 # 모듈 구성과 공개 계약
 
+## 정확 연산으로의 전환 기준 (채택·구현 대기)
+
+[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 채택했다. 아래 공개 함수와 모듈 책임은 재사용하며, 물리 number 계약을 정확 유리수로 전환한다. domain은 최소 타입·저장 계약을, 독립적인 순수 유리수 모듈은 연산을, quantity는 단위 입력·표시를 담당한다. domain이 유리수 구현에 역으로 의존하지 않게 한다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 화면용 변환은 visualization/quantity 경계에서 수행한다. 현재 코드·v4 저장 타입은 아직 전환 전이다.
+
 ## 모듈 책임
 
 | 모듈 | 책임 | 금지되는 결합 |
@@ -129,3 +133,17 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 `component-library.endpointName`과 `wireName`은 사용자용 위치 이름의 공통 경계다. 단자 방향·연결된 부품으로 설명하고 저장 ID는 사용자 이름의 대체값으로 사용하지 않는다. 연결 관계는 명시된 도선에서만 읽으며 좌표는 화면의 단자 방향 표현에만 사용한다.
 
 전압 측정의 3D 입력은 `Potential3DProps.voltageMeasurement?: VoltageMeasurement`이다. App이 기존 측정 API와 탐침 위치 모델로 만든 빨강/검정 point·endpointId 및 포맷된 측정값을 넘긴다. 3D는 공통 PotentialModel의 높이와 카메라로 투영하며 계산·측정 기록을 소유하지 않는다. [ADR-006](../../decisions/ADR-006-threejs-integration.md)
+
+## 연속 값 조절
+
+component-library.adjustableParameter는 부품의 조절 속성·범위·단위를 제공한다. app/parameters는 재사용 가능한 값 조절 UI·프레임 갱신·자동 왕복과 기존 analyze를 통한 비교 축척 계산을 맡는다. useCircuitSession.execute의 선택적 조작 토큰으로 연속 명령을 한 실행 취소 단위로 묶는다. 새 전원장치의 속성 정의가 추가되면 같은 조절 경로를 사용할 수 있다. potential-3d/primitives는 선·튜브·점 자원을 유지해 계산값 변경 시 좌표와 표시 속성을 갱신한다. 자세한 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다.
+
+
+### 만들기·2D 분석·3D 분석의 공통 처리
+
+- App의 `setSelection`은 요소 선택·net 강조·이전 hover 정리를 함께 처리한다. 캔버스의 측정/경로 도구 해석은 `selectElement`에 두고, 상세 설정·부품 배치·진단 위치 선택은 같은 상태 갱신 함수를 사용한다. 화면 모드 전환 시 유효한 선택을 보존하는 필터는 별도다.
+- `app/component-value.parseComponentValue`는 회로 위 편집·상세 설정·실시간 조절기의 단위 해석, 음의 저항 및 범위 검사, 분수 보존을 공유한다. 입력 초안과 적용 동작은 각 UI가 소유한다. 범위만 편집했을 때의 현재값 보정도 같은 함수에서 처리한다.
+- App은 유효한 탐침 위치로 전압 측정 결과·표시 문자열을 한 번 준비해 MeasurementPanel과 3D 높이 차 표지에 전달한다. 기록도 이 결과를 사용한다. 3D는 위치 투영만 수행한다.
+- SVG와 Three.js의 히트 판정·좌표 투영·시야 조작은 각각의 어댑터에 둔다. 공통화 대상은 사용자 동작의 의미와 상태/명령 처리이며 렌더러 자체를 합치지 않는다.
+
+단자·전위 표지의 일반 선택은 공통 `selectNet`을 사용한다. 2D는 단자 ID로 net을 찾고, 3D는 렌더링에 사용한 net ID를 `onSelectNet`으로 전달한다. 대표 부품·도선으로 대상을 바꾸지 않는다.

@@ -94,6 +94,16 @@ export function validateDocument(input: unknown): DocumentValidation {
   const ids = new Set<string>();
   const diagnostics: Diagnostic[] = [];
   const endpoints = new Map<string, EndpointRef['kind']>();
+  for (const c of doc.components) {
+    if (c.type !== 'resistive-load') continue;
+    const { resistanceMinOhm: min, resistanceMaxOhm: max, resistanceOhm: value } = c.properties;
+    // Optional v4 extension: old documents retain their exact electrical values.
+    if (min === undefined && max === undefined) continue;
+    if (typeof min !== 'number' || typeof max !== 'number' || typeof value !== 'number' ||
+        !Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(value) ||
+        min <= 0 || max <= min || value < min || value > max)
+      diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'resistanceRange' }));
+  }
   for (const item of [...doc.components, ...doc.components.flatMap(c => c.terminals), ...doc.wires, ...doc.junctions, ...doc.annotations]) {
     if (ids.has(item.id)) diagnostics.push(diagnostic('DUPLICATE_ID', [item.id]));
     ids.add(item.id);

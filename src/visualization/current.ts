@@ -26,6 +26,8 @@ export interface CurrentDisplay {
   scaleAmperes: number;
   widthScale: number;
   paused: boolean;
+  /** An ongoing parameter gesture or automatic sweep; independent of flow playback. */
+  changing?: boolean;
 }
 export function buildCurrentModel(
   document: CircuitDocument,

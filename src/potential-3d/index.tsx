@@ -10,7 +10,8 @@ import { buildCurrentPaths, type CurrentDisplay, type PotentialModel } from '../
 import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
 import { createHorizontalAttraction } from './camera-snap';
-import { htmlNotation, terminalPosition } from '../component-library';
+import { adjustableParameter, componentValue, htmlNotation, terminalPosition } from '../component-library';
+import { beginPrimitives, endPrimitives, line, tube, dot } from './primitives';
 import { exportSvg } from '../export';
 import { sceneAnchors, sceneExtent, selectedVoltage, obliqueDirection, projectedSize, sceneBounds, automaticHeight, fitPotentialHeight, minorVoltageTicks } from './model';
 import { createVoltageMeasurementOverlay, type VoltageMeasurement } from './voltage-measurement';
@@ -24,6 +25,7 @@ export interface Potential3DProps {
   document: CircuitDocument;
   potential: PotentialModel;
   heightMultiplier?: number;
+  heightRange?: { min: number; max: number };
   referenceLabel: string;
   selectedIds: string[];
   highlightedId?: string | null;
@@ -32,7 +34,8 @@ export interface Potential3DProps {
   showColors: boolean;
   currentDisplay?: CurrentDisplay;
   voltageMeasurement?: VoltageMeasurement;
-  onSelect?: (id: string) => void;
+  onSelect?: (id: string | null) => void;
+  onSelectNet?: (netId: string) => void;
   sourceView?: { x: number; y: number; width: number; height: number };
   entryDuration?: number;
   onReady?: () => void;
@@ -74,21 +77,6 @@ function dispose(group: THREE.Object3D) {
     const materials = mesh.material ? Array.isArray(mesh.material) ? mesh.material : [mesh.material] : [];
     materials.forEach(material => { (material as THREE.MeshBasicMaterial).map?.dispose(); material.dispose(); });
   });
-}
-function line(group: THREE.Group, points: THREE.Vector3[], color: string, dashed = false, opacity = 1) {
-  const material = dashed ? new THREE.LineDashedMaterial({ color, dashSize: 4, gapSize: 4, transparent: true, opacity }) : new THREE.LineBasicMaterial({ color, transparent: true, opacity });
-  const object = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material);
-  if (dashed) object.computeLineDistances();
-  group.add(object);
-  return object;
-}
-function tube(group: THREE.Group, a: THREE.Vector3, b: THREE.Vector3, color: string, radius: number, id: string, visible = true) {
-  if (a.distanceTo(b) < .001) return;
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, a.distanceTo(b), 8), new THREE.MeshBasicMaterial({ color, transparent:!visible, opacity:visible?1:0, depthWrite:visible }));
-  mesh.position.copy(a).add(b).multiplyScalar(.5);
-  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
-  mesh.userData.id = id;
-  group.add(mesh);
 }
 function projection(r: Runtime) {
   const aspect = r.width / Math.max(r.height, 1);
@@ -158,7 +146,7 @@ export function Potential3D(props: Potential3DProps) {
   const { document: circuit, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors, heightMultiplier = 1 } = props;
   const [heightTarget, setHeightTarget] = useState<{ height: number } | null>(null);
   const resetRequested = useRef(false);
-  const potential = useMemo(() => heightTarget ? fitPotentialHeight(props.potential, heightTarget.height, heightMultiplier) : props.potential, [props.potential, heightTarget, heightMultiplier]);
+  const potential = useMemo(() => heightTarget ? fitPotentialHeight(props.potential, heightTarget.height, heightMultiplier, props.heightRange) : props.potential, [props.potential, heightTarget, heightMultiplier, props.heightRange]);
   const host = useRef<HTMLDivElement>(null), overlay = useRef<HTMLDivElement>(null);
   const currentHost = useRef<HTMLDivElement>(null), voltageHost = useRef<HTMLDivElement>(null);
   const latestPotential = useRef(potential); latestPotential.current = potential;
@@ -169,7 +157,6 @@ export function Potential3D(props: Potential3DProps) {
   const [fallback, setFallback] = useState(false);
   const [preset, setPreset] = useState<Preset>('oblique');
   const [guides, setGuides] = useState(true);
-  const selection = props.voltageMeasurement ? null : selectedVoltage(circuit, potential, selectedIds[0]);
 
   useEffect(() => {
     const element = host.current;
@@ -203,7 +190,7 @@ export function Potential3D(props: Potential3DProps) {
       }
       r.voltageOverlay?.update(latest.current.voltageMeasurement, latestPotential.current, camera, r.width, r.height, r.progress);
       const hostRect = element.getBoundingClientRect();
-      const occupied = [...(element.closest('.potential-scene')?.querySelectorAll('.scene-toolbar,.scene-footer,.scene-selection,.voltage-reading,.voltage-probe') ?? [])].map(item => {
+      const occupied = [...(element.closest('.potential-scene')?.querySelectorAll('.scene-toolbar,.scene-footer,.voltage-reading,.voltage-probe') ?? [])].map(item => {
         const rect = item.getBoundingClientRect();
         return { x: rect.left - hostRect.left, y: rect.top - hostRect.top, w: rect.width, h: rect.height };
       });
@@ -281,10 +268,11 @@ export function Potential3D(props: Potential3DProps) {
     controls.addEventListener('start', interrupt);
     controls.addEventListener('end', endInteraction);
     const pointers = new Set<number>();
-    let start: { id:number; x: number; y: number; moved:boolean; label:string|null } | null = null;
+    let start: { id:number; x: number; y: number; moved:boolean; label:string|null; net:string|null } | null = null;
     const down = (event: PointerEvent) => {
       pointers.add(event.pointerId);
-      start=pointers.size===1&&event.button===0?{id:event.pointerId,x:event.clientX,y:event.clientY,moved:false,label:(event.target as Element).closest('[data-selection-id]')?.getAttribute('data-selection-id')??null}:null;
+      const target = (event.target as Element).closest('[data-selection-id],[data-selection-net]');
+      start=pointers.size===1&&event.button===0?{id:event.pointerId,x:event.clientX,y:event.clientY,moved:false,label:target?.getAttribute('data-selection-id')??null,net:target?.getAttribute('data-selection-net')??null}:null;
     };
     const move = (event:PointerEvent) => {if(start?.id===event.pointerId&&Math.hypot(event.clientX-start.x,event.clientY-start.y)>5)start.moved=true;};
     const cancel = (event:PointerEvent) => {pointers.delete(event.pointerId);start=null;attract=null;};
@@ -292,17 +280,18 @@ export function Potential3D(props: Potential3DProps) {
     const up = (event: PointerEvent) => {
       pointers.delete(event.pointerId);
       if (!start || start.id!==event.pointerId || start.moved || pointers.size || Math.hypot(event.clientX-start.x,event.clientY-start.y)>5) { start = null; return; }
-      const label=start.label;start = null;
+      const {label,net}=start;start = null;
+      if(net){latest.current.onSelectNet?.(net);return;}
       if(label){latest.current.onSelect?.(label);return;}
       const rect = renderer.domElement.getBoundingClientRect();
       const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);
-      const hit = ray.intersectObjects(r.raised.children,true).find(hit => typeof hit.object.userData.id === 'string');
-      if (hit) latest.current.onSelect?.(hit.object.userData.id);
+      const hit = ray.intersectObjects(r.raised.children,true).find(hit => typeof hit.object.userData.netId === 'string' || typeof hit.object.userData.id === 'string');
+      if (hit?.object.userData.netId) latest.current.onSelectNet?.(hit.object.userData.netId);
+      else if (hit) latest.current.onSelect?.(hit.object.userData.id);
       else {
         const hitPoint = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,0,1),0),new THREE.Vector3());
-        if (!hitPoint) return;
-        const candidate = latest.current.document.components.find(c => Math.hypot(c.position.x-hitPoint.x,c.position.y+hitPoint.y)<40);
-        if (candidate) latest.current.onSelect?.(candidate.id);
+        const candidate = hitPoint ? latest.current.document.components.find(c => Math.hypot(c.position.x-hitPoint.x,c.position.y+hitPoint.y)<40) : undefined;
+        latest.current.onSelect?.(candidate?.id ?? null);
       }
     };
     const lost = (event: Event) => { event.preventDefault(); r.stop(); controls.enabled = false; setFallback(true); latest.current.onError?.('context-lost'); };
@@ -316,14 +305,22 @@ export function Potential3D(props: Potential3DProps) {
     };
   }, []);
 
+  // Adjustable values are shown with their raised component label. Keep the floor
+  // texture independent of those values while retaining shared exported symbols.
+  const schematicKey = JSON.stringify({ ...circuit, components: circuit.components.map(c => {
+    const parameter = adjustableParameter(c);
+    return parameter ? { ...c, properties: { ...c.properties, [parameter.property]: parameter.min, [parameter.property + 'Fraction']: '' } } : c;
+  }) });
   // Regenerate a transparent schematic from the document and the same shared symbols as 2D/export.
   useEffect(() => {
     const r = runtime.current; if (!r) return;
     let cancelled = false;
     r.floorReady = false;
-    const schematic = { ...circuit, components: circuit.components.map(c => ({ ...c, properties: { ...c.properties, showVoltage: false, showCurrent: false } })) };
+    const schematic: CircuitDocument = JSON.parse(schematicKey);
     const svg = exportSvg(schematic, { quantityFormat, background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 });
     const root = new DOMParser().parseFromString(svg,'image/svg+xml').documentElement;
+    const adjustableIds = new Set(schematic.components.filter(c => adjustableParameter(c)).map(c => c.id));
+    root.querySelectorAll('[data-output-part="value"]').forEach(node => { if (adjustableIds.has(node.getAttribute('data-output-id')!)) node.remove(); });
     const [x,y,width,height] = root.getAttribute('viewBox')!.split(' ').map(Number);
     // Rasterize the vector source at the texture's actual pixel size, not its CSS size.
     const maxSide = Math.min(4096, r.renderer.capabilities.maxTextureSize);
@@ -354,23 +351,22 @@ export function Potential3D(props: Potential3DProps) {
     const fontReady = fonts ? fonts.load('18px "Libertinus Math"') : Promise.resolve([]);
     fontReady.then(() => { if (!cancelled) image.src = url; }).catch(() => { if (!cancelled) latest.current.onError?.('font'); });
     return () => { cancelled = true; image.onload = null; image.onerror = null; URL.revokeObjectURL(url); };
-  }, [circuit,quantityFormat]);
+  }, [schematicKey,quantityFormat]);
 
   useEffect(() => {
     const r = runtime.current, labelHost = overlay.current; if (!r || !labelHost || !heightTarget) return;
-    r.stop(); r.scene.remove(r.content); dispose(r.content);
-    r.content = new THREE.Group(); r.raised = new THREE.Group(); r.content.add(r.raised); r.scene.add(r.content);
+    beginPrimitives(r.content); beginPrimitives(r.raised);
     // Preserve DOM identity (including keyboard focus) across scale and display changes.
     // Recreating buttons makes the browser animate their first position from the origin.
     const existingLabels = new Map(r.labels.map(label => [label.key, label]));
     const nextLabels: Label[] = [];
-    const extent = sceneExtent(circuit,potential), f = extent.floor;
+    const extent = sceneExtent(circuit,potential,props.heightRange), f = extent.floor;
     r.bounds.copy(sceneBounds(extent));
     const radius = Math.max(.9, Math.max(f.width,f.height)*.0035);
-    const addLabel = (key: string, text: string, p: THREE.Vector3, className: string, lifted = false, priority = 1, id?: string) => {
-      if (props.voltageMeasurement) id = undefined;
+    const addLabel = (key: string, text: string, p: THREE.Vector3, className: string, lifted = false, priority = 1, id?: string, netId?: string) => {
+      if (props.voltageMeasurement) netId = undefined;
       const previous = existingLabels.get(key);
-      const tag = id ? 'button' : 'span';
+      const tag = id || netId ? 'button' : 'span';
       const reusable = previous?.element.localName === tag ? previous : undefined;
       const element = reusable?.element ?? window.document.createElement(tag);
       if (!reusable) {
@@ -384,7 +380,16 @@ export function Potential3D(props: Potential3DProps) {
       if (!reusable || reusable.text !== text) {
         if(className==='component-tag'){element.setAttribute('aria-label',text);element.innerHTML=htmlNotation(text,true);}else element.textContent=text;
       }
-      if (id) { element.setAttribute('type','button'); element.setAttribute('data-selection-id',id); element.setAttribute('aria-label',`${text} 선택`); element.onclick = e => { if(e.detail===0)latest.current.onSelect?.(id); }; }
+      element.removeAttribute('data-selection-id'); element.removeAttribute('data-selection-net');
+      if (id || netId) {
+        element.setAttribute('type','button');
+        element.setAttribute(netId ? 'data-selection-net' : 'data-selection-id', (netId ?? id)!);
+        element.setAttribute('aria-label',`${text} ${netId ? '연결된 지점 선택' : '선택'}`);
+        element.onclick = e => { if(e.detail===0) {
+          if(netId) latest.current.onSelectNet?.(netId);
+          else latest.current.onSelect?.(id!);
+        } };
+      }
       existingLabels.delete(key);
       nextLabels.push({key,text,element,point:p,lifted,priority});
     };
@@ -426,26 +431,21 @@ export function Potential3D(props: Potential3DProps) {
     }
     for (const anchor of sceneAnchors(circuit,potential)) {
       const net = potential.nets[anchor.id];
-      const owner = net.wireIds[0] ?? circuit.components.find(c=>c.terminals.some(t=>net.endpointIds.includes(t.id)))?.id;
       const pos = point(anchor);
       if (guides && anchor.z!==0) line(r.raised,[new THREE.Vector3(pos.x,pos.y,0),pos],'#929d88',true,.65);
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(radius*2,12,8),new THREE.MeshBasicMaterial({color:showColors?anchor.color:'#667060'}));
-      dot.position.copy(pos); if(owner) dot.userData.id=owner; r.raised.add(dot);
-      if(props.currentDisplay) { dot.material.transparent=true; dot.material.opacity=0; dot.material.depthWrite=false; }
-      if(showNumbers) addLabel(`net:${anchor.id}`,formatQuantity(anchor.voltage,'V'),pos,'net-tag',true,3,owner);
+      dot(r.raised, pos, showColors ? anchor.color : '#667060', radius*2, undefined, !props.currentDisplay, net.netId);
+      if(showNumbers) addLabel(`net:${anchor.id}`,formatQuantity(anchor.voltage,'V'),pos,'net-tag',true,3,undefined,net.netId);
     }
     // All terminals remain visible, including the two disconnected ends of an open switch.
     for (const c of circuit.components) for (let i=0;i<c.terminals.length;i++) {
       const net=potential.endpoints[c.terminals[i].id], p=terminalPosition(c,i);
       if(net?.height===undefined) continue;
-      const dot=new THREE.Mesh(new THREE.SphereGeometry(radius*1.3,8,6),new THREE.MeshBasicMaterial({color:showColors?net.color:'#667060'}));
-      dot.position.copy(point({...p,z:net.height})); dot.userData.id=c.id; r.raised.add(dot);
-      if(props.currentDisplay) { dot.material.transparent=true; dot.material.opacity=0; dot.material.depthWrite=false; }
+      dot(r.raised, point({...p,z:net.height}), showColors ? net.color : '#667060', radius*1.3, undefined, !props.currentDisplay, net.netId);
     }
     for (const c of circuit.components) {
       const ends = c.terminals.slice(0,2).map(t=>potential.endpoints[t.id]?.height);
       const z = ends.length===2 && ends.every(v=>v!==undefined) ? (ends[0]!+ends[1]!)/2 : 0;
-      addLabel(`component:${c.id}`,c.label,point({...c.position,z}),'component-tag',true,2,c.id);
+      addLabel(`component:${c.id}`,adjustableParameter(c) ? `${c.label} = ${componentValue(c, quantityFormat)}` : c.label,point({...c.position,z}),'component-tag',true,2,c.id);
     }
     const selected = props.voltageMeasurement ? null : selectedVoltage(circuit,potential,selectedIds[0]);
     if(selected) {
@@ -458,11 +458,12 @@ export function Potential3D(props: Potential3DProps) {
     }
     for (const label of existingLabels.values()) label.element.remove();
     r.labels = nextLabels;
+    endPrimitives(r.content); endPrimitives(r.raised);
     r.modelReady = true;
     if (!r.ready) r.begin();
     else if (resetRequested.current) { resetRequested.current = false; moveCamera(r, 'oblique', true); }
     else r.render();
-  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay),Boolean(props.voltageMeasurement)]);
+  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay),Boolean(props.voltageMeasurement),props.heightRange]);
 
   useEffect(() => {
     const r = runtime.current;
@@ -488,6 +489,5 @@ export function Potential3D(props: Potential3DProps) {
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
     <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number(heightMultiplier.toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
-    {showNumbers&&selection&&<div className="scene-selection" aria-live="polite"><strong className="notation" aria-label={selection.component.label} dangerouslySetInnerHTML={{__html:htmlNotation(selection.component.label,true)}}/><span>{formatQuantity(selection.a.voltage,'V')} <span aria-hidden="true">→</span> {formatQuantity(selection.b.voltage,'V')}</span><b>양단 전압 {formatSIQuantity(selection.difference,'V',quantityFormatFor(selection.component.properties))}</b><small>단자 순서 기준 · 경사는 양단 전위 차이의 도식입니다.</small></div>}
   </section>;
 }

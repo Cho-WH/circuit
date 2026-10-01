@@ -5,7 +5,7 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 ## 상태
 
 - `proposed`: 검토 중
-- `accepted`: 현재 적용
+- `accepted`: 채택된 기준. 구현 완료 여부는 [현재 현황](../docs/implementation/current-phase.md)에서 별도로 관리한다.
 - `superseded`: 다른 ADR로 대체
 - `rejected`: 채택하지 않음
 
@@ -35,3 +35,5 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-020](ADR-020-current-visualization.md) | 전류의 물리량과 표시용 움직임 분리 | accepted | 전류 시각화 개선 |
 | [ADR-021](ADR-021-analysis-workspace.md) | 시각화와 측정의 분석 화면 통합 | accepted | 분석 UX 1차 통합 |
 | [ADR-022](ADR-022-measurement-notebook.md) | 비교를 위한 측정표와 별도 로컬 기록 | accepted | 측정 기록 UX 개선 |
+| [ADR-023](ADR-023-live-parameters.md) | 가변저항 조절과 연속 갱신 | accepted | 가변저항 학습 조작 |
+| [ADR-024](ADR-024-exact-dc-arithmetic.md) | 선형 직류 회로의 정확 유리수 연산 | accepted | 명세 확정·구현 대기 |

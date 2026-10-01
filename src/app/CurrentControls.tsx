@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pause, Play } from 'lucide-react';
+import { PlaybackButton } from './PlaybackButton';
 import type { CircuitDocument } from '../domain';
 import { endpointName, wireName } from '../component-library';
 import type { CurrentDisplay, CurrentModel } from '../visualization';
@@ -7,12 +7,12 @@ import { formatQuantity } from '../quantity';
 import { Notation } from './Notation';
 import './current-controls.css';
 
-export function useCurrentDisplay(model: CurrentModel) {
+export function useCurrentDisplay(model: CurrentModel, scaleAmperes = model.maxMagnitude || 1, changing = false) {
   const [paused, setPaused] = useState(false);
   const [widthScale, setWidthScale] = useState(1);
   const display: CurrentDisplay = useMemo(
-    () => ({ model, scaleAmperes: model.maxMagnitude || 1, widthScale, paused }),
-    [model, widthScale, paused],
+    () => ({ model, scaleAmperes, widthScale, paused, changing }),
+    [model, scaleAmperes, widthScale, paused, changing],
   );
   return { display, setPaused, setWidthScale };
 }
@@ -24,19 +24,8 @@ export function CurrentControls({
   paused: boolean;
   onPause: (paused: boolean) => void;
 }) {
-  const label = paused ? '흐름 재생' : '흐름 일시 정지';
-  return (
-    <button
-      type="button"
-      className="current-pause"
-      aria-label={label}
-      title={label}
-      aria-pressed={paused}
-      onClick={() => onPause(!paused)}
-    >
-      {paused ? <Play size={16} /> : <Pause size={16} />}
-    </button>
-  );
+  return <PlaybackButton className="current-pause" paused={paused}
+    playLabel="흐름 재생" pauseLabel="흐름 일시 정지" onToggle={() => onPause(!paused)} />;
 }
 
 /** Detailed values share the existing settings panel, leaving the canvas uncluttered. */

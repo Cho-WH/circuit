@@ -78,6 +78,65 @@ describe('workspace transitions and file actions', () => {
     }
   });
 
+  it('edits the variable resistor range in build and reuses its saved limits in analysis', async () => {
+    const doc = layoutExample(examples.find(e => e.id === 'FIX-02')!.document);
+    const variable = doc.components.find(c => c.id === 'R1')!;
+    variable.type = 'resistive-load';
+    variable.properties = { resistanceOhm: 3, resistanceMinOhm: 1, resistanceMaxOhm: 10 };
+    saveLocal(doc);
+    await act(async () => root.render(createElement(App)));
+    await act(async () => host.querySelector('[data-component-id="R1"] .component')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    const input = (selector: string) => host.querySelector<HTMLInputElement>(selector)!;
+    async function fill(selector: string, value: string) {
+      await act(async () => {
+        const element = input(selector);
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(element, value);
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+    await click('이름·값');
+    expect(input('#inline-component-value').value).toBe('3');
+    await fill('.inline-value-editor [aria-label="저항값 최솟값"]', '5');
+    await fill('.inline-value-editor [aria-label="저항값 최댓값"]', '2');
+    await click('적용');
+    expect(host.querySelector('.inline-value-editor [role="alert"]')).not.toBeNull();
+    await click('취소');
+    await click('이름·값');
+    expect(input('.inline-value-editor [aria-label="저항값 최솟값"]').value).toBe('1');
+    await fill('#inline-component-name', '조절 저항');
+    await fill('.inline-value-editor [aria-label="저항값 최솟값"]', '5');
+    await fill('.inline-value-editor [aria-label="저항값 최댓값"]', '2k');
+    await fill('#inline-component-value', '3000');
+    await click('적용');
+    expect(host.querySelector('.inline-value-editor [role="alert"]')?.textContent).toContain('범위');
+    await fill('#inline-component-value', '15');
+    await click('적용');
+    expect(host.querySelector('[data-value-id="R1"]')?.textContent).toBe('15 Ω');
+    await click('실행 취소');
+    expect(host.querySelector('[data-component-id="R1"] .component')?.getAttribute('aria-label')).toBe(variable.label + ' 3 Ω');
+    await click('다시 실행');
+    await click('상세 설정');
+    expect(input('.inspector-panel input[aria-label="조절 저항 값"]').value).toBe('15');
+    await fill('.inspector-panel input[aria-label="조절 저항 값"]', '12');
+    await act(async () => input('.inspector-panel input[aria-label="조절 저항 값"]')
+      .closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    expect(input('.inspector-panel [aria-label="저항값 최댓값"]').value).toBe('2000');
+    await fill('.inspector-panel [aria-label="저항값 최댓값"]', '20');
+    await act(async () => input('.inspector-panel [aria-label="저항값 최댓값"]')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    await click('분석하기');
+    const slider = input('.parameter-slider');
+    expect(slider.getAttribute('aria-valuemin')).toBe('5');
+    expect(slider.getAttribute('aria-valuemax')).toBe('20');
+    expect(slider.getAttribute('aria-valuenow')).toBe('12');
+    expect(host.querySelector('[data-value-id="R1"]')?.textContent).toBe('12 Ω');
+    await fill('.parameter-slider', '1000');
+    await act(async () => slider.dispatchEvent(new Event('pointerup', { bubbles: true })));
+    expect(slider.getAttribute('aria-valuenow')).toBe('20');
+    expect(host.querySelector('[data-value-id="R1"]')?.textContent).toBe('20 Ω');
+  });
+
   it('toggles a switch immediately while preserving the name draft and independent undo',async()=>{
     const doc=layoutExample(examples.find(e=>e.document.components.some(c=>c.type==='switch'))!.document);
     const item=doc.components.find(c=>c.type==='switch')!;item.properties.state='open';saveLocal(doc);

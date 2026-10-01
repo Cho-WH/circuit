@@ -1,0 +1,33 @@
+.playback-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.playback-button:hover {
+  background: #eeeee7;
+  color: var(--ink);
+}
+.playback-button[aria-pressed='true'] {
+  background: #e9eee3;
+  color: var(--accent);
+}
+.playback-button.with-label {
+  width: auto;
+  gap: 6px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+@media (pointer: coarse) {
+  .playback-button {
+    width: 44px;
+    height: 44px;
+  }
+}

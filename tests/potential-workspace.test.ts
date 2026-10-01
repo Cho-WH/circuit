@@ -19,13 +19,22 @@ beforeEach(() => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host); observed.props = null;
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
-async function render(active = true, doc = circuit) {
+async function render(active = true, doc = circuit, sceneIdentity?: string) {
   const compiled = compileCircuit(doc).circuit;
-  await act(async () => root.render(createElement(PotentialWorkspace, { active, document: doc, potential: buildPotentialModel(doc, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V1.n', onReturnTo2D: vi.fn(), children: createElement('button', { 'data-2d': true }, '회로') })));
+  await act(async () => root.render(createElement(PotentialWorkspace, { active, sceneIdentity, document: doc, potential: buildPotentialModel(doc, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V1.n', onReturnTo2D: vi.fn(), children: createElement('button', { 'data-2d': true }, '회로') })));
 }
 const status = () => host.querySelector('.potential-workspace')!.getAttribute('data-status');
 const twoD = () => host.querySelector<HTMLElement>('.potential-workspace-2d')!;
 describe('3D workspace resource lifecycle', () => {
+  it('keeps a ready scene mounted across value changes and resets on circuit replacement', async () => {
+    await render(true, circuit, 'session-1');
+    await act(async () => { observed.props!.onReady!(); observed.props!.onEntered!(); });
+    const scene = host.querySelector('[data-scene]');
+    const changed = structuredClone(circuit); changed.components.find(c => c.id === 'R1')!.properties.resistanceOhm = 6;
+    await render(true, changed, 'session-1');
+    expect(status()).toBe('ready'); expect(host.querySelector('[data-scene]')).toBe(scene);
+    await render(true, changed, 'session-2'); expect(status()).toBe('preparing');
+  });
   it('retains the actual 2D canvas while resources are delayed and reveals only a completed first render', async () => {
     await render(); const canvas = host.querySelector('[data-2d]');
     expect(status()).toBe('preparing'); expect(twoD().style.visibility).toBe('visible');

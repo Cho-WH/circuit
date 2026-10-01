@@ -7,15 +7,18 @@ import {
   componentValueInput,
   componentNotationLayout,
   componentValue,
+  adjustableParameter,
   notationMetrics,
 } from '../component-library';
-import { parseQuantity } from '../quantity';
+import { parseComponentValue } from './component-value';
 import { Notation } from './Notation';
+import { ParameterRangeInputs, parseParameterRange, type ParameterRange } from './parameters';
 
 export interface ComponentEdit {
   label: string;
   value?: number;
   fraction?: string;
+  range?: ParameterRange;
 }
 interface Props {
   component: ComponentInstance;
@@ -23,6 +26,7 @@ interface Props {
   viewport: { width: number; height: number };
   drawingScale: number;
   labelScale: number;
+  editParameterRange?: boolean;
   onCommit?: (id: string, edit: ComponentEdit) => boolean;
   onClose: () => void;
   onToggleSwitch?: () => boolean;
@@ -34,23 +38,27 @@ export function InlineComponentEditor({
   viewport,
   drawingScale,
   labelScale,
+  editParameterRange = false,
   onCommit,
   onToggleSwitch,
   onClose: closeEditor,
 }: Props) {
   const editingDefinition = componentDefinitions[editingComponent.type];
+  const parameter = adjustableParameter(editingComponent);
+  const editingRange = editParameterRange && parameter;
   const [editing, setEditing] = useState(() => ({
     id: editingComponent.id,
     label: editingComponent.label,
     draft: componentValueInput(editingComponent),
     error: '',
+    range: { min: String(parameter?.min ?? ''), max: String(parameter?.max ?? '') },
   }));
   const inlineInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inlineInput.current?.focus({ preventScroll: true });
     inlineInput.current?.select();
   }, []);
-  const editorHeight = editing.error ? 240 : 186;
+  const editorHeight = (editingRange ? 292 : 186) + (editing.error ? 54 : 0);
   const editLayout = componentNotationLayout(
     editingComponent,
     editingComponent.label,
@@ -91,19 +99,24 @@ export function InlineComponentEditor({
           setEditing({ ...editing, error: '이름을 1~160자로 입력하세요.' });
           return;
         }
-        const parsed = editingDefinition.property
-          ? parseQuantity(editing.draft, editingDefinition.unit)
+        const editedRange = editingRange
+          ? parseParameterRange(editing.range, editingRange)
           : undefined;
-        if (editingDefinition.property && !parsed) {
-          setEditing({
-            ...editing,
-            error: `유효한 ${editingDefinition.unit === 'Ω' ? '0 이상 저항' : '전압'}을 입력하세요.`,
-          });
+        if (editingRange && !editedRange) {
+          setEditing({ ...editing, error: '0 < 최솟값 < 최댓값으로 입력하세요.' });
+          return;
+        }
+        const parsed = editingDefinition.property
+          ? parseComponentValue(editingComponent, editing.draft, editedRange ?? undefined)
+          : undefined;
+        if (parsed && !parsed.ok) {
+          setEditing({ ...editing, error: parsed.error });
           return;
         }
         if (
           onCommit?.(editing.id, {
             label,
+            ...(editedRange ? { range: editedRange } : {}),
             ...(parsed
               ? { value: parsed.value, ...(parsed.fraction ? { fraction: parsed.fraction } : {}) }
               : {}),
@@ -127,6 +140,17 @@ export function InlineComponentEditor({
           <Notation symbol text={editing.label} />
         </span>
       </div>
+      {editingRange && (
+        <>
+          <label>{editingRange.label} 범위</label>
+          <ParameterRangeInputs
+            parameter={editingRange}
+            draft={editing.range}
+            invalid={!!editing.error}
+            onChange={(range) => setEditing({ ...editing, range, error: '' })}
+          />
+        </>
+      )}
       {editingDefinition.property && (
         <>
           <label htmlFor="inline-component-value">
@@ -146,10 +170,24 @@ export function InlineComponentEditor({
           </div>
         </>
       )}
-      {editingComponent.type === 'switch' && <>
-        <label htmlFor="inline-switch-state">상태</label>
-        <div><SwitchStateButton id="inline-switch-state" closed={editingComponent.properties.state==='closed'} onToggle={()=>{const applied=onToggleSwitch?.();setEditing(current=>({...current,error:applied?'':'이 회로에서는 스위치 상태를 바꿀 수 없습니다.'}));}}/></div>
-      </>}
+      {editingComponent.type === 'switch' && (
+        <>
+          <label htmlFor="inline-switch-state">상태</label>
+          <div>
+            <SwitchStateButton
+              id="inline-switch-state"
+              closed={editingComponent.properties.state === 'closed'}
+              onToggle={() => {
+                const applied = onToggleSwitch?.();
+                setEditing((current) => ({
+                  ...current,
+                  error: applied ? '' : '이 회로에서는 스위치 상태를 바꿀 수 없습니다.',
+                }));
+              }}
+            />
+          </div>
+        </>
+      )}
       <div className="inline-edit-actions">
         <button className="primary" type="submit">
           적용

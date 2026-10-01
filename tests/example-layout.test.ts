@@ -9,12 +9,12 @@ import { solveCircuit } from '../src/simulation';
 describe('curated learning circuit layouts', () => {
   it('uses subscript notation for numbered names while preserving connection IDs',()=>{
     for(const example of examples)for(const component of example.document.components){
-      expect(component.label).toBe(component.id.replace(/^([A-Za-z]+)(\d+)$/, '$1_$2'));
+      expect(component.label).toMatch(component.type === 'resistive-load' ? /^VR_\d+$/ : /^[A-Za-z]+_\d+$/);
       expect(component.id).not.toContain('_');
     }
   });
-  it('offers seven learning examples without diagnostic or connection exercises', () => {
-    expect(examples.map(example => example.id)).toEqual(['FIX-01', 'FIX-02', 'FIX-03', 'FIX-04', 'FIX-05', 'FIX-09', 'FIX-10']);
+  it('offers nine learning examples without diagnostic or connection exercises', () => {
+    expect(examples.map(example => example.id)).toEqual(['FIX-01', 'FIX-02', 'FIX-03', 'FIX-04', 'FIX-05', 'FIX-11', 'FIX-12', 'FIX-09', 'FIX-10']);
   });
 
   it.each(examples)('$id preserves electrical meaning and leaves the fixture untouched', example => {

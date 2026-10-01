@@ -25,8 +25,8 @@ export function automaticHeight(document: CircuitDocument, potential: PotentialM
   return Math.min(span.y, flatFit / .75 - span.y) / verticalProjection;
 }
 /** Rescale display geometry while preserving voltages, colors and endpoint/net identity. */
-export function fitPotentialHeight(potential: PotentialModel, height: number, multiplier: number): PotentialModel {
-  const ticks = voltageTicks(Object.values(potential.nets).flatMap(n => n.voltage === undefined ? [] : [n.voltage - potential.referenceVoltage]));
+export function fitPotentialHeight(potential: PotentialModel, height: number, multiplier: number, range?: { min: number; max: number }): PotentialModel {
+  const ticks = voltageTicks(range ? [range.min, range.max] : Object.values(potential.nets).flatMap(n => n.voltage === undefined ? [] : [n.voltage - potential.referenceVoltage]));
   const span = Math.max(...ticks) - Math.min(...ticks);
   const scale = span > 0 ? height / span * multiplier : 1;
   const ratio = scale / potential.scale;
@@ -71,9 +71,9 @@ export function sceneAnchors(document: CircuitDocument, potential: PotentialMode
   });
 }
 
-export function sceneExtent(document: CircuitDocument, potential: PotentialModel) {
+export function sceneExtent(document: CircuitDocument, potential: PotentialModel, range?: { min: number; max: number }) {
   const floor = documentBounds(document, 65);
-  const ticks = voltageTicks(Object.values(potential.nets).flatMap(n => n.voltage === undefined ? [] : [n.voltage - potential.referenceVoltage]));
+  const ticks = voltageTicks(range ? [range.min, range.max] : Object.values(potential.nets).flatMap(n => n.voltage === undefined ? [] : [n.voltage - potential.referenceVoltage]));
   return { floor, ticks, minZ: Math.min(0, ...ticks) * potential.scale, maxZ: Math.max(0, ...ticks) * potential.scale };
 }
 
