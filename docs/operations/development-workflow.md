@@ -46,13 +46,15 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 
 현재 동작은 해당 규약 문서에, 검증 대응표는 검증 문서에 한 번만 정리한다. 작업 추적에는 최종 결과·중요한 실패 원인·검증 범위만 남기고 중간 대화·역할 분담·반복 실행 로그를 쌓지 않는다. 완료된 검토 원문은 Git 이력으로 대체할 수 있지만 미완료 구현 후보와 수용 검사는 [남은 작업](../implementation/follow-up.md)과 [사용성 검증](../testing/usability.md)에 먼저 보존한다.
 
+로컬과 GitHub Actions의 공통 검증 진입점은 `npm run verify`다. 모듈 경계 검사 → TypeScript 테스트(명세·문서 링크 포함) → 타입 검사와 빌드를 한 번씩 실행한다. 변경 범위를 확인할 때는 아래 개별 명령을 사용할 수 있다.
+
 | 대상 | 명령·확인 |
 |---|---|
 | 기능 변경 | `npm test -- tests/<관련 파일>.test.ts`, 변경에 맞는 실제 조작 확인 |
 | 타입 | `npm run typecheck`. 같은 상태에서 `npm run build`를 실행하면 타입 검사가 포함됨 |
-| 모듈 의존 | `npm run check:boundaries` 또는 해당 검사가 포함된 명세 테스트 |
-| 요구사항·스키마·fixture | `python -m pip install -r requirements.txt` 후 `python tools/validate_specs.py` |
-| 문서 정리만 변경 | 변경한 링크·앵커와 삭제 문서의 남은 참조 확인. 코드 테스트·빌드 생략 |
+| 모듈 의존 | `npm run check:boundaries` |
+| 요구사항·스키마·fixture | `npm test -- tests/specifications.test.ts` |
+| 문서 정리만 변경 | `npm test -- tests/document-links.test.ts`; 변경한 앵커는 별도 확인 |
 | 배포 산출물 | `npm run build`; Pages 경로는 `GITHUB_PAGES=true` 적용 |
 
 계산 변경은 관련 fixture·물리 불변식, 편집 변경은 실행 취소·다시 실행, 출력 변경은 실제 SVG·PNG를 확인한다. 실제 사용자·기기 검증과 자동화·브라우저 크기 검증을 구분해 기록한다. 새 요청 전까지 메인이 직접 구현·검증하며 예전 에이전트 분담은 이력에만 남긴다.
@@ -81,7 +83,7 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 
 GitHub Pages + Actions로 `codex/mvp`의 검증된 `dist`를 게시한다. URL은 https://cho-wh.github.io/circuit/ 이다. `GITHUB_PAGES=true`는 배포 빌드에만 적용한다. `github-pages` 환경은 이 브랜치만 허용하고 deploy job에만 `pages: write`, `id-token: write`를 부여한다. 빌드 검증 실패 시 배포 job을 실행하지 않는다. 단계 6의 학생 활동·공유 서버 기능과 별개인 현재 정적 MVP의 게시다.
 
-`codex/mvp` push 또는 수동 실행 시 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 명세 검증 → 모듈 경계 → `npm test` → Java 21 준비 → `npm run test:firestore` → `npm run build`(타입 포함)를 수행한다. 일반 테스트에서 건너뛴 Firestore 규칙 검사는 이 별도 에뮬레이터 단계에서 실행한다. 모든 검사가 성공한 산출물만 Pages에 업로드·배포한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**를 사용한다. 게시 브랜치를 바꿀 때 push 대상·build 조건·github-pages 환경의 허용 브랜치를 함께 바꾼다.
+`codex/mvp` push 또는 수동 실행 시 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 `npm run verify`(GITHUB_PAGES=true) → Java 21 준비 → `npm run test:firestore`를 수행한다. Verify 워크플로는 다른 브랜치의 push와 모든 PR에서 같은 `npm run verify`를 실행한다. 배포 브랜치 push는 Pages 워크플로에서만 검증하며 PR의 병합 결과 검증은 유지한다. 일반 테스트에서 건너뛴 Firestore 규칙 검사는 이 별도 에뮬레이터 단계에서 실행한다. 모든 검사가 성공한 산출물만 Pages에 업로드·배포한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**를 사용한다. 게시 브랜치를 바꿀 때 push 대상·Verify의 제외 브랜치·build 조건·github-pages 환경의 허용 브랜치를 함께 바꾼다.
 
 배포 빌드는 `/circuit/`, 로컬 개발은 `/` 경로다. 빌드 결과만 업로드하며 소스·테스트·브라우저 저장 데이터는 배포하지 않는다. 다른 기기로 회로를 옮길 때는 JSON을 사용한다.
 

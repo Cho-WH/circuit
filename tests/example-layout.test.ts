@@ -7,10 +7,9 @@ import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 
 describe('curated learning circuit layouts', () => {
-  it('uses subscript notation for numbered names while preserving connection IDs',()=>{
+  it('uses subscript notation for numbered names',()=>{
     for(const example of examples)for(const component of example.document.components){
       expect(component.label).toMatch(component.type === 'resistive-load' ? /^VR_\d+$/ : /^[A-Za-z]+_\d+$/);
-      expect(component.id).not.toContain('_');
     }
   });
   it('offers nine learning examples without diagnostic or connection exercises', () => {

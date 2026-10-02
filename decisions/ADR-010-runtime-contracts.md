@@ -18,3 +18,8 @@
 ## 가변저항 범위 검사 (2026-10-01)
 
 [ADR-023](ADR-023-live-parameters.md)의 선택적 저항 범위 속성은 v5 정확값 필드다. 범위가 명시되면 양수·순서·현재값 포함을 구조 검증 뒤 검사한다. 범위가 생략된 현재 문서에는 기본 범위를 사용한다.
+
+
+## 검증 진입점 통합 (2026-10-02)
+
+로컬·검증 CI·배포 CI는 package.json의 `npm run verify`를 공유한다. 명세 검증은 기존 TypeScript/Vitest 테스트와 공통 JSON Schema를 사용하고, 문서 ID·연결 참조는 앱의 공개 `domain.validateDocument`로 검사한다. Python의 중복 검증 및 전용 의존성은 제거하고 고유했던 저장소 Markdown 링크 검사만 TypeScript 테스트로 옮긴다. 링크 검사는 로컬 파일 존재와 저장소 경계만 확인하며 외부 URL·문서 내 앵커 검증은 범위 밖이다. 배포의 Firestore 에뮬레이터 검사는 기존 별도 명령을 유지한다.

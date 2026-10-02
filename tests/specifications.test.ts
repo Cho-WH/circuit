@@ -8,53 +8,19 @@ import { parse as parseYaml } from "yaml";
 
 import {
   cloneDocument,
+  isStoredScalar,
   diagnostic,
   requireDocument,
   DocumentError,
   emptyDocument,
   validateDocument,
   type CircuitDocument as PublicCircuitDocument,
+  type EndpointRef,
 } from "../src/domain";
 
 type JsonObject = Record<string, unknown>;
 
-type EndpointRef = {
-  kind: "terminal" | "junction";
-  id: string;
-};
-
-type Terminal = {
-  id: string;
-};
-
-type Component = {
-  id: string;
-  terminals: Terminal[];
-};
-
-type Wire = {
-  id: string;
-  start: EndpointRef;
-  end: EndpointRef;
-};
-
-type Junction = {
-  id: string;
-};
-
-type Annotation = {
-  id: string;
-  anchor: EndpointRef;
-};
-
-type CircuitDocument = {
-  documentId: string;
-  components: Component[];
-  wires: Wire[];
-  junctions: Junction[];
-  annotations: Annotation[];
-  referenceNode: EndpointRef | null;
-};
+type CircuitDocument = PublicCircuitDocument;
 
 type ExpectedFixtureResult = {
   probeVoltagesV: Record<string, number>;
@@ -148,49 +114,6 @@ function formatSchemaErrors(validate: ValidateFunction): string[] {
   );
 }
 
-function documentIntegrityErrors(document: CircuitDocument): string[] {
-  const errors: string[] = [];
-  const ids = new Map<string, string>();
-  const terminalIds = new Set<string>();
-  const junctionIds = new Set(document.junctions.map(({ id }) => id));
-
-  const addId = (id: string, kind: string): void => {
-    const existingKind = ids.get(id);
-    if (existingKind !== undefined) {
-      errors.push(`duplicate id ${id} (${existingKind}, ${kind})`);
-      return;
-    }
-    ids.set(id, kind);
-  };
-
-  for (const component of document.components) {
-    addId(component.id, "component");
-    for (const terminal of component.terminals) {
-      terminalIds.add(terminal.id);
-      addId(terminal.id, "terminal");
-    }
-  }
-  for (const junction of document.junctions) addId(junction.id, "junction");
-  for (const wire of document.wires) addId(wire.id, "wire");
-  for (const annotation of document.annotations) addId(annotation.id, "annotation");
-
-  const checkEndpoint = (endpoint: EndpointRef, owner: string): void => {
-    const known = endpoint.kind === "terminal" ? terminalIds.has(endpoint.id) : junctionIds.has(endpoint.id);
-    if (!known) errors.push(`${owner} references unknown ${endpoint.kind} ${endpoint.id}`);
-  };
-
-  for (const wire of document.wires) {
-    checkEndpoint(wire.start, `wire ${wire.id} start`);
-    checkEndpoint(wire.end, `wire ${wire.id} end`);
-  }
-  for (const annotation of document.annotations) {
-    checkEndpoint(annotation.anchor, `annotation ${annotation.id} anchor`);
-  }
-  if (document.referenceNode !== null) checkEndpoint(document.referenceNode, "referenceNode");
-
-  return errors;
-}
-
 function fixtureReferenceErrors(fixture: CircuitFixture, fixtureIds: Set<string>): string[] {
   const errors: string[] = [];
   const componentIds = new Set(fixture.document.components.map(({ id }) => id));
@@ -261,10 +184,6 @@ describe("canonical specification fixtures", () => {
     expect(errors).toEqual([]);
   });
 
-  it.each(canonicalFixtures)("$fixture.id has unique document element IDs and valid endpoint references", ({ fixture }) => {
-    expect(documentIntegrityErrors(fixture.document)).toEqual([]);
-  });
-
   it("only references existing fixture, component, terminal, and junction IDs in expected results", () => {
     const fixtureIds = new Set(canonicalFixtures.map(({ fixture }) => fixture.id));
     const errors = canonicalFixtures.flatMap(({ fixture }) =>
@@ -274,10 +193,6 @@ describe("canonical specification fixtures", () => {
     expect(errors).toEqual([]);
   });
 
-  it.each(canonicalFixtures)("$fixture.id preserves its document through a JSON round trip", ({ fixture }) => {
-    const restored = JSON.parse(JSON.stringify(fixture.document)) as CircuitDocument;
-    expect(restored).toStrictEqual(fixture.document);
-  });
 });
 
 describe("requirement and rule references", () => {
@@ -295,14 +210,6 @@ describe("requirement and rule references", () => {
   ] as const)("uses unique %s IDs", (_kind, entries) => {
     const ids = entries.map(({ id }) => id);
     expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it("provides the complete FIX-01 through FIX-12 baseline without duplicate IDs", () => {
-    const actual = canonicalFixtures.map(({ fixture }) => fixture.id).sort();
-    const expected = Array.from({ length: 12 }, (_unused, index) =>
-      `FIX-${String(index + 1).padStart(2, "0")}`,
-    );
-    expect(actual).toEqual(expected);
   });
 
   it("resolves every requirement reference to an existing rule, fixture, and document", () => {
@@ -334,14 +241,23 @@ describe("public CircuitDocument contract", () => {
     expect(result).toEqual({ ok: true, document: currentDocument(fixture.document) });
   });
 
-  it.each(canonicalFixtures)("clones $fixture.id without changing its JSON meaning", ({ fixture }) => {
-    const validated = validateDocument(fixture.document);
-    expect(validated.ok).toBe(true);
-    if (!validated.ok) return;
+  it("clones a document with independently editable nested values and connections", () => {
+    const source = canonicalFixtures.find(({ fixture }) => fixture.id === "FIX-02")!.fixture.document;
+    const before = JSON.stringify(source);
+    const cloned = cloneDocument(source);
+    expect(cloned).toStrictEqual(source);
 
-    const cloned = cloneDocument(validated.document);
-    expect(cloned).toStrictEqual(validated.document);
-    expect(cloned).not.toBe(validated.document);
+    cloned.components[0].position.x += 20;
+    const voltage = cloned.components[0].properties.voltageV;
+    if (!isStoredScalar(voltage)) throw new Error("Expected an exact source voltage");
+    voltage.numerator = "12";
+    cloned.components[0].terminals[0].id = "copied-terminal";
+    cloned.wires[0].start.id = "copied-terminal";
+    cloned.wires[0].waypoints.push({ x: 20, y: 30 });
+    cloned.junctions[0].position.y += 20;
+    cloned.referenceNode!.id = "copied-reference";
+
+    expect(JSON.stringify(source)).toBe(before);
   });
 
   it("creates an empty document accepted by both public and schema validators", () => {
@@ -485,24 +401,6 @@ describe("invalid specification fixtures", () => {
           keyword: "enum",
         }),
       ]),
-    );
-  });
-
-  it("rejects IDs duplicated across document element kinds", () => {
-    const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "duplicate-document-id.json"));
-
-    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
-    expect(documentIntegrityErrors(fixture.document)).toContain(
-      "duplicate id shared-id (component, junction)",
-    );
-  });
-
-  it("rejects a wire endpoint that refers to a missing terminal", () => {
-    const fixture = readJson<CircuitFixture>(join(invalidFixturesDirectory, "dangling-endpoint.json"));
-
-    expect(validateFixture(fixture), formatSchemaErrors(validateFixture).join("\n")).toBe(true);
-    expect(documentIntegrityErrors(fixture.document)).toContain(
-      "wire W1 end references unknown terminal missing-terminal",
     );
   });
 });

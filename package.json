@@ -13,6 +13,7 @@
     "format": "prettier --write",
     "format:check": "prettier --check",
     "test": "vitest run",
+    "verify": "npm run check:boundaries && npm test && npm run build",
     "test:firestore": "npx -y firebase-tools@latest emulators:exec --only firestore --project demo-circuit-feedback \"node tools/test-feedback-firestore.mjs\"",
     "check:boundaries": "node tools/check-boundaries.mjs"
   },

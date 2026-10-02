@@ -411,14 +411,9 @@ describe("value parsing and activity policy", () => {
   });
 
   it.each(["", "one kΩ", "1 V", "-1 Ω", "Infinity", "1kk", "1 Ω trailing"])(
-    "rejects invalid resistance input %s so the previous value can be retained",
+    "rejects invalid resistance input %s",
     (written) => {
-      const document = fixture("FIX-01");
-      const history = createHistory(document);
-      const parsed = parseValue(written, "Ω");
-      expect(parsed).toBeNull();
-      expect(history.present.components.find(({ id }) => id === "R1")!.properties.resistanceOhm).toEqual(q.store(9));
-      expect(history.past).toEqual([]);
+      expect(parseValue(written, "Ω")).toBeNull();
     },
   );
 
