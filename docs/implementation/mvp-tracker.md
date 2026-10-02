@@ -454,3 +454,10 @@
 - 기록 v4는 quality와 approximation을 검증·보존한다. 원시 CSV 메타데이터와 사용자용 표/복사 ≈도 유지한다. 회로 v5는 유지하며 이전 기록 지원은 추가하지 않았다.
 - 검증: 전체 751개 통과 / Firestore 에뮬레이터 24개 제외, production build, 114개 파일 모듈 경계. bounded-dc 테스트에서 예산·결정론·정확 기준해·스케일·불안정/범위·기록 왕복 및 공통 표시를 확인했다. 부하 재검증과 30,030회 반복 결과는 [보고서](../testing/exact-dc-performance.md) 참조.
 - 미확인: 실제 저사양/모바일, 브라우저 라이브 UI. 기존 큰 청크 빌드 경고는 유지. 커밋·푸시는 수행하지 않았다.
+
+
+## 2026-10-02 — CI 명세 검증의 이전 스키마 참조 제거
+
+- e125d50의 검증·배포가 Python 명세 검증 단계에서 함께 실패했다. tools/validate_specs.py가 삭제된 circuit-document-v1.schema.json을 읽던 잔여 호환 분기가 원인이었다.
+- fixture 검증에 현재 circuit-document.schema.json만 적용하도록 수정했다. 이전 스키마나 호환 경로는 복원하지 않았다.
+- 실패했던 Python 명세 검사 통과, 현재 fixture 수용·이전 버전 거부를 확인했다. 앱 소스는 변경하지 않아 기존 계산·화면 검증을 활용한다.

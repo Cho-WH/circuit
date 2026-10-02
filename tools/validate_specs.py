@@ -106,10 +106,8 @@ def validate_fixtures() -> list[str]:
     fixture_schema = load_json(ROOT / 'schemas/fixture.schema.json')
 
     validation_schema = deepcopy(fixture_schema)
-    # Original physics fixtures remain v1; both supported formats must validate.
-    validation_schema['properties']['document'] = {
-        'oneOf': [load_json(ROOT / 'schemas/circuit-document-v1.schema.json'), circuit_schema]
-    }
+    # Fixtures use the same current-format contract as the application.
+    validation_schema['properties']['document'] = circuit_schema
     validator = Draft202012Validator(validation_schema)
 
     seen: set[str] = set()
