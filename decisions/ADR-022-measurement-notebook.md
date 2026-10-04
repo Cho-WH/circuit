@@ -18,7 +18,7 @@
 
 MeasurementRecord와 계산 API는 유지한다. persistence의 MeasurementEntry는 기록 ID, MeasurementRecord, 메모, sourcesDisconnected, 전류 기준 방향과 필수 anchors를 담는 별도 저장 항목이다. MeasurementAnchor·MeasurementAnchors는 persistence의 공개 데이터 타입이며 app/measurement-tools가 같은 타입을 재사용한다. 현재 도구에 해당하지 않는 탐침은 null로 기록한다. 위치 참조·도선 구간 범위·비율과 측정 대상의 일치를 로드·저장 시 검증한다. 측정 기록은 현재 해석 결과로 재사용하지 않는다.
 
-로컬 형식은 `{ version: 3, entries: MeasurementEntry[] }`, 키는 `edu-circuit:measurement-notebook:v4`이다. value는 정규형 정수 문자열 쌍이고 포함된 CircuitDocument는 v5다(ADR-024). 사용자 지시에 따라 이전 회로·기록의 변환·호환을 제공하지 않는다. 이전 키를 읽거나 삭제하지 않고 현재 형식의 새 기록부터 저장한다.
+로컬 형식은 `{ version: 4, entries: MeasurementEntry[] }`, 키는 `edu-circuit:measurement-notebook:v4`이다. value는 정규형 정수 문자열 쌍이고 포함된 CircuitDocument는 v5다(ADR-024). ADR-025에 따라 정확·근사 품질과 근사값의 오차 메타데이터를 함께 검증한다. 사용자 지시에 따라 이전 회로·기록의 변환·호환을 제공하지 않는다. 이전 키를 읽거나 삭제하지 않고 현재 형식의 새 기록부터 저장한다.
 
 persistence가 로드·검증·쓰기·유효한 이전 사본을 맡는다. 읽기에 실패하면 저장본을 빈 목록으로 덮어쓰지 않으며 유효한 백업을 우선 복원한다. 쓰기 실패는 메모리 기록을 보존하고 사용자에게 알린다. 같은 브라우저의 작업 기록이며 회로 파일에는 포함하지 않는다. 다른 기기로의 이동은 표 복사/CSV를 사용한다. 다중 탭 병합은 현재 지원하지 않는다.
 

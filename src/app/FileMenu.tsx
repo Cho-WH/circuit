@@ -1,6 +1,6 @@
 import { ActionMenu } from './ActionMenu';
-import { useState } from 'react';
-import { Archive, Check, Download, FolderOpen, Plus, RotateCcw } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Archive, Check, Download, Ellipsis, FolderOpen, Plus, RotateCcw } from 'lucide-react';
 import { loadLocal, saveLocal } from '../persistence';
 import type { CircuitDocument } from '../domain';
 
@@ -11,15 +11,18 @@ interface Props {
   onNew: () => void;
   onRestore: (document: CircuitDocument) => void;
   onNotice: (message: string, kind?: 'status' | 'error') => void;
+  compact?: boolean;
+  extraItems?: (close: (action?: () => void) => void) => ReactNode;
 }
 
 export function FileMenu(props: Props) {
   const [saved, setSaved] = useState(() => loadLocal('manual'));
   const [stored, setStored] = useState(false);
-  return <ActionMenu label="파일" contentLabel="파일 작업" className="file-menu" onOpen={()=>{setSaved(loadLocal('manual'));setStored(false);}}>{close=><>
+  return <ActionMenu label="파일" trigger={props.compact ? <Ellipsis size={19} /> : undefined} contentLabel="파일 작업" className="file-menu" onOpen={()=>{setSaved(loadLocal('manual'));setStored(false);}}>{close=><>
       <button type="button" role="menuitem" onClick={() => close(props.onNew)}><Plus size={17}/>새 회로</button>
       <button type="button" role="menuitem" onClick={() => close(props.onOpen)}><FolderOpen size={17}/>회로 파일 열기</button>
       <button type="button" role="menuitem" onClick={() => close(props.onSave)}><Download size={17}/>회로 파일 저장</button>
+      {props.extraItems?.(close)}
       <hr/>
       <button type="button" role="menuitem" onClick={() => {
         const result = saveLocal(props.document, 'manual');

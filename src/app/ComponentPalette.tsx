@@ -3,7 +3,7 @@ import type { ComponentType } from '../domain';
 import { componentDefinitions, createComponent, symbolMarkup } from '../component-library';
 
 export interface PaletteDrag { type:ComponentType; x:number; y:number; phase:'start'|'move'|'drop'|'cancel' }
-export function ComponentPalette({placement,onChoose,onClear,onDrag,resetKey}:{placement:ComponentType|null;onChoose:(type:ComponentType)=>void;onClear:()=>void;onDrag:(event:PaletteDrag)=>void;resetKey:unknown}) {
+export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},resetKey,tapOnly=false}:{placement:ComponentType|null;onChoose:(type:ComponentType)=>void;onClear:()=>void;onDrag?:(event:PaletteDrag)=>void;resetKey:unknown;tapOnly?:boolean}) {
   const session=useRef<{id:number;type:ComponentType;x:number;y:number;lastX:number;lastY:number;held:boolean;scrolled:boolean;button:HTMLButtonElement;panel:HTMLElement|null;timer:ReturnType<typeof setTimeout>}|null>(null);
   const [held,setHeld]=useState<ComponentType|null>(null);
   const suppress=useRef(false),lastInput=useRef('mouse'),latest=useRef(onDrag);latest.current=onDrag;
@@ -18,11 +18,11 @@ export function ComponentPalette({placement,onChoose,onClear,onDrag,resetKey}:{p
     window.addEventListener('pointerdown',extra,true);window.addEventListener('pointerup',release,true);window.addEventListener('pointercancel',release,true);window.addEventListener('blur',blur);window.addEventListener('resize',cancel);window.addEventListener('keydown',escape);
     return()=>{cancel();window.removeEventListener('pointerdown',extra,true);window.removeEventListener('pointerup',release,true);window.removeEventListener('pointercancel',release,true);window.removeEventListener('blur',blur);window.removeEventListener('resize',cancel);window.removeEventListener('keydown',escape);};
   },[]);
-  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentType[]).map(type=><button key={type} className={`component-tile${placement===type?' chosen':''}${held===type?' is-held':''}`} aria-pressed={placement===type} draggable
+  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentType[]).map(type=><button key={type} className={`component-tile${placement===type?' chosen':''}${held===type?' is-held':''}`} aria-pressed={placement===type} draggable={!tapOnly}
     onDragStart={e=>{if(lastInput.current==='touch'){e.preventDefault();return;}e.dataTransfer.setData('component',type);onChoose(type);}} onDragEnd={onClear}
     onContextMenu={e=>{if(lastInput.current==='touch')e.preventDefault();}}
     onPointerDown={e=>{
-      lastInput.current=e.pointerType;if(e.pointerType!=='touch'){suppress.current=false;return;}if(e.button!==0)return;
+      lastInput.current=e.pointerType;if(tapOnly||e.pointerType!=='touch'){suppress.current=false;return;}if(e.button!==0)return;
       if(blocked.current){suppress.current=true;return;}
       if(session.current){cancel();return;}suppress.current=false;
       const s={id:e.pointerId,type,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,held:false,scrolled:false,button:e.currentTarget,panel:e.currentTarget.closest<HTMLElement>('.library-panel'),timer:0 as unknown as ReturnType<typeof setTimeout>};

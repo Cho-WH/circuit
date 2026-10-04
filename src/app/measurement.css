@@ -12,6 +12,12 @@
 .measure-readout{container:measurement-device / inline-size;width:100%;min-width:0;max-width:300px;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:7px}
 .measure-lcd{container-type:inline-size;padding:12px 13px 9px;border-top:2px solid #bac5a8;border-radius:5px;background:#dce3cc;color:#273a25;box-shadow:inset 0 1px 4px #283a252b}
 .measure-lcd-caption{display:block;font-size:12px;font-weight:500;line-height:1.35}
+.measure-lcd-header{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:19px}
+.measure-lcd-header>.measure-lcd-caption{flex:none}
+.measure-probe-potentials{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;font-size:11px;line-height:1.4;font-variant-numeric:tabular-nums}
+.measure-probe-potential{display:flex;align-items:center;gap:2px;min-width:0;white-space:nowrap}
+.measure-probe-potential>svg{flex:none;transform:rotate(22deg)}
+.measure-probe-potential>span{overflow:hidden;text-overflow:ellipsis}
 .measure-lcd output{display:flex;align-items:baseline;justify-content:flex-end;min-height:60px;gap:8px;font-variant-numeric:tabular-nums;line-height:1.3}
 .measure-lcd-value{min-width:0;overflow-wrap:anywhere;text-align:right;font-family:'Cascadia Mono','SFMono-Regular',Consolas,monospace;font-size:46px;font-weight:500;letter-spacing:-1.5px}
 .measure-lcd-unit{flex:none;min-width:15px;font-size:21px;font-weight:500;line-height:1;white-space:nowrap}

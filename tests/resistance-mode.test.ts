@@ -19,9 +19,10 @@ const noop=()=>{};
 const example=(id:string)=>layoutExample(examples.find(e=>e.id===id)!.document);
 function props(document:CircuitDocument,red:string,black:string,kind:'voltage'|'resistance'='resistance') {
   const compilation=compileCircuit(document);
-  const voltageReading = probeVoltage(compilation, solveCircuit(compilation.circuit), red ? { kind: 'terminal', id: red } : null, black ? { kind: 'terminal', id: black } : null);
+  const result=solveCircuit(compilation.circuit);
+  const voltageReading = probeVoltage(compilation, result, red ? { kind: 'terminal', id: red } : null, black ? { kind: 'terminal', id: black } : null);
   const voltageLabel = formatQuantity(voltageReading.ok ? voltageReading.value.voltageV : undefined, 'V');
-  return {document,compilation,voltageReading,voltageLabel,active:true,kind,enabled:true,isolated:kind==='resistance',onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red' as const,onActiveProbe:noop,anchors:{red:null,black:null,current:null},currentReading:{ok:false as const,diagnostics:[]},onReset:noop,onSwap:noop,children:null};
+  return {document,compilation,result,voltageReading,voltageLabel,active:true,kind,enabled:true,isolated:kind==='resistance',onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red' as const,onActiveProbe:noop,anchors:{red:null,black:null,current:null},currentReading:{ok:false as const,diagnostics:[]},onReset:noop,onSwap:noop,children:null};
 }
 function reading(doc:CircuitDocument,a:string,b:string,kind:'voltage'|'resistance'='resistance') {
   const host=globalThis.document.createElement('div');

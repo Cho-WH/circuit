@@ -1,0 +1,72 @@
+/* One header and one context bar; opening tools never changes the canvas height. */
+.compact-layout.app-shell{height:var(--app-height,100dvh);min-height:0;overflow:hidden;padding-bottom:env(safe-area-inset-bottom)}
+.compact-layout .topbar{height:52px;min-height:52px;flex-wrap:nowrap;padding:0 8px;gap:8px}
+.compact-layout .brand{display:none}
+.compact-layout .document-heading{flex:1;min-width:0;gap:4px}
+.compact-layout .document-heading input{width:100%;max-width:none;font-size:12px}
+.compact-layout .document-heading .save-state{flex:none}
+.compact-layout .document-heading .save-state svg{width:12px;height:12px}
+.compact-layout .modebar{flex:none;height:52px;min-height:52px;padding:0;border:0;gap:0;overflow:visible}
+.compact-layout .mode-tabs{gap:12px;min-height:52px}
+.compact-layout .mode-tabs button{min-height:44px;font-size:12px;padding:0}
+.compact-layout .mode-tabs button svg{display:none}
+.compact-layout .top-actions{margin:0;gap:0;flex:none}
+.compact-layout .file-menu>.floating-panel-trigger{width:44px;height:44px;padding:8px}
+.compact-layout .workspace{position:relative;display:flex;flex-direction:column;flex:1;min-height:0}
+.compact-layout .library-panel{display:none}
+.compact-layout .canvas-column{flex:1;height:auto;min-height:0;overflow:hidden}
+.compact-layout .canvas-stage,.compact-layout .measure-circuit,.compact-layout .potential-workspace{min-height:0}
+.compact-layout .canvas-shell,.compact-layout.mode-analysis .measure-circuit .canvas-shell,.compact-layout .output-canvas-wrap{min-height:0}
+.compact-layout .three-container{flex:1;min-height:0}
+.compact-layout .measurement-panel{position:relative}
+
+.compact-layout .compact-analysis-bar,.compact-layout .editor-toolbar,.compact-layout .worksheet-topbar{display:flex;align-items:center;flex:none;height:54px;min-height:54px;padding:4px 6px;gap:4px;flex-wrap:nowrap;border-bottom:1px solid var(--line);background:var(--surface);overflow:visible}
+.compact-layout .compact-analysis-bar{position:relative;gap:2px}
+.compact-layout .compact-analysis-bar button,.compact-layout .editor-toolbar button,.compact-layout .worksheet-topbar button{min-height:44px;min-width:44px;padding:6px;font-size:12px;gap:4px}
+.compact-layout .compact-analysis-bar button span{display:inline}
+.compact-layout .compact-analysis-bar .segmented{flex:none;padding:2px}
+.compact-layout .compact-analysis-bar .segmented button{min-width:38px;min-height:40px}
+.compact-layout .compact-measure-start{margin-left:auto}
+.compact-layout .compact-more,.compact-layout .compact-back,.compact-layout .compact-measure-kind{flex:none}
+.compact-layout .compact-more>.floating-panel-trigger{width:44px;padding:6px}
+.compact-layout .compact-measure-kind>.floating-panel-trigger{width:48px;gap:2px;padding:6px 2px}
+.compact-layout .compact-measure-kind svg{width:12px}
+.compact-layout .compact-reading{flex:1;min-width:52px}
+.compact-layout .compact-reading>.floating-panel-trigger{width:100%;min-width:0;padding:6px 2px}
+.compact-layout .compact-reading output{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.6px;font-weight:600;font-variant-numeric:tabular-nums}
+.compact-reading-detail{padding:16px}
+.compact-reading-detail strong{display:block;font-size:26px;font-weight:600;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.compact-reading-detail p{display:flex;align-items:center;gap:4px;margin-top:10px;font-size:12px;color:var(--muted)}
+.compact-layout .compact-analysis-bar .compact-probe{flex:0 1 52px;min-width:44px;padding:4px 2px;gap:3px}
+.compact-layout .compact-probe svg{flex:none;transform:rotate(22deg)}
+.compact-layout .compact-probe span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums}
+.compact-layout .compact-probe.active{border-radius:4px;border-bottom:2px solid var(--accent)}
+.compact-layout .compact-current-target{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px}
+.compact-layout .compact-isolate{flex:1;white-space:normal}
+.compact-layout .compact-record-status{position:absolute;top:calc(100% + 8px);left:8px;right:8px;z-index:12;width:fit-content;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:var(--surface);box-shadow:0 3px 12px #30382f14;font-size:12px}
+.compact-layout .measure-notebook{position:absolute;bottom:0;left:0;right:0;z-index:11;height:min(260px,65%);padding:8px;box-shadow:0 -4px 18px #30382f12}
+.compact-layout .record-scroll table{min-width:650px}
+.compact-layout .record-actions button{min-height:44px}
+
+.compact-layout .desktop-editor-tools,.compact-layout .editor-toolbar>.toolbar-separator{display:none}
+.compact-layout .compact-edit-more{margin-left:auto}
+.compact-layout .compact-parts>.floating-panel-trigger{padding:6px 10px;color:var(--accent)}
+.compact-parts-panel{padding:8px}
+.compact-parts-panel .component-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:4px;margin:0}
+.compact-parts-panel .component-tile{height:72px;min-width:0;width:100%;font-size:12px;touch-action:manipulation}
+.compact-examples{margin-top:8px;border-top:1px solid var(--line)}
+.compact-examples summary{padding:12px 8px;min-height:44px;cursor:pointer;font-size:12px;color:var(--muted)}
+.compact-examples button{display:flex;justify-content:space-between;width:100%;min-height:44px;text-align:left;font-size:12px}
+.compact-layout .inspector-panel{position:absolute;top:auto;bottom:0;left:0;right:0;width:100%;max-height:50%;overflow:auto;border-left:0;border-top:1px solid var(--line);padding:12px 16px;z-index:12;box-shadow:0 -6px 24px #30382f18}
+.compact-layout .inspector-panel>.section-heading button{min-width:44px;min-height:44px}
+.compact-layout.mode-analysis.parameter-open .library-panel{position:absolute;bottom:0;left:0;right:0;z-index:11;display:block;width:100%;min-height:0;max-height:50%;overflow:auto;padding:12px;border-top:1px solid var(--line);box-shadow:0 -6px 24px #30382f18}
+.compact-layout .parameter-panel{margin-top:0}
+.compact-layout .parameter-panel>.section-heading button{min-width:44px;min-height:44px}
+.compact-layout .analysis-console-host{display:none}
+.compact-layout .compact-potential-palette{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
+.compact-layout .worksheet-topbar .output-actions{margin-left:auto;gap:6px;flex-wrap:nowrap}
+.compact-layout .worksheet-topbar .output-copy{min-width:90px}
+.compact-layout .worksheet-topbar .export-menu summary{min-height:44px;display:flex;align-items:center;padding:6px 10px}
+.compact-layout .compact-output-title{padding-left:8px;color:var(--muted);font-size:12px}
+.compact-layout .output-canvas [data-output-id]{cursor:grab}
+.compact-layout .output-canvas [data-output-id]:hover{filter:none}

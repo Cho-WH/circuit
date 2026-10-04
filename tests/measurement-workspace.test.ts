@@ -20,14 +20,15 @@ import type { CircuitDocument } from '../src/domain';
 const document = requireDocument(JSON.parse(readFileSync('fixtures/FIX-02-series.json','utf8')).document) as CircuitDocument;
 const compilation = compileCircuit(document), result = solveCircuit(compilation.circuit);
 const noop = () => {};
-function voltageProps(red: string, black: string) {
-  const voltageReading = probeVoltage(compilation, result, red ? { kind: 'terminal', id: red } : null, black ? { kind: 'terminal', id: black } : null);
-  return { voltageReading, voltageLabel: formatQuantity(voltageReading.ok ? voltageReading.value.voltageV : undefined, 'V') };
+function voltageProps(red: string, black: string, compiled = compilation, solved = result) {
+  const voltageReading = probeVoltage(compiled, solved, red ? { kind: 'terminal', id: red } : null, black ? { kind: 'terminal', id: black } : null);
+  return { result: solved, voltageReading, voltageLabel: formatQuantity(voltageReading.ok ? voltageReading.value.voltageV : undefined, 'V') };
 }
 
 const canvasProps: CanvasProps = {document,selected:[],tool:'probe',placement:null,onSelect:noop,onMove:noop,onPlace:noop,onEndpoint:noop,onWire:noop,onValue:noop,onSwitch:noop,onBackground:noop};
-function panel(red:string,black:string) {
-  return renderToStaticMarkup(createElement(MeasurementPanel, {document,compilation,...voltageProps(red,black),active:true,kind:'voltage',enabled:true,isolated:false,onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red',onActiveProbe:noop,anchors:{red:{kind:'endpoint',id:'R1.a',endpointKind:'terminal'},black:{kind:'endpoint',id:'R1.b',endpointKind:'terminal'},current:null},currentReading:{ok:false,diagnostics:[]},onReset:noop,onSwap:noop,children:null}));
+function panel(red:string,black:string,source=document) {
+  const compiled=compileCircuit(source),solved=solveCircuit(compiled.circuit);
+  return renderToStaticMarkup(createElement(MeasurementPanel, {document:source,compilation:compiled,...voltageProps(red,black,compiled,solved),active:true,kind:'voltage',enabled:true,isolated:false,onExit:noop,panel:null,onPanel:noop,red,black,activeProbe:'red',onActiveProbe:noop,anchors:{red:{kind:'endpoint',id:'R1.a',endpointKind:'terminal'},black:{kind:'endpoint',id:'R1.b',endpointKind:'terminal'},current:null},currentReading:{ok:false,diagnostics:[]},onReset:noop,onSwap:noop,children:null}));
 }
 function outputText(html:string) {
   const host=globalThis.document.createElement('div');
@@ -99,6 +100,36 @@ describe('measurement workspace',()=>{
   it('shows the signed physical reading in the prominent result for either probe order',()=>{
     expect(outputText(panel('R1.a','R1.b'))).toBe('3 V');
     expect(outputText(panel('R1.b','R1.a'))).toBe('-3 V');
+  });
+  it('shows independent probe potentials for missing, swapped and same-net targets',()=>{
+    const host=globalThis.document.createElement('div');
+    for(const [red,black,expected] of [
+      ['', '', ['—', '—']],
+      ['R1.a', '', ['9 V', '—']],
+      ['R1.a', 'R1.b', ['9 V', '6 V']],
+      ['R1.b', 'R1.a', ['6 V', '9 V']],
+      ['R1.b', 'R2.a', ['6 V', '6 V']],
+    ] as const) {
+      host.innerHTML=panel(red,black);
+      const values=[...host.querySelectorAll('.measure-probe-potential')];
+      expect(values.map(e=>e.textContent)).toEqual(expected);
+      expect(values.map(e=>e.getAttribute('aria-label'))).toEqual([
+        `빨강 탐침 전위 ${expected[0]}`, `검정 탐침 전위 ${expected[1]}`,
+      ]);
+    }
+  });
+  it('updates probe potentials with the reference and circuit values, and clears failed solutions',()=>{
+    const doc=structuredClone(document),host=globalThis.document.createElement('div');
+    const values=()=>{
+      host.innerHTML=panel('R1.a','R1.b',doc);
+      return [...host.querySelectorAll('.measure-probe-potential')].map(e=>e.textContent);
+    };
+    doc.referenceNode={kind:'terminal',id:'R1.b'};
+    expect(values()).toEqual(['3 V','0 V']);
+    doc.components.find(c=>c.id==='V1')!.properties.voltageV={numerator:'18',denominator:'1'};
+    expect(values()).toEqual(['6 V','0 V']);
+    doc.referenceNode=null;
+    expect(values()).toEqual(['—','—']);
   });
   it.each(['voltage', 'resistance', 'current'] as const)('restores exact %s wire positions after recording and remount', (kind) => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);

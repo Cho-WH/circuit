@@ -4,11 +4,14 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/app/App';
+import { compactLayoutQuery } from '../src/app/useCompactLayout';
 import { FileMenu } from '../src/app/FileMenu';
 import { loadLocal, saveLocal } from '../src/persistence';
 import { layoutExample } from '../src/app/examples';
 import { examples } from '../src/fixtures';
 import { createHistory, executeCommand, undo } from '../src/editor';
+import { requireDocument } from '../src/domain';
+import shortCircuit from '../fixtures/FIX-06-source-short.json';
 
 let root: Root, host: HTMLDivElement;
 beforeEach(() => {
@@ -20,7 +23,213 @@ afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear()
 const button = (label: string) => [...document.body.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === label || b.textContent?.trim() === label)!;
 const click = async (label: string) => { await act(async () => button(label).click()); };
 
+describe('compact workspace', () => {
+  beforeEach(() => {
+    const matchMedia = window.matchMedia.bind(window);
+    vi.spyOn(window, 'matchMedia').mockImplementation(query => {
+      const media = matchMedia(query);
+      if (query === compactLayoutQuery) Object.defineProperty(media, 'matches', { value: true });
+      return media;
+    });
+  });
+  it('switches the shared bar without losing view options, probes, readings or records', async () => {
+    const doc = layoutExample(examples[1].document);
+    saveLocal(doc);
+    await act(async () => root.render(createElement(App)));
+    await click('분석하기');
+    await click('전위');
+    await click('전류');
+    const canvas = host.querySelector('.circuit-canvas')!;
+    const view = canvas.getAttribute('viewBox');
+    await click('측정');
+    expect(document.activeElement).toBe(button('보기 도구로 돌아가기'));
+    for (const label of ['R_1 · 왼쪽 단자', 'R_1 · 오른쪽 단자']) {
+      await act(async () => host.querySelector(`[aria-label="${label}"]`)!.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true})));
+    }
+    expect(host.querySelector('output[aria-label="측정값"]')?.textContent).toBe('3 V');
+    expect(button('빨강 탐침 전위 9 V')).toBeDefined();
+    expect(button('검정 탐침 전위 6 V')).toBeDefined();
+    await click('측정 더보기'); await click('측정값 기록');
+    await click('보기 도구로 돌아가기');
+    expect(document.activeElement).toBe(button('측정'));
+    expect(button('전위').getAttribute('aria-pressed')).toBe('false');
+    expect(button('전류').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('.circuit-canvas')).toBe(canvas);
+    expect(canvas.getAttribute('viewBox')).toBe(view);
+    await click('측정');
+    expect(host.querySelector('output[aria-label="측정값"]')?.textContent).toBe('3 V');
+    await click('측정 더보기'); await click('기록 보기 1');
+    expect(host.querySelector('.measure-notebook')?.textContent).toContain('3 V');
+    expect(loadLocal()).toEqual({ok:true,document:doc});
+  });
+  it('restores normal visualization after isolated resistance measurement', async () => {
+    saveLocal(layoutExample(examples[1].document));
+    await act(async () => root.render(createElement(App)));
+    await click('분석하기'); await click('측정'); await click('전압'); await click('등가저항');
+    expect(button('전지 분리하고 측정')).toBeDefined();
+    expect(host.querySelector('.measurement-surface')).toBeNull();
+    await click('전지 분리하고 측정');
+    expect(host.querySelector('.measurement-surface')).not.toBeNull();
+    await click('보기 도구로 돌아가기');
+    expect(button('전위').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('.measurement-surface')).toBeNull();
+    expect(button('3D').disabled).toBe(false);
+    expect(host.querySelector('[data-value-id="R1"]')?.getAttribute('role')).toBe('button');
+  });
+  it('folds parts and output editing while keeping variable resistor controls reachable', async () => {
+    const doc = layoutExample(examples[1].document);
+    doc.components.find(c => c.id === 'R1')!.type = 'resistive-load';
+    saveLocal(doc);
+    await act(async () => root.render(createElement(App)));
+    expect(host.querySelector('.library-panel .component-grid')).toBeNull();
+    await click('부품 추가');
+    expect(document.querySelector('.compact-parts-panel .component-tile')?.getAttribute('draggable')).toBe('false');
+    await click('저항');
+    expect(document.querySelector('.compact-parts-panel')).toBeNull();
+    await click('분석하기');
+    await act(async () => host.querySelector('[data-component-id="R1"] .component')!
+      .dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true})));
+    expect(host.querySelector('.parameter-open .parameter-panel:not([hidden]) .parameter-slider')).not.toBeNull();
+    await click('가변저항 조절 닫기');
+    expect(host.querySelector('.parameter-open')).toBeNull();
+    await click('파일'); await click('그림 보기·저장');
+    expect(host.querySelector('[aria-label="회로도 출력 보기"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="글자 크기 배율"]')).toBeNull();
+    expect(host.querySelector('.output-canvas [role="button"]')).toBeNull();
+    expect(button('그림 복사')).toBeDefined();
+  });
+});
+
 describe('workspace transitions and file actions', () => {
+  it('opens assembly diagnostics on demand, locates grouped terminals and removes the icon after repair', async () => {
+    const doc = layoutExample(examples[0].document);
+    saveLocal(doc);
+    await act(async () => root.render(createElement(App)));
+    expect(button('조립 안내')).toBeUndefined();
+    const wire = doc.wires[0];
+    await act(async () => host.querySelector(`[data-wire-id="${wire.id}"]`)!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    await act(async () => host.querySelector('.circuit-canvas')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })));
+    const trigger = button('조립 안내');
+    const view = host.querySelector('.circuit-canvas')!.getAttribute('viewBox');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger.closest('.is-warning')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await click('조립 안내');
+    const panel = document.querySelector('[role="dialog"][aria-label="조립 안내"]')!;
+    expect(document.activeElement).toBe(panel);
+    expect(panel.textContent).toContain('단자 2곳을 연결할 수 있습니다');
+    expect(host.querySelector('.circuit-canvas')!.getAttribute('viewBox')).toBe(view);
+    await act(async () => panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(document.activeElement).toBe(trigger);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await click('조립 안내');
+    await act(async () => document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await click('조립 안내');
+    await click('회로에서 위치 보기');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect([...host.querySelectorAll('[data-component-id][data-selected="true"]')].map(e => e.getAttribute('data-component-id')))
+      .toEqual(doc.components.filter(c => c.terminals.some(t => t.id === wire.start.id || t.id === wire.end.id)).map(c => c.id));
+    await click('실행 취소');
+    expect(button('조립 안내')).toBeUndefined();
+    await click('다시 실행');
+    expect(button('조립 안내').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('keeps error diagnostics collapsed and reachable in every workspace', async () => {
+    saveLocal(layoutExample(requireDocument(shortCircuit.document)));
+    await act(async () => root.render(createElement(App)));
+    for (const mode of ['회로 만들기', '분석하기', '회로도 출력']) {
+      await click(mode);
+      const trigger = button('회로 연결 확인');
+      expect(trigger.closest('.is-warning')).not.toBeNull();
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      await click('회로 연결 확인');
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain('전원이 단락되어 있어요');
+      await click('안내 닫기');
+      expect(document.activeElement).toBe(trigger);
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+    }
+  });
+
+  it.each(['label', 'value'])('moves the first output %s drag without opening settings, and opens them on click', async (part) => {
+    const matchMedia = window.matchMedia.bind(window);
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) => {
+      const media = matchMedia(query);
+      if (query === '(min-width: 641px)') Object.defineProperty(media, 'matches', { value: true });
+      return media;
+    });
+    vi.stubGlobal('DOMPoint', class {
+      constructor(public x: number, public y: number) {}
+      matrixTransform() { return this; }
+    });
+    saveLocal(layoutExample(examples[1].document));
+    await act(async () => root.render(createElement(App)));
+    await click('회로도 출력');
+    const svg = host.querySelector<SVGSVGElement>('.output-canvas')!;
+    Object.assign(svg, { getScreenCTM: () => ({ a: 1, inverse: () => ({}) }), setPointerCapture: () => {} });
+    const target = () => host.querySelector(`[data-output-id="R1"][data-output-part="${part}"]`)!;
+    const pointer = async (element: Element, type: string, x: number, y: number) => {
+      await act(async () => element.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, pointerId: 1, pointerType: 'mouse', button: 0, clientX: x, clientY: y,
+      })));
+    };
+    const before = target().innerHTML;
+    const view = svg.getAttribute('viewBox');
+    await pointer(target(), 'pointerdown', 400, 200);
+    expect(button('표시 설정').getAttribute('aria-expanded')).toBe('false');
+    await pointer(svg, 'pointermove', 450, 170);
+    expect(target().innerHTML).not.toBe(before);
+    await pointer(svg, 'pointerup', 450, 170);
+    expect(button('표시 설정').getAttribute('aria-expanded')).toBe('false');
+    expect(svg.getAttribute('viewBox')).toBe(view);
+    await click('출력 실행 취소');
+    expect(target().innerHTML).toBe(before);
+    expect(button('출력 실행 취소').disabled).toBe(true);
+    await pointer(target(), 'pointerdown', 400, 200);
+    await pointer(svg, 'pointermove', 450, 170);
+    await pointer(svg, 'pointercancel', 450, 170);
+    await pointer(svg, 'pointerup', 450, 170);
+    expect(target().innerHTML).toBe(before);
+    expect(button('표시 설정').getAttribute('aria-expanded')).toBe('false');
+    await pointer(target(), 'pointerdown', 400, 200);
+    await pointer(svg, 'pointerup', 400, 200);
+    expect(button('표시 설정').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it.each(['회로도 출력', '분석하기'])('starts a new blank circuit in the build workspace from %s', async (mode) => {
+    const original = layoutExample(examples[1].document);
+    saveLocal(original);
+    await act(async () => root.render(createElement(App)));
+    await click(mode);
+    await click(mode === '회로도 출력' ? '표시 설정' : '상세 설정');
+    await click('수업 화면');
+    await click('파일');
+    await click('새 회로');
+    expect(button('회로 만들기').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('.app-shell')?.classList.contains('presentation')).toBe(false);
+    expect(host.querySelector<HTMLElement>('.library-panel')?.hidden).toBe(false);
+    expect(host.querySelector<HTMLElement>('.inspector-panel')?.hidden).toBe(true);
+    expect(host.querySelectorAll('[data-component-id]')).toHaveLength(0);
+    expect(button('저항')).toBeDefined();
+    await click('실행 취소');
+    expect(host.querySelector<HTMLInputElement>('.document-heading input')?.value).toBe(original.title);
+  });
+
+  it('keeps the output mode when restoring a saved circuit', async () => {
+    const stored = layoutExample(examples[1].document);
+    saveLocal(stored, 'manual');
+    saveLocal({ ...stored, title: '복원 전 회로' });
+    await act(async () => root.render(createElement(App)));
+    await click('회로도 출력');
+    await click('파일');
+    await click('보관한 회로 불러오기');
+    expect(button('회로도 출력').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector<HTMLInputElement>('.document-heading input')?.value).toBe(stored.title);
+  });
+
   it('reads the selected wire current in potential view by mouse and keyboard',async()=>{
     saveLocal(layoutExample(examples.find(e=>e.id==='FIX-03')!.document));
     await act(async()=>root.render(createElement(App)));await click('분석하기');

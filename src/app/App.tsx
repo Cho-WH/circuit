@@ -2,7 +2,8 @@ import type { ComponentProperties } from '../domain';
 import * as q from '../rational';
 import { parseComponentValue } from './component-value';
 import { Tooltip } from './Tooltip';
-import { ExampleMenu } from './ExampleMenu';
+import { ExampleMenu, ExampleChoices } from './ExampleMenu';
+import { CanvasDiagnostics } from './CanvasDiagnostics';
 import { SwitchStateButton } from './SwitchStateButton';
 import { saveBlob } from './download';
 import { ComponentNameInput } from './ComponentNameInput';
@@ -36,6 +37,8 @@ import {
   SlidersHorizontal,
   CircuitBoard,
   MessageCircle,
+  Ellipsis,
+  NotebookPen,
 } from 'lucide-react';
 import {
   cloneDocument,
@@ -96,8 +99,11 @@ import { FeedbackLoading } from './FeedbackLoading';
 import { PotentialWorkspace, type PotentialWorkspaceStatus } from './PotentialWorkspace';
 import { CurrentControls, CurrentSettings, useCurrentDisplay } from './CurrentControls';
 import { useVisibleViewport } from './useVisibleViewport';
+import { useCompactLayout } from './useCompactLayout';
+import { FloatingPanel } from './FloatingPanel';
 import './styles.css';
 import './ux.css';
+import './mobile.css';
 const FeedbackFeature = lazy(() => import('./FeedbackBoard'));
 const noSelection: string[] = [];
 
@@ -121,6 +127,7 @@ function GroundIcon({ size = 18 }: { size?: number }) {
 type Mode = WorkspaceMode;
 export function App() {
   useVisibleViewport();
+  const compact = useCompactLayout();
   const [mode, setMode] = useState<Mode>('build');
   const {
     history,
@@ -131,6 +138,11 @@ export function App() {
     undo: undoEdit,
     redo: redoEdit,
   } = useCircuitSession(mode);
+  const saveStatusLabel = {
+    saved: '이 브라우저에 저장됨',
+    saving: '이 브라우저에 저장 중',
+    failed: '이 브라우저에 자동 저장 실패',
+  }[saveStatus];
   const doc = history.present;
   const [selected, setSelected] = useState<string[]>([]);
   const [tool, setTool] = useState('select');
@@ -187,6 +199,7 @@ export function App() {
     blackProbe = anchorEndpoint(doc, measurementAnchors.black)?.id ?? '';
   const [activeProbe, setActiveProbe] = useState<'red' | 'black'>('red');
   const [measurementKind, setMeasurementKind] = useState<MeasurementKind | null>(null);
+  const [mobileMeasuring, setMobileMeasuring] = useState(false);
   const [measurementConsoleHost, setMeasurementConsoleHost] = useState<HTMLDivElement | null>(null);
   const [sourcesDetached, setSourcesDetached] = useState(false);
   const hasSources = doc.components.some((c) => c.type === 'dc-voltage-source');
@@ -195,11 +208,12 @@ export function App() {
   const isolated = resistanceMode && !needsIsolation;
   const analysisView = resistanceMode ? '2d' : potentialView;
   const measurementActive =
-    mode === 'analysis' && measurementKind !== null && analysisView === '2d' && !needsIsolation;
+    mode === 'analysis' && measurementKind !== null && analysisView === '2d' && !needsIsolation && (!compact || mobileMeasuring);
   const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation;
   const showOperatingState = mode === 'analysis' && !isolated;
   function chooseMeasurement(kind: MeasurementKind | null) {
     setMeasurementKind(kind);
+    setMobileMeasuring(kind !== null);
     setSourcesDetached(false);
     setTool('select');
     if (kind && kind !== 'resistance') setPotentialView('2d');
@@ -209,6 +223,13 @@ export function App() {
     if (view === '3d' && measurementKind !== 'voltage') chooseMeasurement(null);
     setPotentialView(view);
   }
+  useEffect(() => {
+    if (!compact) return;
+    setPresentation(false);
+    setAnalysisPanel(panel => panel === 'path' ? null : panel);
+    setTool(tool => tool === 'path' ? 'select' : tool);
+    setOutputFontPreview(null);
+  }, [compact]);
   useEffect(() => {
     setMeasurementAnchors({ red: null, black: null, current: null });
     setActiveProbe('red');
@@ -371,6 +392,7 @@ export function App() {
   }
   function cancelTool() {
     setMeasurementKind(null);
+    setMobileMeasuring(false);
     setSourcesDetached(false);
     setPaletteDrag(null);
     setOutputFontPreview(null);
@@ -383,6 +405,7 @@ export function App() {
     const handler = (event: KeyboardEvent) => {
       if (feedbackOpen || help) return;
       if ((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')) return;
+      if (compact && mode === 'worksheet') return;
       const modifier = event.ctrlKey || event.metaKey;
       if (modifier && event.key.toLowerCase() === 'z') {
         event.preventDefault();
@@ -583,7 +606,15 @@ export function App() {
       cancelTool();
       setCustomPathIds([]);
       setActivePath(0);
+      return true;
     }
+    return false;
+  }
+  function newCircuit() {
+    if (!replace(emptyDocument(newId('circuit-')))) return;
+    changeMode('build');
+    setDetailsOpen(false);
+    setPresentation(false);
   }
   function setSelection(ids: string[], net: string | null = null) {
     setSelected(ids);
@@ -608,8 +639,6 @@ export function App() {
       return;
     }
     const wire = mode === 'analysis' ? doc.wires.find((w) => w.id === id) : undefined;
-    if (mode === 'worksheet' && id && window.matchMedia('(min-width: 641px)').matches)
-      setDetailsOpen(true);
     setSelection(
       id === null
         ? []
@@ -650,6 +679,7 @@ export function App() {
   }
   function changeMode(next: Mode) {
     setMode(next);
+    if (compact) { setDetailsOpen(false); setPresentation(false); }
     cancelTool();
     setHovered(null);
     setSelected((ids) =>
@@ -673,6 +703,45 @@ export function App() {
       <span>{mode === 'worksheet' ? '표시 설정' : '상세 설정'}</span>
     </button>
   );
+  const modeNavigation = <nav className="modebar" aria-label="작업 모드">
+    <div className="mode-tabs">
+      <button aria-pressed={mode === 'build'} className={mode === 'build' ? 'active' : ''} onClick={() => changeMode('build')}><MousePointer2 size={16} />회로 만들기</button>
+      <button aria-pressed={mode === 'analysis'} className={mode === 'analysis' ? 'active' : ''} onClick={() => changeMode('analysis')}><Zap size={16} />분석하기</button>
+      {!compact && <button aria-pressed={mode === 'worksheet'} className={mode === 'worksheet' ? 'active' : ''} onClick={() => changeMode('worksheet')}><Copy size={16} />회로도 출력</button>}
+    </div>
+    {!compact && <button className="presentation-toggle" onClick={() => setPresentation(v => !v)}>{presentation ? '편집 화면' : '수업 화면'}</button>}
+  </nav>;
+  const viewSwitcher = <div className="segmented" role="group" aria-label="회로 차원">
+    {(['2d', '3d'] as const).map(view => <button key={view} aria-pressed={analysisView === view} className={analysisView === view ? 'active' : ''} onClick={() => chooseView(view)}>{view.toUpperCase()}</button>)}
+  </div>;
+  const mobileViewControls = <>
+    {viewSwitcher}
+    <button className={showColors || showNumbers ? 'active' : ''} aria-pressed={showColors || showNumbers} onClick={() => {
+      const show = !(showColors || showNumbers); setShowColors(show); setShowNumbers(show);
+    }}>전위</button>
+    <button className={showCurrent ? 'active' : ''} aria-pressed={showCurrent} onClick={() => setShowCurrent(v => !v)}>전류</button>
+    <button className="compact-measure-start" onClick={() => chooseMeasurement(measurementKind ?? 'voltage')}>측정</button>
+    <FloatingPanel label="보기 더보기" contentLabel="보기 더보기" className="compact-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
+      {close => <>
+        <button role="menuitemcheckbox" aria-checked={showColors} onClick={() => setShowColors(v => !v)}>전위 색상 {showColors && <Check size={16} />}</button>
+        <button role="menuitemcheckbox" aria-checked={showNumbers} onClick={() => setShowNumbers(v => !v)}>전위 숫자 {showNumbers && <Check size={16} />}</button>
+        <button role="menuitem" onClick={() => close(() => setAnalysisPanel('records'))}><NotebookPen size={16} />측정 기록 보기</button>
+        <button role="menuitem" onClick={() => close(() => setDetailsOpen(true))}><SlidersHorizontal size={16} />상세 설정</button>
+      </>}
+    </FloatingPanel>
+  </>;
+  const canvasDiagnostics =
+    !isolated && result.diagnostics.length > 0 ? (
+      <CanvasDiagnostics
+        key={`${documentEpoch}:${doc.documentId}:${mode}`}
+        document={doc}
+        diagnostics={result.diagnostics}
+        onLocate={(ids) => {
+          setSelection(ids);
+          setFocusIds([...ids]);
+        }}
+      />
+    ) : null;
   const circuitCanvas = (
     <CircuitCanvas
       paletteDrag={paletteDrag}
@@ -807,7 +876,7 @@ export function App() {
   );
   return (
     <div
-      className={`app-shell mode-${mode}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
+      className={`app-shell mode-${mode}${compact ? ' compact-layout' : ''}${compact && controlledComponent ? ' parameter-open' : ''}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
     >
       <Tooltip />
       <header className="topbar">
@@ -830,13 +899,8 @@ export function App() {
           <span
             className={`save-state ${saveStatus}`}
             role="status"
-            aria-label={
-              saveStatus === 'saved'
-                ? '저장됨'
-                : saveStatus === 'saving'
-                  ? '저장 중'
-                  : '자동 저장 실패'
-            }
+            data-tooltip={saveStatusLabel}
+            aria-label={saveStatusLabel}
           >
             {saveStatus === 'saved' ? (
               <Check size={15} />
@@ -847,22 +911,29 @@ export function App() {
             )}
           </span>
         </div>
+        {compact && modeNavigation}
         <div className="top-actions">
           <FileMenu
+            compact={compact}
+            extraItems={compact ? close => <>
+              <button role="menuitem" onClick={() => close(() => changeMode('worksheet'))}><Copy size={16} />그림 보기·저장</button>
+              <button role="menuitem" onClick={() => close(() => setHelp(true))}><CircleHelp size={16} />사용 도움말</button>
+              <button role="menuitem" onClick={() => close(() => setFeedbackOpen(true))}><MessageCircle size={16} />사용 후기 및 피드백</button>
+            </> : undefined}
             document={doc}
-            onNew={() => replace(emptyDocument(newId('circuit-')))}
+            onNew={newCircuit}
             onOpen={() => fileInput.current?.click()}
             onSave={downloadJson}
             onRestore={replace}
             onNotice={setNotice}
           />
-          <button onClick={() => setFeedbackOpen(true)} aria-label="사용 후기 및 피드백">
+          {!compact && <><button onClick={() => setFeedbackOpen(true)} aria-label="사용 후기 및 피드백">
             <MessageCircle size={18} />
             한마디
           </button>
           <button onClick={() => setHelp(true)} aria-label="사용 도움말">
             <CircleHelp size={19} />
-          </button>
+          </button></>}
         </div>
         <input
           ref={fileInput}
@@ -877,40 +948,10 @@ export function App() {
           <FeedbackFeature onClose={() => setFeedbackOpen(false)} />
         </Suspense>
       )}
-      <nav className="modebar" aria-label="작업 모드">
-        <div className="mode-tabs">
-          <button
-            aria-pressed={mode === 'build'}
-            className={mode === 'build' ? 'active' : ''}
-            onClick={() => changeMode('build')}
-          >
-            <MousePointer2 size={16} />
-            회로 만들기
-          </button>
-          <button
-            aria-pressed={mode === 'analysis'}
-            className={mode === 'analysis' ? 'active' : ''}
-            onClick={() => changeMode('analysis')}
-          >
-            <Zap size={16} />
-            분석하기
-          </button>
-          <button
-            aria-pressed={mode === 'worksheet'}
-            className={mode === 'worksheet' ? 'active' : ''}
-            onClick={() => changeMode('worksheet')}
-          >
-            <Copy size={16} />
-            회로도 출력
-          </button>
-        </div>
-        <button className="presentation-toggle" onClick={() => setPresentation((v) => !v)}>
-          {presentation ? '편집 화면' : '수업 화면'}
-        </button>
-      </nav>
+      {!compact && modeNavigation}
       <div className="workspace">
         <aside className="library-panel" hidden={mode === 'worksheet'}>
-          {mode === 'analysis' ? (
+          {mode === 'analysis' ? (!compact &&
             <AnalysisTools
               kind={measurementKind}
               onChoose={chooseMeasurement}
@@ -918,7 +959,7 @@ export function App() {
               onIsolate={() => setSourcesDetached(true)}
               threeDimensional={analysisView === '3d'}
             />
-          ) : (
+          ) : (!compact &&
             <>
               <div className="section-heading">
                 <h2>부품</h2>
@@ -945,7 +986,7 @@ export function App() {
               <button
                 className="wide-button new-circuit-button"
                 aria-label="빈 회로 만들기"
-                onClick={() => replace(emptyDocument(newId('circuit-')))}
+                onClick={newCircuit}
               >
                 <Plus size={16} aria-hidden="true" />
                 <span className="new-circuit-desktop-label">빈 회로 만들기</span>
@@ -972,6 +1013,7 @@ export function App() {
                 >
                   <div className="section-heading">
                     <h2>가변저항</h2>
+                    {compact && <button aria-label="가변저항 조절 닫기" onClick={() => setSelection([])}><X size={16} /></button>}
                     <span className="parameter-name">
                       <Notation symbol text={adjustableComponent.label} />
                     </span>
@@ -1011,7 +1053,13 @@ export function App() {
         </aside>
         <main className="canvas-column">
           <div className="editor-toolbar" hidden={mode !== 'build'}>
-            <div className="tool-group">
+            {compact && <FloatingPanel label="부품 추가" contentLabel="부품 추가" trigger={<><Plus size={17} />부품</>} className="compact-parts" contentClassName="compact-parts-panel" align="start" width={330}>
+              {close => <>
+                <ComponentPalette tapOnly resetKey={doc} placement={placement} onChoose={type => close(() => {setPlacement(type);setTool('select');setWiringResetKey(key => key + 1);})} onClear={() => close(() => setPlacement(null))} />
+                <details className="compact-examples"><summary>예제 회로</summary><ExampleChoices documentId={doc.documentId} onSelect={document => close(() => replace(document))} /></details>
+              </>}
+            </FloatingPanel>}
+            <div className="tool-group desktop-editor-tools">
               {[
                 { id: 'select', label: '선택', Icon: MousePointer2 },
                 { id: 'wire', label: '배선', Icon: Cable },
@@ -1053,27 +1101,17 @@ export function App() {
                 <Redo2 size={18} />
               </button>
             </div>
-            {settingsButton}
+            {compact ? <FloatingPanel label="편집 더보기" contentLabel="편집 더보기" className="compact-edit-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
+              {close => <>
+                <button role="menuitem" onClick={() => close(() => { setTool('reference'); setPlacement(null); setWiringResetKey(key => key + 1); })}><GroundIcon size={16} />접지(0V) 지정</button>
+                <button role="menuitem" onClick={() => close(() => setDetailsOpen(true))}><SlidersHorizontal size={16} />상세 설정</button>
+              </>}
+            </FloatingPanel> : settingsButton}
           </div>
           {mode === 'worksheet' && <div id="worksheet-actions" className="worksheet-topbar" />}
-          {mode === 'analysis' && (
+          {mode === 'analysis' && !compact && (
             <div className={`potential-controls${isolated || !showColors ? ' no-legend' : ''}`}>
-              <div className="segmented">
-                <button
-                  aria-pressed={analysisView === '2d'}
-                  className={analysisView === '2d' ? 'active' : ''}
-                  onClick={() => chooseView('2d')}
-                >
-                  2D
-                </button>
-                <button
-                  aria-pressed={analysisView === '3d'}
-                  className={analysisView === '3d' ? 'active' : ''}
-                  onClick={() => chooseView('3d')}
-                >
-                  3D
-                </button>
-              </div>
+              {viewSwitcher}
               <label>
                 <input
                   type="checkbox"
@@ -1131,6 +1169,11 @@ export function App() {
           )}
           <div hidden={mode !== 'analysis'} className="measurement-workspace">
             <MeasurementPanel
+              mobile={compact ? {
+                viewControls: mobileViewControls, measuring: mobileMeasuring,
+                onBack: () => { setMobileMeasuring(false); setAnalysisPanel(null); if (measurementKind === 'resistance') chooseMeasurement(null); },
+                onChoose: chooseMeasurement, needsIsolation, onIsolate: () => setSourcesDetached(true),
+              } : undefined}
               consoleHost={measurementConsoleHost}
               kind={measurementKind}
               onExit={() => chooseMeasurement(null)}
@@ -1140,6 +1183,7 @@ export function App() {
               onPanel={setAnalysisPanel}
               document={doc}
               compilation={compilation}
+              result={result}
               voltageReading={voltageReading}
               voltageLabel={voltageLabel}
               active={mode === 'analysis'}
@@ -1160,9 +1204,15 @@ export function App() {
                   sceneIdentity={`${documentEpoch}:${doc.documentId}`}
                   heightRange={comparisonScales?.height}
                   overlayControls={
-                    showOperatingState && showCurrent ? (
-                      <CurrentControls paused={currentDisplay.paused} onPause={setCurrentPaused} />
-                    ) : undefined
+                    <>
+                      {canvasDiagnostics}
+                      {showOperatingState && showCurrent && (
+                        <CurrentControls
+                          paused={currentDisplay.paused}
+                          onPause={setCurrentPaused}
+                        />
+                      )}
+                    </>
                   }
                   onStatusChange={setPotentialStatus}
                   active={analysisView === '3d'}
@@ -1193,26 +1243,35 @@ export function App() {
               )}
             </MeasurementPanel>
           </div>
-          {mode === 'worksheet' ? (
-            <OutputCanvas
-              document={
-                outputFontPreview === null
-                  ? doc
-                  : { ...doc, output: { ...doc.output, fontScale: outputFontPreview } }
-              }
-              result={result}
-              options={outputOptions}
-              selected={selected}
-              tool={outputTool}
-              onSelect={selectElement}
-              onTool={setOutputTool}
-              dispatch={dispatch}
-              newId={newId}
-            />
-          ) : mode === 'build' ? (
-            circuitCanvas
-          ) : null}
-          {showOperatingState && showGraph && (
+          {mode !== 'analysis' && (
+            <div className="canvas-stage">
+              {mode === 'worksheet' ? (
+                <OutputCanvas
+                  readOnly={compact}
+                  document={
+                    outputFontPreview === null
+                      ? doc
+                      : { ...doc, output: { ...doc.output, fontScale: outputFontPreview } }
+                  }
+                  result={result}
+                  options={outputOptions}
+                  selected={compact ? noSelection : selected}
+                  tool={compact ? 'select' : outputTool}
+                  onSelect={selectElement}
+                  onInspect={() => {
+                    if (window.matchMedia('(min-width: 641px)').matches) setDetailsOpen(true);
+                  }}
+                  onTool={setOutputTool}
+                  dispatch={dispatch}
+                  newId={newId}
+                />
+              ) : (
+                circuitCanvas
+              )}
+              {canvasDiagnostics}
+            </div>
+          )}
+          {showOperatingState && showGraph && !compact && (
             <section className="graph-panel">
               <div className="graph-heading">
                 <h2>경로에 따른 전위 변화</h2>
@@ -1272,67 +1331,6 @@ export function App() {
               )}
             </section>
           )}
-          {!isolated && result.diagnostics.length > 0 && (
-            <details className="canvas-diagnostics" open={result.status === 'error'}>
-              <summary>
-                {result.status === 'error'
-                  ? '회로 연결 확인'
-                  : doc.components.length
-                    ? '조립 안내'
-                    : '시작 안내'}{' '}
-                ·{' '}
-                {result.diagnostics.filter((d) => d.code === 'UNCONNECTED_TERMINAL').length
-                  ? '연결되지 않은 단자가 있습니다'
-                  : diagnosticText[result.diagnostics[0].code]?.title}
-              </summary>
-              {Object.values(
-                result.diagnostics.reduce<Record<string, typeof result.diagnostics>>(
-                  (groups, d) => {
-                    (groups[d.code] ??= []).push(d);
-                    return groups;
-                  },
-                  {},
-                ),
-              ).map((items) => {
-                const d = items[0],
-                  ids = [
-                    ...new Set(
-                      items
-                        .flatMap((d) => d.affectedIds)
-                        .map(
-                          (id) =>
-                            doc.components.find((c) => c.terminals.some((t) => t.id === id))?.id ??
-                            id,
-                        ),
-                    ),
-                  ].filter((id) =>
-                    [...doc.components, ...doc.wires, ...doc.junctions].some((x) => x.id === id),
-                  );
-                return (
-                  <div key={d.code}>
-                    <strong>
-                      {d.code === 'UNCONNECTED_TERMINAL'
-                        ? '단자 ' + items.length + '곳을 연결할 수 있습니다'
-                        : (diagnosticText[d.code]?.title ?? d.code)}
-                    </strong>
-                    <p>
-                      {diagnosticText[d.code]?.detail} {diagnosticText[d.code]?.action}
-                    </p>
-                    {ids.length > 0 && (
-                      <button
-                        onClick={() => {
-                          setSelection(ids);
-                          setFocusIds([...ids]);
-                        }}
-                      >
-                        회로에서 위치 보기
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </details>
-          )}
         </main>
         <aside className="inspector-panel" hidden={!detailsOpen}>
           <div className="section-heading">
@@ -1357,11 +1355,12 @@ export function App() {
           </div>
           <div hidden={mode !== 'worksheet'}>
             <WorksheetPanel
+              compact={compact}
               toolbarEnd={settingsButton}
               active={mode === 'worksheet'}
               document={doc}
               result={result}
-              selected={selected}
+              selected={compact ? noSelection : selected}
               onSelect={(id) => setSelection([id])}
               dispatch={dispatch}
               onNotice={setNotice}
@@ -1378,6 +1377,8 @@ export function App() {
           </div>
 
           {showOperatingState && (
+            <>
+            {compact && <div className="compact-potential-palette"><span>전위 색상표</span><PotentialPalettePicker value={potentialPalette} min={potential.min} max={potential.max} onChange={setPotentialPalette} /></div>}
             <PotentialSettings
               document={doc}
               potential={potential}
@@ -1386,6 +1387,7 @@ export function App() {
               value={potentialSettings}
               onChange={setPotentialSettings}
             />
+            </>
           )}
 
           {showOperatingState && showCurrent && (

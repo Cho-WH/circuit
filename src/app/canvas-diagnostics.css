@@ -1,0 +1,13 @@
+.canvas-stage{position:relative;display:flex;flex:1;min-width:0;min-height:0}
+.canvas-diagnostics-trigger{position:absolute;top:10px;left:10px;z-index:8}
+.canvas-diagnostics-trigger>.floating-panel-trigger{width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface,#fcfbf8);color:var(--muted);box-shadow:0 2px 8px #30382f0d}
+.canvas-diagnostics-trigger.is-warning>.floating-panel-trigger{color:#986121;border-color:#ddc9a4;background:#fffaf0}
+.canvas-diagnostics-trigger>.floating-panel-trigger:hover,.canvas-diagnostics-trigger>.floating-panel-trigger[aria-expanded=true]{color:var(--ink);background:#f0efe8}
+.floating-panel-content.canvas-diagnostics-bubble{padding:14px;color:var(--ink);font-size:13px;line-height:1.6}
+.canvas-diagnostics-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.canvas-diagnostics-heading>button{width:36px;height:36px;padding:0;margin:-8px -8px -8px 0;flex-shrink:0}
+.canvas-diagnostics-bubble section{padding-top:12px}
+.canvas-diagnostics-bubble section+section{border-top:1px solid var(--line);margin-top:12px}
+.canvas-diagnostics-bubble h3{font-size:13px;margin:0 0 4px;font-weight:600}
+.canvas-diagnostics-bubble p{margin:0;color:var(--muted)}
+.canvas-diagnostics-bubble section>button{margin-top:8px;min-height:40px;padding:8px 10px;border:1px solid var(--line);font-size:12px}

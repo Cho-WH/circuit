@@ -1,10 +1,12 @@
 import * as q from '../rational';
 import { formatQuantity } from '../quantity';
 import { Notation } from './Notation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { AnalysisPanel, MeasurementKind } from './AnalysisTools';
-import type { CircuitDocument, CompileResult, EndpointRef, Diagnostic } from '../domain';
+import type {
+  CircuitDocument, CompileResult, EndpointRef, Diagnostic, SimulationResult,
+} from '../domain';
 import { equivalentResistance } from '../simulation';
 import { quantityFormatForTargets } from '../component-library';
 import { createMeasurementRecord } from '../measurement';
@@ -21,6 +23,7 @@ import './measurement.css';
 import { diagnosticText } from './diagnostic-text';
 import { useMeasurementRecords } from './useMeasurementRecords';
 import { MeasurementTable } from './MeasurementTable';
+import { CompactMeasurementBar } from './CompactMeasurementBar';
 
 interface Props {
   kind: MeasurementKind | null;
@@ -32,6 +35,7 @@ interface Props {
   children: ReactNode;
   document: CircuitDocument;
   compilation: CompileResult;
+  result: SimulationResult;
   voltageReading: MeasurementResult<ProbeVoltage>;
   voltageLabel: string;
   active: boolean;
@@ -44,6 +48,14 @@ interface Props {
   onSwap: () => void;
   onActiveProbe: (probe: 'red' | 'black') => void;
   consoleHost?: HTMLElement | null;
+  mobile?: {
+    viewControls: ReactNode;
+    measuring: boolean;
+    onBack: () => void;
+    onChoose: (kind: MeasurementKind) => void;
+    needsIsolation: boolean;
+    onIsolate: () => void;
+  };
 }
 function Diagnostics({ items }: { items: Diagnostic[] }) {
   return (
@@ -58,17 +70,17 @@ function Diagnostics({ items }: { items: Diagnostic[] }) {
   );
 }
 export function MeasurementPanel(props: Props) {
-  const [compact, setCompact] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 640px)');
-    const update = () => setCompact(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
   const { document: doc, compilation, red, black } = props;
   const { kind, panel, onPanel, enabled, isolated } = props;
   const showNotebook = panel === 'records';
+  const compactBar = useRef<HTMLDivElement>(null);
+  const previousMeasuring = useRef(props.mobile?.measuring);
+  useEffect(() => {
+    if (props.active && props.mobile && previousMeasuring.current !== props.mobile.measuring) {
+      compactBar.current?.querySelector<HTMLButtonElement>(props.mobile.measuring ? '.compact-back' : '.compact-measure-start')?.focus();
+    }
+    previousMeasuring.current = props.mobile?.measuring;
+  }, [props.mobile?.measuring, props.active]);
 
   const { entries, setEntries, storageWarning } = useMeasurementRecords();
   const [message, setMessage] = useState('');
@@ -87,6 +99,15 @@ export function MeasurementPanel(props: Props) {
   const voltage = props.voltageReading;
   const redNet = compilation.circuit.endpointToNet[red],
     blackNet = compilation.circuit.endpointToNet[black];
+  const potentialsAvailable =
+    props.result.status !== 'error' &&
+      ![...compilation.diagnostics, ...props.result.diagnostics].some(d => d.severity === 'error');
+  const probePotentials = (color: 'red' | 'black') => {
+    const net = color === 'red' ? redNet : blackNet;
+    const value = potentialsAvailable && ref(color === 'red' ? red : black)
+      ? props.result.nodeVoltages[net] : undefined;
+    return value === undefined ? '—' : formatQuantity(value, 'V');
+  };
   const excluded = compilation.circuit.elements
     .filter((e) => e.type === 'dc-voltage-source')
     .map((e) => e.id);
@@ -269,9 +290,28 @@ export function MeasurementPanel(props: Props) {
       </div>
       <div className="measure-readout">
         <div className="measure-lcd">
-          <span className="measure-lcd-caption">
-            {kind === 'voltage' ? '전압' : kind === 'current' ? '전류' : '저항'}
-          </span>
+          <div className="measure-lcd-header">
+            <span className="measure-lcd-caption">
+              {kind === 'voltage' ? '전압' : kind === 'current' ? '전류' : '저항'}
+            </span>
+            {kind === 'voltage' && (
+              <div className="measure-probe-potentials">
+                {(['red', 'black'] as const).map(color => {
+                  const text = probePotentials(color);
+                  const label = `${color === 'red' ? '빨강' : '검정'} 탐침 전위 ${text}`;
+                  return (
+                    <span key={color} className="measure-probe-potential" role="img"
+                      aria-label={label} data-tooltip={label}>
+                      <svg width="11" height="17" viewBox="-11 -47 22 42" aria-hidden="true">
+                        <ProbeGlyph color={color} compact />
+                      </svg>
+                      <span>{text}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <output aria-label="측정값" aria-live="polite" aria-atomic="true">
             <span
               className="measure-lcd-value"
@@ -332,16 +372,28 @@ export function MeasurementPanel(props: Props) {
       className={`measurement-panel${showNotebook ? ' notebook-open' : ''}`}
       aria-label="측정 작업 공간"
     >
-      {props.consoleHost ? (
+      {props.mobile ? <>
+        <div ref={compactBar} className="compact-analysis-bar tool-group" aria-label={props.mobile.measuring ? '측정 도구' : '회로 시각화'}>
+          {props.mobile.measuring && kind ? <CompactMeasurementBar
+            kind={kind} onChoose={props.mobile.onChoose} onBack={props.mobile.onBack}
+            reading={formattedReading} ready={ready} potentials={{red: probePotentials('red'), black: probePotentials('black')}}
+            activeProbe={props.activeProbe} onActiveProbe={props.onActiveProbe} targetName={targetName}
+            needsIsolation={props.mobile.needsIsolation} isolated={isolated} onIsolate={props.mobile.onIsolate}
+            onRecord={record} onRecords={() => onPanel('records')} records={entries.length}
+            onSwap={props.onSwap} onReset={props.onReset} diagnostics={<Diagnostics items={diagnostics} />}
+          /> : props.mobile.viewControls}
+          {message && <span className="compact-record-status" role="status">{message}</span>}
+          {storageWarning && !showNotebook && <span className="compact-record-status" role="status">{storageWarning}</span>}
+        </div>
+      </> : props.consoleHost ? (
         <>
           {createPortal(
             <>
-              {!compact && measurementConsole}
+              {measurementConsole}
               {recordsFooter}
             </>,
             props.consoleHost,
           )}
-          {compact && measurementConsole}
         </>
       ) : (
         <>

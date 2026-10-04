@@ -11,9 +11,11 @@ import { useCanvasWheelZoom } from './useCanvasWheelZoom';
 
 export type OutputTool = 'select' | 'point' | 'arrow' | 'corner-arrow' | 'note';
 interface Props {
+  readOnly?: boolean;
   document: CircuitDocument; result: SimulationResult;
   options: ExportOptions; selected: string[]; tool: OutputTool;
   onSelect: (id: string | null) => void; onTool: (tool: OutputTool) => void;
+  onInspect?: () => void;
   dispatch: (command: Command) => boolean; newId: (prefix: string) => string;
 }
 type Target = { id: string; part: string };
@@ -87,7 +89,11 @@ export function OutputCanvas(props: Props) {
   },[view]);
   const hitRadius=22/screenScale;
   function cancel() { gesture.current = null; setPreview(null); }
-  useEffect(() => {cancel();touchNavigation.reset();setChoices([]);}, [props.document, props.tool]);
+  function selectOutput(id: string | null, inspect = true) {
+    props.onSelect(id);
+    if (id && inspect) props.onInspect?.();
+  }
+  useEffect(() => {cancel();touchNavigation.reset();setChoices([]);}, [props.document, props.tool, props.readOnly]);
   useEffect(() => {
     const id=props.selected[0];
     if(!id)setTarget(null);
@@ -98,12 +104,13 @@ export function OutputCanvas(props: Props) {
       const id=element.getAttribute('data-output-id')!;
       element.setAttribute('data-selected',String(props.selected.includes(id)));
       element.setAttribute('tabindex','0');
+      if(props.readOnly){element.removeAttribute('tabindex');element.removeAttribute('role');element.removeAttribute('aria-label');continue;}
       element.setAttribute('role','button');
       const parts:Record<string,string>={body:'기호',label:'이름',value:'값',annotation:'장식',start:'시작 쪽 길이 조절',end:'끝 쪽 길이 조절',voltage:'전압',current:'전류'};
       const annotation=props.document.annotations.find(a=>a.id===id);
       element.setAttribute('aria-label',`${props.document.components.find(c=>c.id===id)?.label??annotation?.presentation?.labelText??annotation?.content??id} ${parts[element.getAttribute('data-output-part')!]??''}`);
     }
-  }, [scene.content, props.selected, props.document]);
+  }, [scene.content, props.selected, props.document, props.readOnly]);
   useEffect(() => {setView(createSvgExport(props.document, options, props.result).bounds);}, [props.document.documentId]);
   useEffect(() => {
     const blur = () => cancel();
@@ -124,6 +131,7 @@ export function OutputCanvas(props: Props) {
     const p={x:g.start.x+(e.clientX-g.client.x)/g.scale,y:g.start.y+(e.clientY-g.client.y)/g.scale};
     const moved=g.moved || Math.hypot(e.clientX-g.client.x,e.clientY-g.client.y)>4;
     cancel();skipClick.current=moved;
+    if(props.readOnly)return;
     const rect=e.currentTarget.getBoundingClientRect();
     if(rect.width&&(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom))return;
     if(props.tool!=='select'&&!moved) {
@@ -132,12 +140,14 @@ export function OutputCanvas(props: Props) {
       if(props.dispatch({type:'AddAnnotation',annotation:{id,kind:props.tool==='corner-arrow'?'arrow':props.tool,anchor:null,position,
         ...((props.tool==='arrow'||props.tool==='corner-arrow')?{arrow:{shape:props.tool==='corner-arrow'?'corner' as const:'straight' as const,length:64,legLength:48,rotation:0,reversed:false}}:{}),
         content:props.tool==='point'?'A':(props.tool==='arrow'||props.tool==='corner-arrow')?'I':'글자',visibility:'always'}})) {
-        props.onTool('select');props.onSelect(id);setTarget({id,part:'annotation'});
+        props.onTool('select');selectOutput(id);setTarget({id,part:'annotation'});
       }
     } else if(moved&&Math.hypot(p.x-g.start.x,p.y-g.start.y)>.001) {const command=moveCommand(g,p);if(command)props.dispatch(command);}
+    // Inspect only a completed click; opening the panel during a drag resizes and cancels it.
+    else if (!moved && g.target && e.pointerType !== 'touch') props.onInspect?.();
   }
   function zoom(factor:number) {setView(v=>{const width=Math.max(160,Math.min(6000,v.width*factor)),height=width*v.height/v.width;return {x:v.x+(v.width-width)/2,y:v.y+(v.height-height)/2,width,height};});}
-  function hitTarget(element:Element|null):Target|null { const el=element?.closest('[data-output-id]');return el?{id:el.getAttribute('data-output-id')!,part:el.getAttribute('data-output-part')!}:null; }
+  function hitTarget(element:Element|null):Target|null { if(props.readOnly)return null;const el=element?.closest('[data-output-id]');return el?{id:el.getAttribute('data-output-id')!,part:el.getAttribute('data-output-part')!}:null; }
   function touchTargets(x:number,y:number):Target[] {
     const hits=new Map<string,Target>();
     const p=point({clientX:x,clientY:y});
@@ -155,18 +165,19 @@ export function OutputCanvas(props: Props) {
     }
     return [...hits.values()];
   }
-  function choose(hit:Target|null){setTarget(hit);setChoices([]);props.onSelect(hit?.id??null);}
+  function choose(hit:Target|null, inspect = true){setTarget(hit);setChoices([]);selectOutput(hit?.id??null, inspect);}
   function beginTouchDrag(hit:Target,e:{pointerId:number;clientX:number;clientY:number}) {
     gesture.current={pointer:e.pointerId,start:point(e),client:{x:e.clientX,y:e.clientY},scale:svg.current?.getScreenCTM?.()?.a||1,view,target:hit,document:props.document,moved:false};
-    svg.current?.setPointerCapture(e.pointerId);choose(hit);
+    svg.current?.setPointerCapture(e.pointerId);choose(hit, false);
   }
   const partNames:Record<string,string>={body:'기호',label:'이름',value:'값',annotation:'장식',start:'시작점',end:'끝점',voltage:'전압',current:'전류'};
   const targetName=(t:Target)=>`${props.document.components.find(c=>c.id===t.id)?.label??props.document.annotations.find(a=>a.id===t.id)?.content??t.id} · ${partNames[t.part]??t.part}`;
   function nudge(delta:Point){if(!target)return;const command=outputMoveCommand(props.document,target,delta);if(command)props.dispatch(command);}
   return <div className="output-canvas-wrap" data-touch={touchInput||undefined} data-gesture={gesture.current?.moved?'dragging':touchNavigation.state}>
-    <svg ref={svg} className="output-canvas" aria-label="회로도 출력 편집" tabIndex={0} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
+    <svg ref={svg} className="output-canvas" aria-label={props.readOnly?'회로도 출력 보기':'회로도 출력 편집'} tabIndex={0} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
       onContextMenu={e=>{if(touchInput)e.preventDefault();}}
       onPointerDownCapture={e=>{
+        if(props.readOnly){if(touchNavigation.down(e,true))e.stopPropagation();return;}
         setTouchInput(e.pointerType==='touch');skipClick.current=false;if(e.pointerType!=='touch'){touchNavigation.down(e,false);return;}
         const direct=hitTarget(e.target as Element),handle=direct&&(direct.part==='start'||direct.part==='end')?direct:null;
         const hits=touchTargets(e.clientX,e.clientY),hit=handle??hits.find(h=>h.id===target?.id&&h.part===target.part&&props.selected.includes(h.id))??(hits.length===1?hits[0]:hits.length>1?null:direct);
@@ -179,6 +190,7 @@ export function OutputCanvas(props: Props) {
       onPointerUpCapture={e=>{if(touchNavigation.up(e))e.stopPropagation();}}
       onPointerCancelCapture={e=>{touchNavigation.up(e,true);skipClick.current=true;}}
       onClickCapture={e=>{
+        if(props.readOnly){e.stopPropagation();return;}
         if(!touchInput)return;e.stopPropagation();if(touchNavigation.consumeClick()||skipClick.current)return;
         const hitElement=svg.current?.ownerDocument.elementFromPoint?.(e.clientX,e.clientY)??e.target as Element;
         if(props.tool==='select'){
@@ -191,32 +203,32 @@ export function OutputCanvas(props: Props) {
       onPointerDown={e=>{
         if(gesture.current){if(gesture.current.pointer!==e.pointerId)cancel();return;}
         if(e.button!==0)return;
-        const element=(e.target as Element).closest('[data-output-id]');
-        const hit=element?{id:element.getAttribute('data-output-id')!,part:element.getAttribute('data-output-part')!}:null;
+        const hit=hitTarget(e.target as Element);
         if(hit&&(hit.part==='start'||hit.part==='end')) {
           const placement=annotationPlacements(props.document).find(p=>p.annotation.id===hit.id);
           if(placement){const points=arrowGeometry(placement.annotation,placement).points,p=point(e),first=points[0],last=points.at(-1)!;hit.part=Math.hypot(p.x-first.x,p.y-first.y)<Math.hypot(p.x-last.x,p.y-last.y)?'start':'end';}
         }
         gesture.current={pointer:e.pointerId,start:point(e),client:{x:e.clientX,y:e.clientY},scale:svg.current?.getScreenCTM?.()?.a||1,view,target:props.tool==='select'?hit:null,document:props.document,moved:false};
         e.currentTarget.setPointerCapture(e.pointerId);e.currentTarget.focus();
-        if(props.tool==='select'){setTarget(hit);props.onSelect(hit?.id??null);}
+        if(props.tool==='select'&&!props.readOnly){setTarget(hit);props.onSelect(hit?.id??null);}
       }}
       onPointerMove={e=>{const g=gesture.current;if(!g||g.pointer!==e.pointerId)return;const dx=e.clientX-g.client.x,dy=e.clientY-g.client.y;if(Math.hypot(dx,dy)<4&&!g.moved)return;g.moved=true;const p={x:g.start.x+dx/g.scale,y:g.start.y+dy/g.scale};const command=moveCommand(g,p);if(command){const next=previewCommand(g.document,command);if(next.ok)setPreview(next.document);}else if(!g.target&&props.tool==='select')setView({...g.view,x:g.view.x-dx/g.scale,y:g.view.y-dy/g.scale});}}
       onPointerUp={finish} onPointerCancel={cancel} onLostPointerCapture={e=>{touchNavigation.lost(e);cancel();}}
       onFocus={e=>{const el=(e.target as Element).closest('[data-output-id]');if(el)setTarget({id:el.getAttribute('data-output-id')!,part:el.getAttribute('data-output-part')!});}}
       onKeyDown={e=>{
+        if(props.readOnly)return;
         const focused=(e.target as Element).closest('[data-output-id]');
-        if(e.key==='Enter'&&props.tool==='select'&&focused){props.onSelect(focused.getAttribute('data-output-id')!);return;}
+        if(e.key==='Enter'&&props.tool==='select'&&focused){selectOutput(focused.getAttribute('data-output-id')!);return;}
         if(e.key==='Escape'){cancel();touchNavigation.reset();setChoices([]);props.onTool('select');return;}
         if(e.key==='Enter'&&props.tool!=='select') {
           const position={x:view.x+view.width/2,y:view.y+view.height/2},id=props.newId('note-');
-          if(props.dispatch({type:'AddAnnotation',annotation:{id,kind:props.tool==='corner-arrow'?'arrow':props.tool,anchor:null,position,...((props.tool==='arrow'||props.tool==='corner-arrow')?{arrow:{shape:props.tool==='corner-arrow'?'corner' as const:'straight' as const,length:64,legLength:48,rotation:0,reversed:false}}:{}),content:props.tool==='point'?'A':(props.tool==='arrow'||props.tool==='corner-arrow')?'I':'글자',visibility:'always'}})){props.onSelect(id);setTarget({id,part:'annotation'});props.onTool('select');}
+          if(props.dispatch({type:'AddAnnotation',annotation:{id,kind:props.tool==='corner-arrow'?'arrow':props.tool,anchor:null,position,...((props.tool==='arrow'||props.tool==='corner-arrow')?{arrow:{shape:props.tool==='corner-arrow'?'corner' as const:'straight' as const,length:64,legLength:48,rotation:0,reversed:false}}:{}),content:props.tool==='point'?'A':(props.tool==='arrow'||props.tool==='corner-arrow')?'I':'글자',visibility:'always'}})){selectOutput(id);setTarget({id,part:'annotation'});props.onTool('select');}
         }
         if(e.key.startsWith('Arrow')&&target){e.preventDefault();e.stopPropagation();svg.current?.focus();const step=e.shiftKey?10:2;const command=outputMoveCommand(props.document,target,{x:e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0,y:e.key==='ArrowDown'?step:e.key==='ArrowUp'?-step:0});if(command)props.dispatch(command);}
       }}>
       {annotationPlacements(preview??props.document).map(({annotation:a,x,y})=>a.kind==='point'?<circle key={a.id} data-output-id={a.id} data-output-part="annotation" cx={x} cy={y} r={hitRadius} fill="transparent"/>:a.kind==='arrow'?<path key={a.id} data-output-id={a.id} data-output-part="annotation" d={arrowGeometry(a,{x,y}).path} stroke="transparent" strokeWidth={2*hitRadius} fill="none" style={{pointerEvents:'stroke'}}/>:null)}
       <g dangerouslySetInnerHTML={{__html:scene.content}}/>
-      {props.document.components.map(c=><rect key={c.id} data-output-id={c.id} data-output-part="body" x={c.position.x-24} y={c.position.y-24} width={48} height={48} fill="transparent" tabIndex={0} role="button" aria-label={`${c.label} 표기 편집`} onFocus={()=>setTarget({id:c.id,part:'body'})} onKeyDown={e=>{if(e.key==='Enter')props.onSelect(c.id);}}/>)}
+      {!props.readOnly&&props.document.components.map(c=><rect key={c.id} data-output-id={c.id} data-output-part="body" x={c.position.x-24} y={c.position.y-24} width={48} height={48} fill="transparent" tabIndex={0} role="button" aria-label={`${c.label} 표기 편집`} onFocus={()=>setTarget({id:c.id,part:'body'})} onKeyDown={e=>{if(e.key==='Enter')props.onSelect(c.id);}}/>)}
 
       {annotationPlacements(preview??props.document).filter(p=>p.annotation.kind==='arrow'&&props.selected.includes(p.annotation.id)).flatMap(p=>{
         const points=arrowGeometry(p.annotation,p).points;

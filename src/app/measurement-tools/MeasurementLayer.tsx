@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CircuitDocument, Point } from '../../domain';
 import { anchorPose, measurementHit, type MeasurementAnchor, type MeasurementTool } from './model';
 
-export function ProbeGlyph({color='red'}:{color?:'red'|'black'}) {
-  return <g stroke={color==='red'?'#bc4541':'#34413a'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M0 0L0 -15"/><path d="M-4 -15L-5 -40Q0 -45 5 -40L4 -15Z" fill={color==='red'?'#bc4541':'#34413a'}/><path d="M-7 -17H7"/><path d="M0 -26V-35 M-3 -30.5H3" stroke="white" strokeWidth="1.4"/>{color==='black'&&<path d="M0 -26V-35" stroke="#34413a" strokeWidth="2"/>}</g>;
+export function ProbeGlyph({color='red',compact=false}:{color?:'red'|'black';compact?:boolean}) {
+  return <g stroke={color==='red'?'#bc4541':'#34413a'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={compact?'M0 -9L0 -15':'M0 0L0 -15'}/><path d="M-4 -15L-5 -40Q0 -45 5 -40L4 -15Z" fill={color==='red'?'#bc4541':'#34413a'}/><path d="M-7 -17H7"/><path d="M0 -26V-35 M-3 -30.5H3" stroke="white" strokeWidth="1.4"/>{color==='black'&&<path d="M0 -26V-35" stroke="#34413a" strokeWidth="2"/>}</g>;
 }
 export function CurrentGlyph() {
   return <g stroke="#53694b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 -8A12 12 0 1 0 8 8" fill="none"/><path d="M-7 -11L-7 -32Q0 -38 7 -32L7 -17" fill="#f4f6ef"/><text x="0" y="-22" fill="#53694b" stroke="none" textAnchor="middle" fontSize="12" fontFamily="Libertinus Math">A</text></g>;

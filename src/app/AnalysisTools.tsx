@@ -2,6 +2,9 @@ import { CurrentGlyph, ProbeGlyph } from './measurement-tools';
 
 export type MeasurementKind = 'voltage' | 'current' | 'resistance';
 export type AnalysisPanel = 'records' | 'path' | null;
+export const measurementLabels: Record<MeasurementKind, string> = {
+  voltage: '전압 탐침', current: '전류 센서', resistance: '등가저항',
+};
 
 export function AnalysisTools({
   kind,
@@ -50,7 +53,7 @@ export function AnalysisTools({
               )}
             </span>
             <span>
-              {value === 'voltage' ? '전압 탐침' : value === 'current' ? '전류 센서' : '등가저항'}
+              {measurementLabels[value]}
             </span>
           </button>
         ))}

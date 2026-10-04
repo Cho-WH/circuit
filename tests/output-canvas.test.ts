@@ -29,19 +29,29 @@ afterEach(() => {
 });
 
 
-function setup(arrow=false) {
+function setup(arrow=false,readOnly=false) {
+  const onInspect = vi.fn();
   let history=createHistory(layoutExample(examples[1].document));
   if(arrow)history.present.annotations=[{id:'test-arrow',kind:'arrow',anchor:null,position:{x:100,y:100},content:'I',visibility:'always',arrow:{shape:'corner',length:80,legLength:60,rotation:90,reversed:true}}];
   const dispatch=vi.fn((command: Parameters<typeof executeCommand>[1])=>{const result=executeCommand(history,command);if(!result.ok)return false;history=result.history;render();return true;});
-  function render(){root.render(createElement(OutputCanvas,{document:history.present,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected:[arrow?'test-arrow':'R1'],tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'test-note'}));}
+  function render(){root.render(createElement(OutputCanvas,{readOnly,document:history.present,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected:readOnly?[]:[arrow?'test-arrow':'R1'],tool:'select',onSelect:()=>{},onInspect,onTool:()=>{},dispatch,newId:()=> 'test-note'}));}
   act(render);
   const svg=host.querySelector('svg')!;
   Object.assign(svg,{getScreenCTM:()=>({a:1,inverse:()=>({})}),setPointerCapture:()=>{}});
   function pointer(target:Element,type:string,x:number,y:number,pointerType='mouse'){act(()=>{target.dispatchEvent(new PointerEvent(type,{bubbles:true,clientX:x,clientY:y,pointerId:1,pointerType,button:0}));});}
   const label=()=>host.querySelector('[data-output-id="R1"][data-output-part="label"]')!;
-  return {svg,label,pointer,dispatch,history:()=>history};
+  return {svg,label,pointer,dispatch,onInspect,history:()=>history};
 }
 describe('output canvas direct manipulation',()=>{
+  it('pans a read-only output without editing labels or opening settings',()=>{
+    const c=setup(false,true),before=c.label().innerHTML,view=c.svg.getAttribute('viewBox');
+    c.pointer(c.label(),'pointerdown',400,200);c.pointer(c.svg,'pointermove',440,230);c.pointer(c.svg,'pointerup',440,230);
+    act(()=>c.label().dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})));
+    expect(c.label().innerHTML).toBe(before);
+    expect(c.svg.getAttribute('viewBox')).not.toBe(view);
+    expect(c.dispatch).not.toHaveBeenCalled();expect(c.onInspect).not.toHaveBeenCalled();
+    expect(host.querySelector('.output-canvas [role="button"]')).toBeNull();
+  });
   it.each(['mouse','touch'])('previews and commits one independent label drag with %s',pointerType=>{
     const c=setup(),before=c.label().innerHTML;
     c.pointer(c.label(),'pointerdown',400,200,pointerType);
@@ -51,6 +61,7 @@ describe('output canvas direct manipulation',()=>{
     expect(c.dispatch).toHaveBeenCalledExactlyOnceWith({type:'SetProperties',id:'R1',properties:{labelOffsetX:70,labelOffsetY:-40}});
     expect(c.history().past).toHaveLength(1);
     expect(c.history().present.components.find(c=>c.id==='R1')!.properties.answerOffsetX).toBeUndefined();
+    expect(c.onInspect).not.toHaveBeenCalled();
   });
   it('discards canceled preview and does not commit on a late release',()=>{
     const c=setup(),before=c.label().innerHTML;
@@ -78,6 +89,7 @@ describe('arrow length handles',()=>{
     expect(c.dispatch).toHaveBeenCalledTimes(1);
     expect(c.history().present.annotations[0]).toMatchObject({position:{x:100,y:100},arrow:{length:80,legLength:100,rotation:90,reversed:true}});
     expect(c.history().past).toHaveLength(1);
+    expect(c.onInspect).not.toHaveBeenCalled();
   });
   it('cancels length preview and keeps the opposite corner fixed on a start drag',()=>{
     const c=setup(true),start=()=>host.querySelector('[data-output-part="start"]')!;
