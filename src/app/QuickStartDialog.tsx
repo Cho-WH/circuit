@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { ArrowRight, Box, FileImage, MessageCircle, Save, X } from 'lucide-react';
 import { createComponent, symbolMarkup } from '../component-library';
 import type { ComponentType } from '../domain';
@@ -147,7 +147,7 @@ function WorksheetPreview() {
       className="quick-start-illustration"
       viewBox="0 -10 340 200"
       role="img"
-      aria-label="문제지용 회로도 예시. 저항값 자리에 빈칸이 있고 전류 I의 방향이 화살표로 표시되어 있습니다."
+      aria-label="문제지용 회로도 예시. 저항값 자리에 빈칸이 있고 아래 도선 중앙의 전류 I 화살표가 왼쪽을 향합니다."
     >
       <rect x="30" y="10" width="280" height="160" rx="4" fill="#fff" stroke="#d7d4cc" />
       <path d="M48 28H103" stroke="#d5d2c9" strokeWidth="3" strokeLinecap="round" />
@@ -161,14 +161,14 @@ function WorksheetPreview() {
         <Symbol type="resistor" transform="translate(170 73)" />
         <Symbol type="dc-voltage-source" transform="translate(72 110) rotate(90) scale(.42)" />
         <path
-          d="M223 108H249 M242 104 249 108 242 112"
+          d="M183 130H155 M162 126 155 130 162 134"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.8"
         />
         <text
-          x="235"
-          y="99"
+          x="169"
+          y="121"
           textAnchor="middle"
           fontSize="16"
           fontStyle="italic"
@@ -188,11 +188,91 @@ function WorksheetPreview() {
   );
 }
 
-export function QuickStartDialog({ onClose, compact }: { onClose: () => void; compact: boolean }) {
-  const dialog = useDialogFocus(true, onClose);
+export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
+  onClose: () => void;
+  compact: boolean;
+  firstVisit: boolean;
+  helpButton: RefObject<HTMLButtonElement | null>;
+}) {
+  const [closing, setClosing] = useState(false);
+  const closingRequested = useRef(false);
+  const backdrop = useRef<HTMLDivElement>(null);
+  function requestClose() {
+    if (closingRequested.current) return;
+    closingRequested.current = true;
+    setClosing(true);
+  }
+  const dialog = useDialogFocus(true, requestClose, helpButton);
   const title = useId();
+
+  useEffect(() => {
+    if (!closing) return;
+    const surface = dialog.current;
+    const target = helpButton.current;
+    if (!surface || typeof surface.animate !== 'function') {
+      onClose();
+      return;
+    }
+    const from = surface.getBoundingClientRect();
+    const to = target?.getBoundingClientRect();
+    const dock = firstVisit && to && to.width > 0 && to.height > 0 && from.width > 0 && from.height > 0;
+    const animations: Animation[] = [];
+    const animate = (element: Element, frames: Keyframe[], duration: number, easing = 'ease-out') => {
+      const animation = element.animate(frames, { duration, easing, fill: 'forwards' });
+      // Auxiliary fades may still be running if the dialog unmounts early.
+      void animation.finished.catch(() => {});
+      animations.push(animation);
+      return animation;
+    };
+    let active = true;
+    let exit: Animation;
+    if (dock) {
+      const dx = to.x + to.width / 2 - (from.x + from.width / 2);
+      const dy = to.y + to.height / 2 - (from.y + from.height / 2);
+      // The content leaves first. Only its light surface follows a curved path to help.
+      for (const child of surface.children) animate(child, [{ opacity: 1 }, { opacity: 0 }], 85);
+      const radius = getComputedStyle(surface).borderRadius;
+      // Sample continuous curves so contraction and travel do not change speed at stages.
+      const frames = Array.from({ length: 31 }, (_, index) => {
+        const t = index / 30;
+        const diameter = 12 + 40 * (1 - t) ** 2;
+        const width = diameter + (from.width - diameter) * (1 - t) ** 5;
+        const height = diameter + (from.height - diameter) * (1 - t) ** 5;
+        return {
+          offset: t,
+          transform: `translate(${dx * (2 * t - t * t)}px, ${dy * t * t}px) scale(${width / from.width}, ${height / from.height})`,
+          borderRadius: t === 0 ? radius : `${Math.min(50, t * 160)}%`,
+          opacity: Math.min(1, (1 - t) / .16),
+        };
+      });
+      exit = animate(surface, frames, 460, 'cubic-bezier(.3, 0, .2, 1)');
+    } else {
+      exit = animate(surface, [{ opacity: 1 }, { opacity: 0 }], 120);
+    }
+    if (backdrop.current) animate(backdrop.current, [
+      { backgroundColor: getComputedStyle(backdrop.current).backgroundColor, backdropFilter: getComputedStyle(backdrop.current).backdropFilter },
+      { backgroundColor: 'transparent', backdropFilter: 'blur(0px)' },
+    ], dock ? 180 : 120);
+    const finish = () => {
+      if (!active) return;
+      if (dock && target?.isConnected) {
+        target.animate([
+          { transform: 'scale(1)' },
+          { transform: 'scale(1.16)', offset: .4 },
+          { transform: 'scale(1)' },
+        ], { duration: 220, easing: 'ease-out' });
+      }
+      onClose();
+    };
+    void exit.finished.then(finish, finish);
+    return () => {
+      active = false;
+      animations.forEach(animation => animation.cancel());
+    };
+  }, [closing, firstVisit, helpButton, onClose, dialog]);
+
   return (
-    <div className="modal-backdrop quick-start-backdrop" onClick={onClose}>
+    <div ref={backdrop} className="modal-backdrop quick-start-backdrop" data-closing={closing || undefined} onClick={requestClose}>
       <section
         ref={dialog}
         tabIndex={-1}
@@ -205,7 +285,7 @@ export function QuickStartDialog({ onClose, compact }: { onClose: () => void; co
         <header className="quick-start-header">
           <span className="quick-start-eyebrow">빠른 시작</span>
           <h2 id={title}>회로 분석과 수업 자료까지</h2>
-          <button className="quick-start-close" onClick={onClose} aria-label="도움말 닫기">
+          <button className="quick-start-close" onClick={requestClose} aria-label="도움말 닫기">
             <X size={20} />
           </button>
         </header>
@@ -260,7 +340,7 @@ export function QuickStartDialog({ onClose, compact }: { onClose: () => void; co
             >
               <div className="quick-start-feature-title">
                 <FileImage size={19} aria-hidden="true" />
-                <h3 id={`${title}-worksheet`}>문제지에 넣을 그림을 만드세요</h3>
+                <h3 id={`${title}-worksheet`}>문제지에 넣을 회로도를 만드세요</h3>
               </div>
               <WorksheetPreview />
               <p>
@@ -311,7 +391,7 @@ export function QuickStartDialog({ onClose, compact }: { onClose: () => void; co
             </strong>
             에 남겨주세요.
           </span>
-          <button className="primary" onClick={onClose}>
+          <button className="primary" onClick={requestClose}>
             직접 해보기
             <ArrowRight size={16} aria-hidden="true" />
           </button>

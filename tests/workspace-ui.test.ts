@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/app/App';
+import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { compactLayoutQuery } from '../src/app/useCompactLayout';
 import { FileMenu } from '../src/app/FileMenu';
 import { loadLocal, saveLocal } from '../src/persistence';
@@ -17,6 +18,7 @@ let root: Root, host: HTMLDivElement;
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
+  localStorage.setItem(QUICK_START_SEEN_KEY, 'true');
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });

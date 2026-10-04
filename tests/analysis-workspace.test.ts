@@ -4,6 +4,7 @@ import { act, createElement, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { App } from '../src/app/App';
+import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { examples } from '../src/fixtures';
 import { layoutExample } from '../src/app/examples';
 import { saveLocal, loadLocal, loadMeasurementNotebook } from '../src/persistence';
@@ -30,6 +31,7 @@ let host: HTMLDivElement, root: Root;
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
+  localStorage.setItem(QUICK_START_SEEN_KEY, 'true');
   host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);

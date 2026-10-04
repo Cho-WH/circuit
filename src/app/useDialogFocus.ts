@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 /** Keep dialog keyboard focus inside and restore the action which opened it. */
-export function useDialogFocus(open:boolean,onClose:()=>void){
+export function useDialogFocus(open:boolean,onClose:()=>void,returnFocus?:RefObject<HTMLElement|null>){
   const ref=useRef<HTMLElement>(null);
   const close=useRef(onClose);close.current=onClose;
   useEffect(()=>{
@@ -20,7 +20,7 @@ export function useDialogFocus(open:boolean,onClose:()=>void){
       }
     };
     document.addEventListener('keydown',handler,true);
-    return()=>{document.removeEventListener('keydown',handler,true);if(previous?.isConnected)previous.focus({preventScroll:true});};
-  },[open]);
+    return()=>{document.removeEventListener('keydown',handler,true);const target=returnFocus?.current??previous;if(target?.isConnected)target.focus({preventScroll:true});};
+  },[open,returnFocus]);
   return ref;
 }

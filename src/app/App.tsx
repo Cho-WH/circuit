@@ -94,6 +94,7 @@ import { formatQuantity, quantityFormatFor, type QuantityMode } from '../quantit
 import { Notation } from './Notation';
 import { PotentialSettings, defaultPotentialSettings } from './PotentialSettings';
 import { QuickStartDialog } from './QuickStartDialog';
+import { useQuickStart } from './useQuickStart';
 import { FileMenu } from './FileMenu';
 import { FeedbackLoading } from './FeedbackLoading';
 import { PotentialWorkspace, type PotentialWorkspaceStatus } from './PotentialWorkspace';
@@ -160,7 +161,8 @@ export function App() {
   } | null>(null);
   const [clipboard, setClipboard] = useState<PastePayload | null>(null);
   const [valueDraft, setValueDraft] = useState('');
-  const [help, setHelp] = useState(false);
+  const { help, firstVisit, showHelp, closeHelp } = useQuickStart();
+  const helpButton = useRef<HTMLButtonElement>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [potentialView, setPotentialView] = useState<'2d' | '3d'>('2d');
   const [potentialStatus, setPotentialStatus] = useState<PotentialWorkspaceStatus>('2d');
@@ -934,7 +936,7 @@ export function App() {
             <MessageCircle size={18} />
             {!compact && '한마디'}
           </button>
-          <button onClick={() => setHelp(true)} aria-label="사용 도움말">
+          <button ref={helpButton} onClick={showHelp} aria-label="사용 도움말">
             <CircleHelp size={19} />
           </button>
         </div>
@@ -1603,7 +1605,7 @@ export function App() {
           </button>
         </div>
       )}
-      {help && <QuickStartDialog compact={compact} onClose={() => setHelp(false)} />}
+      {help && <QuickStartDialog compact={compact} onClose={closeHelp} firstVisit={firstVisit} helpButton={helpButton} />}
     </div>
   );
 }

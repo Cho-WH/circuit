@@ -4,13 +4,14 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PotentialPalettePicker } from '../src/app/PotentialPalettePicker';
 import { App } from '../src/app/App';
+import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { potentialColor, type PotentialPaletteId } from '../src/visualization';
 import type { Potential3DProps } from '../src/potential-3d';
 
 const observed = vi.hoisted(()=>({scene:null as Potential3DProps|null}));
 vi.mock('../src/potential-3d',()=>({Potential3D:(props:Potential3DProps)=>{observed.scene=props;return createElement('div',null,'3D');}}));
 let root:Root,host:HTMLDivElement;
-beforeEach(()=>{vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);localStorage.clear();host=document.createElement('div');document.body.append(host);root=createRoot(host);observed.scene=null;});
+beforeEach(()=>{vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);localStorage.clear();localStorage.setItem(QUICK_START_SEEN_KEY,'true');host=document.createElement('div');document.body.append(host);root=createRoot(host);observed.scene=null;});
 afterEach(()=>{act(()=>root.unmount());host.remove();localStorage.clear();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const trigger=()=>host.querySelector<HTMLButtonElement>('.potential-palette-trigger')!;
 const menu=()=>document.querySelector<HTMLElement>('[role="menu"][aria-label="전위 색상표"]');

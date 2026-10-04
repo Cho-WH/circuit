@@ -18,6 +18,11 @@
   padding: 26px 32px 20px;
   flex-shrink: 0;
 }
+.quick-start-backdrop[data-closing] .quick-start-dialog {
+  will-change: transform, opacity;
+  pointer-events: none;
+  transform-origin: center;
+}
 .quick-start-eyebrow {
   color: #526645;
   font-size: 13px;
@@ -228,7 +233,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .quick-start-dialog {
-    animation: none;
+  /* This welcome transition intentionally remains enabled at the product owner's request. */
+  .quick-start-backdrop .quick-start-dialog {
+    animation: surface-enter 200ms var(--ease-out) !important;
   }
 }
