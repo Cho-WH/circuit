@@ -39,7 +39,7 @@
   height: 44px;
 }
 .quick-start-body {
-  padding: 0 32px 22px;
+  padding: 0 32px 12px;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -49,6 +49,8 @@
   font-size: 16px;
   line-height: 1.5;
   letter-spacing: -0.35px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .quick-start-dialog p {
   font-size: 15px;
@@ -63,38 +65,11 @@
   margin-bottom: 16px;
   color: #596153;
 }
-.quick-start-tip {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 18px;
-  background: #eef1e8;
-  border-radius: 10px;
-  margin-bottom: 22px;
-}
-.quick-start-tip-label {
-  display: block;
-  color: #526645;
-  font-size: 12px;
-  font-weight: 750;
-  margin-bottom: 4px;
-}
-.quick-start-tip p {
-  font-size: 14px;
-}
-.quick-start-tip svg {
-  width: 210px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
 .quick-start-dialog small {
   display: block;
   font-size: 12px;
   line-height: 1.65;
   color: #636b5d;
-}
-.quick-start-tip small {
-  margin-top: 3px;
 }
 .quick-start-features {
   display: grid;
@@ -119,9 +94,11 @@
   display: block;
   width: 100%;
   height: auto;
-  margin: 12px 0;
+  max-height: 180px;
+  margin: 10px 0;
   border-radius: 10px;
-  background: #f0f2ec;
+  background: #fff;
+  border: 1px solid #e5e7df;
 }
 .worksheet .quick-start-illustration {
   background: #efede6;
@@ -133,10 +110,27 @@
 .quick-start-route {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: auto;
+  flex-wrap: wrap;
+  gap: 6px;
   color: #526645;
   font-weight: 650;
+}
+.quick-start-routes,
+.quick-start-output-route {
+  margin-top: auto;
+}
+.quick-start-routes {
+  display: grid;
+  gap: 4px;
+}
+.quick-start-route b {
+  min-width: 55px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #636b5d;
+}
+.quick-start-route > svg {
+  flex-shrink: 0;
 }
 .quick-start-route span {
   font-size: 13px;
@@ -146,12 +140,13 @@
   align-items: flex-start;
   gap: 9px;
   border-top: 1px solid #e1e3da;
-  margin-top: 22px;
-  padding-top: 16px;
+  margin-top: 16px;
+  padding-top: 12px;
   color: #606758;
 }
 .quick-start-dialog .quick-start-save {
   font-size: 13px;
+  line-height: 1.6;
 }
 .quick-start-save > svg {
   flex-shrink: 0;
@@ -214,19 +209,22 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 26px;
   }
-  .quick-start-tip {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    padding: 14px;
-  }
-  .quick-start-tip svg {
-    width: 200px;
-    max-width: 100%;
-    margin: 0 auto;
-  }
   .quick-start-footer {
     padding: 12px 20px;
+  }
+}
+@media (max-width: 1000px) and (max-height: 500px) {
+  .quick-start-header {
+    padding-top: 14px;
+    padding-bottom: 12px;
+  }
+  .quick-start-header h2 {
+    margin-top: 4px;
+    font-size: 21px;
+  }
+  .quick-start-footer {
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

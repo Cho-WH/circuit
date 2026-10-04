@@ -1603,7 +1603,7 @@ export function App() {
           </button>
         </div>
       )}
-      {help && <QuickStartDialog onClose={() => setHelp(false)} />}
+      {help && <QuickStartDialog compact={compact} onClose={() => setHelp(false)} />}
     </div>
   );
 }

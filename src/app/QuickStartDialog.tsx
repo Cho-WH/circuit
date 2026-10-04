@@ -2,6 +2,8 @@ import { useId } from 'react';
 import { ArrowRight, Box, FileImage, MessageCircle, Save, X } from 'lucide-react';
 import { createComponent, symbolMarkup } from '../component-library';
 import type { ComponentType } from '../domain';
+import { potentialColor } from '../visualization';
+import { ProbeGlyph } from './measurement-tools';
 import { useDialogFocus } from './useDialogFocus';
 import './quick-start.css';
 
@@ -31,49 +33,110 @@ function Symbol({
 }
 
 function PotentialPreview() {
-  const gradient = useId();
+  const high = potentialColor(6, 0, 6);
+  const low = potentialColor(0, 0, 6);
   return (
     <svg
       className="quick-start-illustration"
-      viewBox="0 0 340 180"
+      viewBox="0 0 340 200"
       role="img"
-      aria-label="전원과 저항이 연결된 회로의 전위 높이 예시. 6 V 도선은 높게, 0 V 도선은 낮게 놓이고 저항 양 끝에 높이 차이가 생깁니다."
+      aria-label="앱의 3D 분석 예시. 바닥 회로도 위에 6 V 도선은 빨강으로 높게, 0 V 도선은 남색으로 낮게 표시됩니다. 전류 띠와 흐름 무늬, 두 지점의 전압 탐침을 함께 볼 수 있습니다."
     >
-      <defs>
-        <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#b65c30" />
-          <stop offset="1" stopColor="#405b9b" />
-        </linearGradient>
-      </defs>
-      <path d="M42 144 120 95H302L224 144Z" fill="#e8ede4" stroke="#d1d9cc" />
-      <path d="M130 44V100 M284 44V100" stroke="#899383" strokeDasharray="3 5" />
-      <path d="M76 134 130 100H284L230 134Z" fill="none" stroke="#bdc7b7" strokeWidth="2" />
-      <path d="M130 44H284" stroke="#b65c30" strokeWidth="3" />
-      <path d="M76 134H230" stroke="#405b9b" strokeWidth="3" />
-      <g color="#536448">
-        <Symbol type="dc-voltage-source" transform="matrix(-.614 1.023 -.7 -.42 103 89)" />
+      {/* A static projection keeps the guide light; symbols, palette and probes are shared. */}
+      <g transform="matrix(.88 .13 -.32 .5 112 101)">
+        <g stroke="#deded5" strokeWidth=".7" opacity=".65">
+          {[0, 22, 44, 66, 88, 110].map((y) => (
+            <path key={`y${y}`} d={`M-20 ${y}H240`} />
+          ))}
+          {[-20, 24, 68, 112, 156, 200, 240].map((x) => (
+            <path key={`x${x}`} d={`M${x} -14V124`} />
+          ))}
+        </g>
+        <g color="#72796e" opacity=".75">
+          <path
+            d="M0 33V0H220V33 M220 77V110H0V77"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <Symbol type="dc-voltage-source" transform="translate(0 55) rotate(90) scale(.5)" />
+          <Symbol type="resistor" transform="translate(220 55) rotate(90) scale(.5)" />
+          <g fill="currentColor" fontSize="15" fontFamily="Libertinus Math, serif">
+            <text x="14" y="60">
+              6 V
+            </text>
+            <text x="169" y="59">
+              100 Ω
+            </text>
+          </g>
+        </g>
       </g>
-      <Symbol
-        type="resistor"
-        transform="matrix(-.614 1.023 -.7 -.42 257 89)"
-        stroke={`url(#${gradient})`}
-      />
-      <g fontSize="15" fontWeight="650">
-        <text x="164" y="32" fill="#934421">
+      <g fill="none" stroke="#7e8a72" strokeWidth=".6">
+        {[0, 17, 34, 51, 68].map((height) => (
+          <path
+            key={height}
+            d={`M49 ${166 - height} 95 ${94 - height} 316 ${127 - height}`}
+            strokeDasharray={height ? '2 4' : undefined}
+            opacity={height ? '.45' : '.7'}
+          />
+        ))}
+        <path d="M49 94V170 M316 55V131" />
+        <path d="M112 33V101 M305.6 61.6V129.6" strokeDasharray="2 4" opacity=".6" />
+      </g>
+      <g fill="#66745a" fontSize="10" textAnchor="end">
+        <text x="43" y="102">
           6 V
         </text>
-        <text x="138" y="158" fill="#405b9b">
+        <text x="43" y="136">
+          3 V
+        </text>
+        <text x="43" y="170">
           0 V
         </text>
       </g>
+      <g fill="none" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".65">
+        <path d="M101.4 49.5 112 33 305.6 61.6 295 78.1" stroke={high} />
+        <path d="M295 78.1 281 168.1 M87.4 139.5 101.4 49.5" stroke="#586879" />
+        <path d="M281 168.1 270.4 184.6 76.8 156 87.4 139.5" stroke={low} />
+      </g>
       <path
-        d="M309 47V131 M305 51 309 47 313 51 M305 127 309 131 313 127"
+        d="M112 33 305.6 61.6 295 78.1 281 168.1 270.4 184.6 76.8 156 87.4 139.5 101.4 49.5Z"
         fill="none"
-        stroke="#697463"
+        stroke="white"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeDasharray=".1 14"
       />
-      <text x="318" y="77" fontSize="13" fill="#526048" writingMode="vertical-rl">
-        전위
-      </text>
+      <g fill="#30382f" fontSize="14" fontStyle="italic" fontFamily="Libertinus Math, serif">
+        <text x="105" y="96">
+          V₁
+        </text>
+        <text x="296" y="127">
+          R₁
+        </text>
+      </g>
+      <g transform="translate(208 47)">
+        <circle r="4" fill="#bc4541" stroke="white" strokeWidth="1.5" />
+        <g transform="rotate(26) scale(.6)">
+          <ProbeGlyph />
+        </g>
+      </g>
+      <g transform="translate(174 170.4)">
+        <circle r="4" fill="#34413a" stroke="white" strokeWidth="1.5" />
+        <g transform="rotate(-26) scale(.6)">
+          <ProbeGlyph color="black" />
+        </g>
+      </g>
+      <g fill="#30382f" fontSize="12" fontFamily="Libertinus Math, serif" textAnchor="middle">
+        <rect x="240" y="31" width="34" height="20" rx="4" fill="white" />
+        <text x="257" y="45">
+          6 V
+        </text>
+        <rect x="202" y="179" width="34" height="20" rx="4" fill="white" />
+        <text x="219" y="193">
+          0 V
+        </text>
+      </g>
     </svg>
   );
 }
@@ -82,7 +145,7 @@ function WorksheetPreview() {
   return (
     <svg
       className="quick-start-illustration"
-      viewBox="0 0 340 180"
+      viewBox="0 -10 340 200"
       role="img"
       aria-label="문제지용 회로도 예시. 저항값 자리에 빈칸이 있고 전류 I의 방향이 화살표로 표시되어 있습니다."
     >
@@ -125,37 +188,7 @@ function WorksheetPreview() {
   );
 }
 
-function InsertionPreview() {
-  return (
-    <svg
-      viewBox="0 0 240 82"
-      role="img"
-      aria-label="도선의 곧은 구간에 저항을 놓으면 양쪽 도선이 저항에 연결됩니다."
-    >
-      <g color="#567344">
-        <g opacity=".5">
-          <Symbol type="resistor" transform="translate(58 22) scale(.65)" />
-        </g>
-        <path
-          d="M58 38V48 M54 44 58 48 62 44"
-          stroke="currentColor"
-          fill="none"
-          strokeWidth="1.5"
-        />
-        <path d="M15 59H100 M142 59H162 M218 59H238" stroke="currentColor" strokeWidth="2" />
-        <Symbol type="resistor" transform="translate(190 59) scale(.65)" />
-        <path
-          d="M110 59H129 M124 54 129 59 124 64"
-          fill="none"
-          stroke="#7a8075"
-          strokeWidth="1.5"
-        />
-      </g>
-    </svg>
-  );
-}
-
-export function QuickStartDialog({ onClose }: { onClose: () => void }) {
+export function QuickStartDialog({ onClose, compact }: { onClose: () => void; compact: boolean }) {
   const dialog = useDialogFocus(true, onClose);
   const title = useId();
   return (
@@ -183,11 +216,13 @@ export function QuickStartDialog({ onClose }: { onClose: () => void }) {
           tabIndex={0}
         >
           <p className="quick-start-build">
-            직관적인 조작으로 간단히 원하는 회로를 그릴 수 있어요. 부품을 놓고 연결해 회로를 만들고,
-            전압·전류를 확인해보세요.
+            <strong>
+              {compact
+                ? '+ 부품에서 예제 회로를 열거나 부품을 골라 놓으세요.'
+                : '예제 회로를 열거나 왼쪽 목록에서 부품을 골라 놓으세요.'}
+            </strong>
             <br />
-            바로 시작할 수 있는 다양한 예제 회로도 준비되어 있어요. 만든 회로도는 예쁘게 출력도
-            가능해요.
+            단자 두 곳을 차례로 누르면 도선으로 연결돼요.
           </p>
           <div className="quick-start-features">
             <section
@@ -196,19 +231,28 @@ export function QuickStartDialog({ onClose }: { onClose: () => void }) {
             >
               <div className="quick-start-feature-title">
                 <Box size={19} aria-hidden="true" />
-                <h3 id={`${title}-potential`}>3D로 전위를 살펴보세요</h3>
+                <h3 id={`${title}-potential`}>3D로 회로를 분석하세요</h3>
               </div>
               <PotentialPreview />
               <p>
-                평면 회로가 <strong>전위에 따라 높아지고 낮아져요.</strong> <br />
-                회로 해석의 핵심인 전위를 눈으로 보고 바로 이해하세요!
+                <strong>전위는 높이로, 전류는 흐름으로</strong> 살펴보세요. 탐침과 센서로
+                전압·전류를 측정하고 비교해 보세요.
               </p>
-              <small>전위의 높이에 따라 전류가 어떻게 흐를지 예상해 볼까요?</small>
-              <p className="quick-start-route">
-                <span>분석하기</span>
-                <ArrowRight size={14} aria-hidden="true" />
-                <span>3D</span>
-              </p>
+              <small>회로를 살펴보는 시선을 한 차원 높여보세요!</small>
+              <div className="quick-start-routes">
+                <p className="quick-start-route">
+                  <b>3D 보기</b>
+                  <span>분석하기</span>
+                  <ArrowRight size={12} aria-hidden="true" />
+                  <span>3D</span>
+                </p>
+                <p className="quick-start-route">
+                  <b>측정하기</b>
+                  <span>분석하기</span>
+                  <ArrowRight size={12} aria-hidden="true" />
+                  <span>{compact ? '측정' : '왼쪽 측정 도구'}</span>
+                </p>
+              </div>
             </section>
             <section
               className="quick-start-feature worksheet"
@@ -220,11 +264,30 @@ export function QuickStartDialog({ onClose }: { onClose: () => void }) {
               </div>
               <WorksheetPreview />
               <p>
-                값을 숨기거나 <strong>빈칸으로 바꾸고, 화살표와 설명을 더해보세요.</strong> 완성한
-                그림은 복사해서 시험지나 수업 자료에 붙여넣으면 돼요.
+                {compact ? (
+                  <>
+                    완성한 회로를 <strong>그림으로 복사하거나 저장하세요.</strong> 시험지나 수업
+                    자료에 바로 넣을 수 있어요.
+                  </>
+                ) : (
+                  <>
+                    값을 숨기거나 <strong>빈칸·화살표·설명을 더해보세요.</strong> 그림을 복사해
+                    시험지나 수업 자료에 넣을 수 있어요.
+                  </>
+                )}
               </p>
-              <small>기호 크기와 위치까지 바꿀 수 있어요!</small>
-              <p className="quick-start-route">
+              <small>
+                {compact
+                  ? '글자 배치와 주석 편집은 넓은 화면에서 할 수 있어요.'
+                  : '글자 크기와 이름·값 위치도 바꿀 수 있어요.'}
+              </small>
+              <p className="quick-start-route quick-start-output-route">
+                {compact && (
+                  <>
+                    <span>상단 ⋯</span>
+                    <ArrowRight size={12} aria-hidden="true" />
+                  </>
+                )}
                 <span>회로도 출력</span>
                 <ArrowRight size={14} aria-hidden="true" />
                 <span>그림 복사</span>
@@ -235,18 +298,18 @@ export function QuickStartDialog({ onClose }: { onClose: () => void }) {
             <Save size={17} aria-hidden="true" />
             <span>
               자동 저장은 이 브라우저에만 남아요. 따로 보관하려면{' '}
-              <strong>파일 → 회로 파일 저장</strong>을 이용하세요.
+              <strong>{compact ? '상단 ⋯' : '파일'} → 회로 파일 저장</strong>을 이용하세요.
             </span>
           </p>
         </div>
         <footer className="quick-start-footer">
           <span>
-            사용 후기나 피드백을 남기고 싶다면{' '}
+            후기·제안은 상단{' '}
             <strong className="quick-start-feedback-label">
               <MessageCircle size={14} aria-hidden="true" />
-              한마디
+              {compact ? '말풍선' : '한마디'}
             </strong>
-            를 눌러주세요!
+            에 남겨주세요.
           </span>
           <button className="primary" onClick={onClose}>
             직접 해보기
