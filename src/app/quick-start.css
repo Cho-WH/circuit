@@ -1,3 +1,23 @@
+.modal-backdrop.quick-start-backdrop {
+  background: transparent;
+  backdrop-filter: none;
+  isolation: isolate;
+  --quick-start-enter: quick-start-enter 200ms var(--ease-out) both;
+  --quick-start-dim: quick-start-dim 180ms ease-out both;
+}
+.quick-start-backdrop[data-first-visit] {
+  --quick-start-enter: quick-start-enter 700ms cubic-bezier(.2, .65, .3, 1) 180ms both;
+  --quick-start-dim: quick-start-dim 280ms ease-out both;
+}
+.quick-start-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgb(24 31 23 / 58%);
+  pointer-events: none;
+  will-change: opacity;
+  animation: var(--quick-start-dim);
+}
 .quick-start-dialog {
   width: min(860px, 100%);
   max-height: calc(100dvh - 40px);
@@ -5,12 +25,13 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  background: #fcfbf8;
+  z-index: 1;
+  background: var(--surface);
   border: 1px solid #dedfd5;
   border-radius: 18px;
   box-shadow: 0 24px 90px #26302433;
   color: #30382f;
-  animation: surface-enter 200ms var(--ease-out);
+  animation: var(--quick-start-enter);
   overflow: hidden;
 }
 .quick-start-header {
@@ -164,7 +185,7 @@
   gap: 14px;
   padding: 14px 32px;
   border-top: 1px solid #e1e3da;
-  background: #fcfbf8;
+  background: var(--surface);
   flex-shrink: 0;
 }
 .quick-start-footer > span {
@@ -232,9 +253,20 @@
     padding-bottom: 8px;
   }
 }
+@keyframes quick-start-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes quick-start-dim {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   /* This welcome transition intentionally remains enabled at the product owner's request. */
   .quick-start-backdrop .quick-start-dialog {
-    animation: surface-enter 200ms var(--ease-out) !important;
+    animation: var(--quick-start-enter) !important;
+  }
+  .quick-start-backdrop .quick-start-scrim {
+    animation: var(--quick-start-dim) !important;
   }
 }

@@ -60,19 +60,19 @@ it('allows dismissal and manual reopening when browser storage is unavailable', 
   expect(host.querySelector('[role="dialog"]')).not.toBeNull();
 });
 
-it('finishes the first close at the help button once, then restores focus and releases its animations', async () => {
+it('keeps the screen dim throughout the one-second exit, then fades it before restoring focus', async () => {
   localStorage.removeItem(QUICK_START_SEEN_KEY);
   await act(async () => root.render(createElement(App)));
   const surface = host.querySelector<HTMLElement>('.quick-start-dialog')!;
-  const backdrop = host.querySelector<HTMLElement>('.quick-start-backdrop')!;
+  const scrim = host.querySelector<HTMLElement>('.quick-start-scrim')!;
   const target = button('사용 도움말');
   vi.spyOn(surface, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 60, 350, 680));
   vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(342, 8, 36, 36));
-  let finish!: () => void;
-  const finished = new Promise<void>(resolve => { finish = resolve; });
+  const finish = new Map<Element, () => void>();
   const animations: { cancel: ReturnType<typeof vi.fn> }[] = [];
-  for (const element of [surface, backdrop, target, ...surface.children]) {
+  for (const element of [surface, scrim, target, ...surface.children]) {
     element.animate = vi.fn(() => {
+      const finished = new Promise<void>(resolve => { finish.set(element, resolve); });
       const animation = { finished, cancel: vi.fn() };
       animations.push(animation);
       return animation as unknown as Animation;
@@ -81,16 +81,23 @@ it('finishes the first close at the help button once, then restores focus and re
   await act(async () => button('직접 해보기').click());
   await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
   expect(surface.animate).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(surface.animate).mock.calls[0][1]).toMatchObject({ duration: 1000 });
+  expect(scrim.animate).not.toHaveBeenCalled();
   expect(host.querySelector('[role="dialog"]')).toBe(surface);
   expect(localStorage.getItem(QUICK_START_SEEN_KEY)).toBeNull();
   const frames = vi.mocked(surface.animate).mock.calls[0][0] as Keyframe[];
   expect(frames.at(-1)!.transform).toContain('translate(165px, -374px)');
-  await act(async () => finish());
+  await act(async () => finish.get(surface)!());
+  expect(target.animate).toHaveBeenCalledTimes(1);
+  expect(scrim.animate).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(scrim.animate).mock.calls[0][1]).toMatchObject({ duration: 400 });
+  expect(host.querySelector('[role="dialog"]')).toBe(surface);
+  expect(localStorage.getItem(QUICK_START_SEEN_KEY)).toBeNull();
+  await act(async () => finish.get(scrim)!());
   expect(host.querySelector('[role="dialog"]')).toBeNull();
   expect(localStorage.getItem(QUICK_START_SEEN_KEY)).toBe('true');
   expect(document.activeElement).toBe(target);
-  expect(target.animate).toHaveBeenCalledTimes(1);
-  expect(animations.slice(0, -1).every(animation => animation.cancel.mock.calls.length === 1)).toBe(true);
+  expect(animations.every(animation => animation.cancel.mock.calls.length === 1)).toBe(true);
 });
 
 it('contains keyboard focus and restores the help trigger without changing the circuit or active mode', async () => {

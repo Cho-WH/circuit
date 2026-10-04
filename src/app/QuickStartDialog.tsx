@@ -196,7 +196,7 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
 }) {
   const [closing, setClosing] = useState(false);
   const closingRequested = useRef(false);
-  const backdrop = useRef<HTMLDivElement>(null);
+  const scrim = useRef<HTMLDivElement>(null);
   function requestClose() {
     if (closingRequested.current) return;
     closingRequested.current = true;
@@ -229,42 +229,48 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
     if (dock) {
       const dx = to.x + to.width / 2 - (from.x + from.width / 2);
       const dy = to.y + to.height / 2 - (from.y + from.height / 2);
-      // The content leaves first. Only its light surface follows a curved path to help.
-      for (const child of surface.children) animate(child, [{ opacity: 1 }, { opacity: 0 }], 85);
-      const radius = getComputedStyle(surface).borderRadius;
-      // Sample continuous curves so contraction and travel do not change speed at stages.
-      const frames = Array.from({ length: 31 }, (_, index) => {
-        const t = index / 30;
-        const diameter = 12 + 40 * (1 - t) ** 2;
-        const width = diameter + (from.width - diameter) * (1 - t) ** 5;
-        const height = diameter + (from.height - diameter) * (1 - t) ** 5;
+      // Keep the dimmer in place so the light surface stays visible throughout its journey.
+      for (const child of surface.children) animate(child, [{ opacity: 1 }, { opacity: 0 }], 220);
+      const style = getComputedStyle(surface);
+      const radius = style.borderRadius;
+      const startOpacity = Number(style.opacity);
+      // The browser interpolates these continuous curves at the display refresh rate.
+      // Motion uses transforms instead of changing layout dimensions.
+      const frames = Array.from({ length: 61 }, (_, index) => {
+        const t = index / 60;
+        const travel = t * t * (3 - 2 * t);
+        const arrival = Math.max(0, (t - .82) / .18);
+        const diameter = (56 - 20 * t) * (1 - arrival * arrival * (3 - 2 * arrival));
+        const width = diameter + (from.width - diameter) * (1 - t) ** 3;
+        const height = diameter + (from.height - diameter) * (1 - t) ** 3;
         return {
           offset: t,
-          transform: `translate(${dx * (2 * t - t * t)}px, ${dy * t * t}px) scale(${width / from.width}, ${height / from.height})`,
-          borderRadius: t === 0 ? radius : `${Math.min(50, t * 160)}%`,
-          opacity: Math.min(1, (1 - t) / .16),
+          transform: `translate(${dx * (2 * travel - travel * travel)}px, ${dy * travel * travel}px) scale(${width / from.width}, ${height / from.height})`,
+          borderRadius: t === 0 ? radius : `${Math.min(50, 3 + t * 94)}%`,
+          opacity: Math.min(1, (1 - t) / .04) * (startOpacity + (1 - startOpacity) * Math.min(1, t / .15)),
         };
       });
-      exit = animate(surface, frames, 460, 'cubic-bezier(.3, 0, .2, 1)');
+      exit = animate(surface, frames, 1000, 'linear');
     } else {
       exit = animate(surface, [{ opacity: 1 }, { opacity: 0 }], 120);
     }
-    if (backdrop.current) animate(backdrop.current, [
-      { backgroundColor: getComputedStyle(backdrop.current).backgroundColor, backdropFilter: getComputedStyle(backdrop.current).backdropFilter },
-      { backgroundColor: 'transparent', backdropFilter: 'blur(0px)' },
-    ], dock ? 180 : 120);
-    const finish = () => {
+    const fadeScrim = (duration: number) => scrim.current
+      ? animate(scrim.current, [{ opacity: 1 }, { opacity: 0 }], duration, 'cubic-bezier(.2, .65, .3, 1)').finished
+      : Promise.resolve();
+    const finish = () => { if (active) onClose(); };
+    const arrive = () => {
       if (!active) return;
       if (dock && target?.isConnected) {
-        target.animate([
+        animate(target, [
           { transform: 'scale(1)' },
-          { transform: 'scale(1.16)', offset: .4 },
+          { transform: 'scale(1.16)', offset: .35 },
           { transform: 'scale(1)' },
-        ], { duration: 220, easing: 'ease-out' });
+        ], 360);
       }
-      onClose();
+      return fadeScrim(400).then(finish, finish);
     };
-    void exit.finished.then(finish, finish);
+    if (dock) void exit.finished.then(arrive, finish);
+    else void Promise.all([exit.finished, fadeScrim(120)]).then(finish, finish);
     return () => {
       active = false;
       animations.forEach(animation => animation.cancel());
@@ -272,7 +278,8 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
   }, [closing, firstVisit, helpButton, onClose, dialog]);
 
   return (
-    <div ref={backdrop} className="modal-backdrop quick-start-backdrop" data-closing={closing || undefined} onClick={requestClose}>
+    <div className="modal-backdrop quick-start-backdrop" data-first-visit={firstVisit || undefined} data-closing={closing || undefined} onClick={requestClose}>
+      <div ref={scrim} className="quick-start-scrim" aria-hidden="true" />
       <section
         ref={dialog}
         tabIndex={-1}
