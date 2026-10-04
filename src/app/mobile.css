@@ -11,7 +11,7 @@
 .compact-layout .mode-tabs button{min-height:44px;font-size:12px;padding:0}
 .compact-layout .mode-tabs button svg{display:none}
 .compact-layout .top-actions{margin:0;gap:0;flex:none}
-.compact-layout .file-menu>.floating-panel-trigger{width:44px;height:44px;padding:8px}
+.compact-layout .top-actions>button,.compact-layout .file-menu>.floating-panel-trigger{width:36px;min-width:36px;height:44px;padding:8px}
 .compact-layout .workspace{position:relative;display:flex;flex-direction:column;flex:1;min-height:0}
 .compact-layout .library-panel{display:none}
 .compact-layout .canvas-column{flex:1;height:auto;min-height:0;overflow:hidden}
@@ -63,10 +63,18 @@
 .compact-layout .parameter-panel{margin-top:0}
 .compact-layout .parameter-panel>.section-heading button{min-width:44px;min-height:44px}
 .compact-layout .analysis-console-host{display:none}
-.compact-layout .compact-potential-palette{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
 .compact-layout .worksheet-topbar .output-actions{margin-left:auto;gap:6px;flex-wrap:nowrap}
 .compact-layout .worksheet-topbar .output-copy{min-width:90px}
 .compact-layout .worksheet-topbar .export-menu summary{min-height:44px;display:flex;align-items:center;padding:6px 10px}
 .compact-layout .compact-output-title{padding-left:8px;color:var(--muted);font-size:12px}
 .compact-layout .output-canvas [data-output-id]{cursor:grab}
 .compact-layout .output-canvas [data-output-id]:hover{filter:none}
+
+/* Match the desktop segmented control; tool-group's active tint must not cover its white thumb. */
+.compact-layout .compact-analysis-bar .segmented{margin-right:4px;gap:2px}
+.compact-layout .compact-analysis-bar .segmented button.active{background:white;color:var(--ink);box-shadow:0 1px 3px #30382f26;font-weight:700}
+.compact-layout .compact-analysis-bar .compact-layers button.active{background:var(--accent);color:white}
+
+.compact-palette-row{display:flex;align-items:center;gap:12px;padding:0 10px;font-size:12px;color:var(--muted)}
+.compact-palette-row>span{flex:none}
+.action-menu-content .compact-palette-row>.potential-palette-trigger{flex:1;width:auto;min-height:44px;padding:8px 4px;gap:6px}

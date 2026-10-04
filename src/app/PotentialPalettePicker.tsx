@@ -45,6 +45,7 @@ export function PotentialPalettePicker({ value, min, max, onChange }: Props) {
   return <>
     <button ref={trigger} type="button" className="potential-palette-trigger" aria-label={`전위 색상표 선택: ${current.name}`}
       aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
+      onBlur={event => { if (menu.current?.contains(event.relatedTarget)) event.stopPropagation(); }}
       onClick={() => setOpen(!open)} onKeyDown={event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); event.stopPropagation(); setOpen(true); }
         if (event.key === 'Escape' && open) { event.stopPropagation(); close(true); }
@@ -53,7 +54,12 @@ export function PotentialPalettePicker({ value, min, max, onChange }: Props) {
       <ChevronDown size={13} aria-hidden="true"/>
     </button>
     {open && createPortal(<div ref={menu} id={id} role="menu" aria-label="전위 색상표" className="potential-palette-menu" style={position}
-      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== trigger.current) close(); }}
+      onPointerDown={event => event.stopPropagation()}
+      onBlur={event => {
+        // Portaled submenu focus stays inside the containing menu's interaction.
+        if (event.currentTarget.contains(event.relatedTarget) || event.relatedTarget === trigger.current) event.stopPropagation();
+        else close();
+      }}
       onKeyDown={event => {
         // Palette navigation must never move/delete the selected circuit elements.
         event.stopPropagation();

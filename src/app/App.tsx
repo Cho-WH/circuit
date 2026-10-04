@@ -714,17 +714,22 @@ export function App() {
   const viewSwitcher = <div className="segmented" role="group" aria-label="회로 차원">
     {(['2d', '3d'] as const).map(view => <button key={view} aria-pressed={analysisView === view} className={analysisView === view ? 'active' : ''} onClick={() => chooseView(view)}>{view.toUpperCase()}</button>)}
   </div>;
+  const togglePotentialColors = () => setShowColors(value => !value);
+  const toggleCurrentDisplay = () => setShowCurrent(value => !value);
   const mobileViewControls = <>
     {viewSwitcher}
-    <button className={showColors || showNumbers ? 'active' : ''} aria-pressed={showColors || showNumbers} onClick={() => {
-      const show = !(showColors || showNumbers); setShowColors(show); setShowNumbers(show);
-    }}>전위</button>
-    <button className={showCurrent ? 'active' : ''} aria-pressed={showCurrent} onClick={() => setShowCurrent(v => !v)}>전류</button>
+    <div className="segmented compact-layers" role="group" aria-label="회로 표시">
+      <button className={showColors ? 'active' : ''} aria-pressed={showColors} onClick={togglePotentialColors}>전위</button>
+      <button className={showCurrent ? 'active' : ''} aria-pressed={showCurrent} onClick={toggleCurrentDisplay}>전류</button>
+    </div>
     <button className="compact-measure-start" onClick={() => chooseMeasurement(measurementKind ?? 'voltage')}>측정</button>
     <FloatingPanel label="보기 더보기" contentLabel="보기 더보기" className="compact-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
       {close => <>
-        <button role="menuitemcheckbox" aria-checked={showColors} onClick={() => setShowColors(v => !v)}>전위 색상 {showColors && <Check size={16} />}</button>
-        <button role="menuitemcheckbox" aria-checked={showNumbers} onClick={() => setShowNumbers(v => !v)}>전위 숫자 {showNumbers && <Check size={16} />}</button>
+        <div className="compact-palette-row">
+          <span>전위 색상표</span>
+          <PotentialPalettePicker value={potentialPalette} min={potential.min} max={potential.max} onChange={setPotentialPalette} />
+        </div>
+        <hr />
         <button role="menuitem" onClick={() => close(() => setAnalysisPanel('records'))}><NotebookPen size={16} />측정 기록 보기</button>
         <button role="menuitem" onClick={() => close(() => setDetailsOpen(true))}><SlidersHorizontal size={16} />상세 설정</button>
       </>}
@@ -916,9 +921,7 @@ export function App() {
           <FileMenu
             compact={compact}
             extraItems={compact ? close => <>
-              <button role="menuitem" onClick={() => close(() => changeMode('worksheet'))}><Copy size={16} />그림 보기·저장</button>
-              <button role="menuitem" onClick={() => close(() => setHelp(true))}><CircleHelp size={16} />사용 도움말</button>
-              <button role="menuitem" onClick={() => close(() => setFeedbackOpen(true))}><MessageCircle size={16} />사용 후기 및 피드백</button>
+              <button role="menuitem" onClick={() => close(() => changeMode('worksheet'))}><Copy size={16} />회로도 출력</button>
             </> : undefined}
             document={doc}
             onNew={newCircuit}
@@ -927,13 +930,13 @@ export function App() {
             onRestore={replace}
             onNotice={setNotice}
           />
-          {!compact && <><button onClick={() => setFeedbackOpen(true)} aria-label="사용 후기 및 피드백">
+          <button onClick={() => setFeedbackOpen(true)} aria-label="사용 후기 및 피드백">
             <MessageCircle size={18} />
-            한마디
+            {!compact && '한마디'}
           </button>
           <button onClick={() => setHelp(true)} aria-label="사용 도움말">
             <CircleHelp size={19} />
-          </button></>}
+          </button>
         </div>
         <input
           ref={fileInput}
@@ -1117,7 +1120,7 @@ export function App() {
                   type="checkbox"
                   disabled={isolated}
                   checked={!isolated && showColors}
-                  onChange={(e) => setShowColors(e.target.checked)}
+                  onChange={togglePotentialColors}
                 />
                 색상
               </label>
@@ -1135,7 +1138,7 @@ export function App() {
                   type="checkbox"
                   disabled={isolated}
                   checked={!isolated && showCurrent}
-                  onChange={(e) => setShowCurrent(e.target.checked)}
+                  onChange={toggleCurrentDisplay}
                 />
                 전류 흐름
               </label>
@@ -1378,7 +1381,6 @@ export function App() {
 
           {showOperatingState && (
             <>
-            {compact && <div className="compact-potential-palette"><span>전위 색상표</span><PotentialPalettePicker value={potentialPalette} min={potential.min} max={potential.max} onChange={setPotentialPalette} /></div>}
             <PotentialSettings
               document={doc}
               potential={potential}
