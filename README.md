@@ -31,6 +31,7 @@ Node.js 20.19 이상이 필요하다. 기본 주소는 http://localhost:5173 이
 단계 0~5 기능 MVP를 완료했고 UX·문맥 배선·터치 조작 등의 후속 개선을 반영했다. 공유·활동 배포와 실제 교실 사용성 평가는 단계 6~7의 후속 범위다. 로컬 작업과 배포 상태는 현재 현황 문서에서 구분한다.
 
 - [현재 작업 현황](docs/implementation/current-phase.md): 구현 범위, 커밋·배포 상태, 남은 작업
+- [다이오드 확장 기획](docs/implementation/diode-mvp.md): 엔진·불안정 회로·과부하/파손 UX, 설계 확정·구현 전
 - [빠른 시작과 단축키](docs/ux/quick-start.md): 실행·편집·저장·출력
 - [문서 색인](docs/index.md): 제품·UX·물리·구조·운영 문서
 - [작업 및 검증 이력](docs/implementation/mvp-tracker.md) · [검증 범위와 제한](docs/testing/mvp-coverage.md)
