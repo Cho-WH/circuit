@@ -5,7 +5,7 @@
   "purpose": "도선 끝점의 끊어진 참조를 거부하는지 검증",
   "document": {
     "format": "edu-circuit",
-    "version": 5,
+    "version": 6,
     "documentId": "dangling-endpoint",
     "title": "존재하지 않는 단자 참조",
     "components": [

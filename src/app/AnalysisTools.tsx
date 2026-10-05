@@ -13,12 +13,14 @@ export function AnalysisTools({
   needsIsolation,
   onIsolate,
   threeDimensional,
+  stopped,
 }: {
   kind: MeasurementKind | null;
   onChoose: (kind: MeasurementKind | null) => void;
   needsIsolation: boolean;
   onIsolate: () => void;
   threeDimensional: boolean;
+  stopped?: boolean;
 }) {
   return (
     <>
@@ -31,6 +33,7 @@ export function AnalysisTools({
             key={value}
             className="component-tile"
             selected={kind === value}
+            disabled={stopped}
             onClick={() => onChoose(kind === value && !threeDimensional ? null : value)}
           >
             <span className="tile-symbol">
@@ -59,7 +62,7 @@ export function AnalysisTools({
           </SelectionButton>
         ))}
       </div>
-      {needsIsolation && (
+      {needsIsolation && !stopped && (
         <div className="isolation-prompt" role="status">
           <p>등가저항은 전지를 분리하고 측정해요.</p>
           <button className="primary" onClick={onIsolate}>
@@ -67,7 +70,7 @@ export function AnalysisTools({
           </button>
         </div>
       )}
-      {threeDimensional && kind !== 'voltage' && (
+      {threeDimensional && kind !== 'voltage' && !stopped && (
         <p className="analysis-tool-hint">측정 도구를 고르면 2D로 전환해요.</p>
       )}
     </>

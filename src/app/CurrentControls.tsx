@@ -76,7 +76,7 @@ export function CurrentSettings({
             </strong>
             <span>
               {value?.status === 'known' ? (
-                <Notation text={formatQuantity(q.abs(value.amperes), 'A')} />
+                <Notation text={formatQuantity(q.abs(value.amperes), 'A', {modelApproximation:display.model.modelApproximation})} />
               ) : value?.status === 'uncertain' ? (
                 '전류 방향 불확실'
               ) : value?.status === 'undefined' ? (

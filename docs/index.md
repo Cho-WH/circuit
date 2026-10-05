@@ -7,7 +7,9 @@
 - [작업 추적](implementation/mvp-tracker.md): 최근 변경과 주요 완료 결과
 - [요구사항](../requirements/requirements.yaml) · [스키마](../schemas/) · [기술 결정 색인](../decisions/README.md): 규범과 계약
 
-## 다이오드 확장 — 설계 확정·구현 전
+## 다이오드 확장 — D0~D4 구현
+
+선형 직류와 다이오드 구간선형 모델, 회로 v6·측정 기록 v5를 지원한다. 이전 형식은 변환 없이 거부한다. 교육용 프로필은 실물 정격이 아니며, 열 축적·파손 후 연쇄 고장은 제외한다. 현재 변경은 푸시·배포 전이고 교실·실기기·보조기술 검증은 남아 있다.
 
 - [기획과 구현 순서](implementation/diode-mvp.md): 목표 경험, 범위, 기존 모듈 연결, 단계별 종료 조건
 - [ADR-026](../decisions/ADR-026-diode-boundary-analysis.md): 채택한 설계와 기존 규범의 관계
@@ -44,7 +46,7 @@
 - [`architecture/modules.md`](architecture/modules.md): 모듈 책임과 공개 인터페이스
 - [`architecture/data-flow.md`](architecture/data-flow.md): 편집부터 계산·표시·저장까지의 흐름
 - [`architecture/extension-points.md`](architecture/extension-points.md): 부품·엔진·출력 확장 경계
-- [`architecture/persistence-and-sharing.md`](architecture/persistence-and-sharing.md): 자동 저장, 파일, 마이그레이션, 공유
+- [`architecture/persistence-and-sharing.md`](architecture/persistence-and-sharing.md): 자동 저장, 현재 파일 형식 검증, 후속 공유
 
 - [`architecture/feedback.md`](architecture/feedback.md): Firebase 후기 게시판의 데이터·권한·운영 구조
 - [ADR-012](../decisions/ADR-012-worksheet-presentation.md): 출력 표기 속성과 출력 계약

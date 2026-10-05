@@ -2,7 +2,7 @@
 
 ## 1. 제품과 현재 범위
 
-이 저장소는 고등학교 수업을 중심으로 한 교육용 전기회로 웹앱을 개발한다. 현재 물리 범위는 이상적인 선형 직류 저항 회로다.
+이 저장소는 고등학교 수업을 중심으로 한 교육용 전기회로 웹앱을 개발한다. 현재 물리 범위는 이상적인 선형 직류 저항 회로와 0.7 V 다이오드·구간선형 부품 모델이다. 작동 경계는 고정된 교육용 가정이며 실물 정격·열 축적·파손 후 연쇄 고장을 계산하지 않는다.
 
 현재 구현과 단계는 `docs/implementation/current-phase.md`, 남은 작업은 `docs/implementation/follow-up.md`에서 확인한다. 후속 후보를 착수 승인으로 간주하지 않으며, 현재 단계의 종료 조건을 충족하기 전에는 후속 기능을 앞당겨 구현하지 않는다.
 
@@ -36,7 +36,7 @@
 9. 진단은 안정적인 코드와 관련 요소 ID를 반환한다. 사용자 문구를 계산 함수 안에 넣지 않는다.
 10. 학생 조작 제한은 버튼 숨김이 아니라 명령 실행 단계에서 검사한다.
 11. 출력은 현재 화면 캡처가 아니라 `CircuitDocument`와 공통 기호 정의에서 다시 생성한다.
-12. 저장은 현재 정확값 형식만 지원한다. 스키마 변경 시 지원 버전을 명시하고 현재 형식의 왕복과 지원 밖 입력의 거부를 확인한다.
+12. 저장은 현재 정확값 형식인 회로 v6·측정 기록 v5만 지원한다. 이전 형식은 변환 없이 거부한다. 스키마 변경 시 지원 버전을 명시하고 현재 형식의 왕복과 지원 밖 입력의 거부를 확인한다.
 
 ## 4. 작업별 필수 참조
 
@@ -47,8 +47,9 @@
 | 모듈 경계·공개 계약 | `docs/architecture/modules.md`, `ADR-008`, `ADR-010` |
 | 연결 판정 | `docs/architecture/domain-model.md`, `docs/architecture/modules.md`, `SIM-001` |
 | 직류 계산 | `docs/physics/ideal-dc-model.md`, `docs/physics/exact-dc-arithmetic.md`, `docs/architecture/modules.md`, `SIM-002~008`, `ADR-024`, `ADR-025`, 관련 fixture |
+| 다이오드·작동 경계·분석 사건 | `docs/physics/diode-dc-model.md`, `docs/physics/circuit-operating-boundaries.md`, `docs/ux/diode-analysis.md`, `docs/testing/diode-cases.md`, `ADR-026` |
 | 전위 시각화 | `docs/physics/potential-visualization.md`, `VIS-001~007`, `ADR-006` |
-| 전류 시각화 | `docs/physics/current-visualization.md`, `VIS-006`, `CV-01~05`, `ADR-020` |
+| 전류 시각화 | `docs/physics/current-visualization.md`, `VIS-006`, `CV-01~06`, `ADR-020`, `ADR-026` |
 | 회로 편집기 | `docs/ux/interactions.md`, `EDT-001~007`, `ADR-001`, `ADR-002` |
 | 배선·부품 삽입·삭제·분기점 | `docs/ux/interactions.md`, `ADR-013`, `ADR-016~018` |
 | 측정 기능 | `docs/physics/measurement-and-display.md`, `MEA-001~005`, `ADR-011`, `ADR-015` |

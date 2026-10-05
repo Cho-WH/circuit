@@ -9,6 +9,8 @@ export interface ParsedQuantity {
 export type QuantityMode = 'auto' | 'scientific' | 'plain';
 export interface QuantityFormatOptions {
   mode?: QuantityMode;
+  /** Display provenance for a simplified physical model; arithmetic stays exact. */
+  modelApproximation?: boolean;
 }
 export const defaultQuantityFormat: Readonly<QuantityFormatOptions> = Object.freeze({
   mode: 'auto',
@@ -176,7 +178,7 @@ export function createQuantityScale(
     unit: prefix + unit,
     format(value: q.Scalar | undefined): string {
       if (!valid(value)) return '—';
-      const prefix = q.from(value).approximation ? '≈ ' : '';
+      const prefix = q.from(value).approximation || options.modelApproximation ? '≈ ' : '';
       if (mode === 'scientific' || (mode === 'auto' && outside)) return prefix + scientific(value);
       if (mode === 'plain') return prefix + plainNumber(value);
       const scaled = q.div(value, q.power10(power)),

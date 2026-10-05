@@ -18,6 +18,7 @@ export interface CurrentPath {
 // presentation policy rather than automatically inheriting a conducting bridge.
 const policies: Record<ComponentType, (component: ComponentInstance) => boolean> = {
   resistor: () => true,
+  diode: () => true,
   'resistive-load': () => true,
   'dc-voltage-source': () => true,
   ammeter: () => true,

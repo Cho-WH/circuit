@@ -2,13 +2,13 @@
 
 ## 정확 연산 계약
 
-[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 구현했다. domain은 최소 타입·정규형 직렬화·현재 문서 검증을, rational은 순수 사칙연산·비교·표시 변환을, quantity는 단위 입력·표시 반올림을 담당한다. domain은 rational에 역으로 의존하지 않는다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 현재 저장은 회로 v5·측정 기록 v4만 지원한다.
+[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 구현했다. domain은 최소 타입·정규형 직렬화·현재 문서 검증을, rational은 순수 사칙연산·비교·표시 변환을, quantity는 단위 입력·표시 반올림을 담당한다. domain은 rational에 역으로 의존하지 않는다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 현재 저장은 회로 v6·측정 기록 v5만 지원한다.
 
 ## 구현된 근사 경로의 경계
 
 [ADR-025](../../decisions/ADR-025-bounded-approximate-dc.md)에 따라 simulation이 요청별 정확 계산 예산과 공통 MNA 구성, 정확/근사 풀이, 수용 검사·진단을 소유한다. domain의 공개 결과에는 정확/근사 품질과 측정에 필요한 오차 정보를 명시한다. measurement는 그 품질을 전압차·도선 KCL·등가저항·기록까지 전파하고 quantity/visualization이 ≈와 방향 불확실을 공통으로 표현한다. 렌더러·UI는 행렬·근사 전환·자체 허용오차를 다루지 않는다.
 
-rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v4가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다.
+rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v5가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다.
 
 ## 모듈 책임
 
@@ -66,6 +66,10 @@ function validateDocument(input: unknown): DocumentValidation;
 function requireDocument(input: unknown): CircuitDocument;
 ```
 
+[ADR-026](../../decisions/ADR-026-diode-boundary-analysis.md)의 다이오드 확장은 `SolveOptions.physicalModel`(`textbook` 또는 `component`)을 사용한다. `SimulationResult.provenance`는 선택된 물리 모델·고정 프로필과 특성의 식별자·수치 품질을 구별한다. 아핀 해 공간과 부등식은 simulation 내부에만 남는다. `queryVoltage(result, aNet, bNet)`과 `queryCurrent(result, terms)`는 전압차와 전류 선형결합 자체의 유일성을 질의하므로 개별 전위·전류가 미정이어도 확정 가능한 측정을 보존한다.
+
+`analyzeOperatingCircuit(circuit, { physicalModel?, continuousAdjustment? })`는 현재 회로의 두 모델을 해석하고 표시 결과와 `OperatingAssessment`를 함께 반환한다. `assessOperatingPoint`는 검증된 값과 해당 프로필의 경계를 비교하고 부품 ID·원인·근거 값을 보존한다. 모델 유지·파손 후 잠금·연출은 app의 세션 책임이다. 측정 기록의 `provenance`와 CSV에도 모델·프로필·수치 출처가 남는다. 원래 풀이가 근사여도 같은 net의 차처럼 정확히 아는 측정은 기록값의 품질과 풀이의 출처가 다를 수 있다.
+
 ## 연결망 구성
 
 1. 모든 부품 단자, 도선 끝, 분기점을 ID로 읽는다.
@@ -99,7 +103,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ## 측정과 출력의 공개 계약
 
-관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v5이며 이전 형식의 변환·호환은 제공하지 않는다(ADR-024).
+관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v6이며 이전 형식의 변환·호환은 제공하지 않는다(ADR-024).
 
 `measurement`는 `probeVoltage(compilation, result, red, black)`, `probeCurrent(document, compilation, result, target)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
 

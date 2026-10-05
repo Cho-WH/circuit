@@ -87,6 +87,11 @@ describe('3D prepared first frame and camera lifetime', () => {
     expect(camera.position.equals(position)).toBe(true);
     expect([...host.querySelectorAll('.axis-tag')]).toEqual([...ticks]);
     expect(host.textContent).toContain('6 Ω'); expect(ready).toHaveBeenCalledOnce(); expect(entered).toHaveBeenCalledOnce();
+    variable.properties.quantityMode='plain';
+    await update({document:structuredClone(circuit),potential:{...model(),modelApproximation:true}});
+    expect(host.querySelector('.delta-tag')?.textContent).toContain('≈');
+    expect(host.querySelector('[data-label-key="component:R1"]')?.textContent).not.toContain('≈');
+    expect(decodeURIComponent(images.at(-1)!.src)).not.toContain('≈');
   });
   it('gently attracts a live drag without jumping on start or trapping slow movements', async () => {
     await mount(); await act(async()=>resolveFont()); await act(async()=>images[0].onload!());

@@ -139,7 +139,7 @@ function seriesDocument(
 ): CircuitDocument {
   return {
     format: "edu-circuit",
-    version: 5,
+    version: 6,
     documentId: `series-${middle.id}`,
     title: `직렬 ${middle.id}`,
     components: [
@@ -177,7 +177,7 @@ function seriesDocument(
 function parallelDocument(second: ComponentInstance, sourceVoltage = 9): CircuitDocument {
   return {
     format: "edu-circuit",
-    version: 5,
+    version: 6,
     documentId: `parallel-${second.id}`,
     title: `병렬 ${second.id}`,
     components: [
@@ -410,7 +410,7 @@ describe("explicit connectivity", () => {
   it("does not join wires merely because their waypoint coordinates cross", () => {
     const document: CircuitDocument = {
       format: "edu-circuit",
-      version: 5,
+      version: 6,
       documentId: "crossing-wires",
       title: "교차하지만 연결되지 않은 도선",
       components: [
@@ -501,22 +501,24 @@ describe("ideal zero-volt constraints", () => {
     expectNoNumericalResults(result);
   });
 
-  it("reports a redundant equal-voltage source constraint as singular", () => {
+  it("preserves fixed voltages while redundant source currents remain nonunique", () => {
     const document = parallelDocument(
       component("V2", "dc-voltage-source", { voltageV: q.store(9) }),
       9,
     );
     const { result } = runDocument(document);
 
-    expect(result.status).toBe("error");
-    expect(result.diagnostics.map(({ code }) => code)).toContain("SINGULAR_SYSTEM");
-    expectNoNumericalResults(result);
+    expect(result.status).toBe("warning");
+    expect(result.diagnostics.map(({ code }) => code)).toContain("NONUNIQUE_OPERATING_POINT");
+    expect(result.componentVoltages.V1).toEqual(q.from(9));
+    expect(result.branchCurrents.V1).toBeUndefined();
+    expect(result.branchCurrents.V2).toBeUndefined();
   });
 
   it("does not invent individual currents for parallel zero-volt constraints", () => {
     const document: CircuitDocument = {
       format: "edu-circuit",
-      version: 5,
+      version: 6,
       documentId: "parallel-zero-volt-constraints",
       title: "병렬 0 V 제약",
       components: [
@@ -544,9 +546,11 @@ describe("ideal zero-volt constraints", () => {
     };
     const { result } = runDocument(document);
 
-    expect(result.status).toBe("error");
-    expect(result.diagnostics.map(({ code }) => code)).toContain("SINGULAR_SYSTEM");
-    expectNoNumericalResults(result);
+    expect(result.status).toBe("warning");
+    expect(result.diagnostics.map(({ code }) => code)).toContain("NONUNIQUE_OPERATING_POINT");
+    expect(result.branchCurrents.R1).toEqual(q.ONE);
+    expect(result.branchCurrents.S1).toBeUndefined();
+    expect(result.branchCurrents.S2).toBeUndefined();
   });
 
   it("reports inconsistent parallel voltage constraints", () => {

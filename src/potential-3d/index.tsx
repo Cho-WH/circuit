@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
-import { potentialAxisValue, buildCurrentPaths, type CurrentDisplay, type PotentialRange, type PotentialModel } from '../visualization';
+import { operatingMarkSvg, potentialAxisValue, buildCurrentPaths, type ComponentOperatingMark, type CurrentDisplay, type PotentialRange, type PotentialModel } from '../visualization';
 import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
 import { createHorizontalAttraction } from './camera-snap';
@@ -35,6 +35,8 @@ export interface Potential3DProps {
   showColors: boolean;
   currentDisplay?: CurrentDisplay;
   voltageMeasurement?: VoltageMeasurement;
+  operatingMarks?: Record<string, ComponentOperatingMark>;
+  operatingStopped?: boolean;
   onSelect?: (id: string | null) => void;
   onSelectNet?: (netId: string) => void;
   sourceView?: { x: number; y: number; width: number; height: number };
@@ -142,7 +144,7 @@ function moveCamera(r: Runtime, preset: Preset, reset = false) {
 }
 
 export function Potential3D(props: Potential3DProps) {
-  const quantityFormat=props.quantityFormat??defaultQuantityFormat;
+  const quantityFormat=useMemo(()=>({...props.quantityFormat??defaultQuantityFormat,modelApproximation:props.potential.modelApproximation}),[props.quantityFormat,props.potential.modelApproximation]);
   const formatQuantity=(value:Scalar|undefined,unit:string)=>formatSIQuantity(value,unit,quantityFormat);
   const { document: circuit, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors, heightMultiplier = 1 } = props;
   const [heightTarget, setHeightTarget] = useState<{ height: number } | null>(null);
@@ -209,7 +211,7 @@ export function Potential3D(props: Potential3DProps) {
         p.project(camera);
         const x = (p.x + 1) * r.width / 2, y = (1 - p.y) * r.height / 2;
         const w = label.element.offsetWidth || 52, h = label.element.offsetHeight || 25;
-        const rect = { x: x - w / 2, y: label.element.classList.contains('axis-tag') ? y - h / 2 : y - h - 9, w, h };
+        const rect = { x: x - w / 2, y: label.element.classList.contains('axis-tag') || label.element.classList.contains('operating-tag') ? y - h / 2 : y - h - 9, w, h };
         const nearAxis = !label.element.classList.contains('axis-tag') && axisGutters.some(gutter => rect.x < gutter.right && rect.x + w > gutter.left && rect.y < gutter.bottom && rect.y + h > gutter.top);
         const hidden = nearAxis || p.z < -1 || p.z > 1 || rect.x < 3 || rect.x + w > r.width - 3 || rect.y < 2 || rect.y + h > r.height - 2 || occupied.some(b => rect.x < b.x+b.w+5 && rect.x+w+5 > b.x && rect.y < b.y+b.h+4 && rect.y+h+4 > b.y);
         label.element.style.visibility = hidden ? 'hidden' : 'visible';
@@ -318,7 +320,7 @@ export function Potential3D(props: Potential3DProps) {
     let cancelled = false;
     r.floorReady = false;
     const schematic: CircuitDocument = JSON.parse(schematicKey);
-    const svg = exportSvg(schematic, { quantityFormat, background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 });
+    const svg = exportSvg(schematic, { quantityFormat: props.quantityFormat, background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 });
     const root = new DOMParser().parseFromString(svg,'image/svg+xml').documentElement;
     const adjustableIds = new Set(schematic.components.filter(c => adjustableParameter(c)).map(c => c.id));
     root.querySelectorAll('[data-output-part="value"]').forEach(node => { if (adjustableIds.has(node.getAttribute('data-output-id')!)) node.remove(); });
@@ -352,7 +354,7 @@ export function Potential3D(props: Potential3DProps) {
     const fontReady = fonts ? fonts.load('18px "Libertinus Math"') : Promise.resolve([]);
     fontReady.then(() => { if (!cancelled) image.src = url; }).catch(() => { if (!cancelled) latest.current.onError?.('font'); });
     return () => { cancelled = true; image.onload = null; image.onerror = null; URL.revokeObjectURL(url); };
-  }, [schematicKey,quantityFormat]);
+  }, [schematicKey,props.quantityFormat]);
 
   useEffect(() => {
     const r = runtime.current, labelHost = overlay.current; if (!r || !labelHost || !heightTarget) return;
@@ -404,7 +406,7 @@ export function Potential3D(props: Potential3DProps) {
     // Two open guide planes sit outside the circuit: rear (+Y) and left (-X).
     const left=f.x-10, rear=-f.y+10, front=-f.y-f.height+20, right=f.x+f.width;
     const axes = [{key:'axis',x:left,y:front,labelX:left-20}, {key:'axis-rear',x:right,y:rear,labelX:right+20}];
-    for (const axis of axes) {
+    for (const axis of props.operatingStopped ? [] : axes) {
       line(r.content,[new THREE.Vector3(axis.x,axis.y,extent.minZ),new THREE.Vector3(axis.x,axis.y,extent.maxZ+15)],'#7b856f');
       for (const v of extent.ticks) {
         const z=v*potential.scale;
@@ -412,7 +414,7 @@ export function Potential3D(props: Potential3DProps) {
         addLabel(`${axis.key}:${v}`,formatQuantity(potentialAxisValue(potential,v),'V'),new THREE.Vector3(axis.labelX,axis.y,z),'axis-tag',false,v===0?6:5);
       }
     }
-    if (guides) {
+    if (guides && !props.operatingStopped) {
       const addGuide = (v:number, minor:boolean) => {
         const z=v*potential.scale;
         const guide=line(r.content,[new THREE.Vector3(left,front,z),new THREE.Vector3(left,rear,z),new THREE.Vector3(right,rear,z)],v===0?'#68765c':'#7e8a72',v!==0,v===0?.9:minor?.6:.8);
@@ -446,7 +448,19 @@ export function Potential3D(props: Potential3DProps) {
     for (const c of circuit.components) {
       const ends = c.terminals.slice(0,2).map(t=>potential.endpoints[t.id]?.height);
       const z = ends.length===2 && ends.every(v=>v!==undefined) ? (ends[0]!+ends[1]!)/2 : 0;
-      addLabel(`component:${c.id}`,adjustableParameter(c) ? `${c.label} = ${componentValue(c, quantityFormat)}` : c.label,point({...c.position,z}),'component-tag',true,2,c.id);
+      addLabel(`component:${c.id}`,adjustableParameter(c) ? `${c.label} = ${componentValue(c, props.quantityFormat ?? defaultQuantityFormat)}` : c.label,point({...c.position,z}),'component-tag',true,2,c.id);
+      const mark = props.operatingMarks?.[c.id];
+      if (mark) {
+        const key = `operating:${c.id}:${mark.event}`;
+        addLabel(key,mark.label,point({...c.position,z}),'operating-tag',true,10,c.id);
+        const element = nextLabels[nextLabels.length-1].element;
+        const signature = `${mark.state}:${mark.event}`;
+        if (element.dataset.operatingSignature !== signature) {
+          element.innerHTML = `<svg viewBox="-44 -34 88 68" aria-hidden="true" class="component-operating-mark is-${mark.state}">${operatingMarkSvg(mark.state)}</svg>`;
+          element.dataset.operatingSignature = signature;
+        }
+        element.title = mark.label;
+      }
     }
     const selected = props.voltageMeasurement ? null : selectedVoltage(circuit,potential,selectedIds[0]);
     if(selected) {
@@ -455,7 +469,7 @@ export function Potential3D(props: Potential3DProps) {
       const x=(a.x+b.x)/2+20,y=(a.y+b.y)/2+20;
       line(r.raised,[new THREE.Vector3(x,y,a.z),new THREE.Vector3(x,y,b.z)],'#53694b');
       for(const z of [a.z,b.z]) line(r.raised,[new THREE.Vector3(x-5,y,z),new THREE.Vector3(x+5,y,z)],'#53694b');
-      if(showNumbers) addLabel(`delta:${selected.component.id}`,`ΔV ${formatSIQuantity(selected.difference,'V',quantityFormatFor(selected.component.properties))}`,new THREE.Vector3(x,y,(a.z+b.z)/2),'delta-tag',true,8);
+      if(showNumbers) addLabel(`delta:${selected.component.id}`,`ΔV ${formatSIQuantity(selected.difference,'V',{...quantityFormatFor(selected.component.properties),modelApproximation:potential.modelApproximation})}`,new THREE.Vector3(x,y,(a.z+b.z)/2),'delta-tag',true,8);
     }
     for (const label of existingLabels.values()) label.element.remove();
     r.labels = nextLabels;
@@ -464,7 +478,7 @@ export function Potential3D(props: Potential3DProps) {
     if (!r.ready) r.begin();
     else if (resetRequested.current) { resetRequested.current = false; moveCamera(r, 'oblique', true); }
     else r.render();
-  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay),Boolean(props.voltageMeasurement),props.heightRange]);
+  }, [circuit,potential,selectedIds,highlightedId,selectedNet,showNumbers,showColors,guides,quantityFormat,Boolean(props.currentDisplay),Boolean(props.voltageMeasurement),props.heightRange,props.operatingMarks,props.operatingStopped]);
 
   useEffect(() => {
     const r = runtime.current;
@@ -489,6 +503,6 @@ export function Potential3D(props: Potential3DProps) {
     <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="current-flow-host" ref={currentHost}/><div className="potential-labels" ref={overlay}/><div className="voltage-measurement-host" ref={voltageHost}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
-    <footer className="scene-footer"><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number(heightMultiplier.toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
+    <footer className="scene-footer" hidden={props.operatingStopped}><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number(heightMultiplier.toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
   </section>;
 }

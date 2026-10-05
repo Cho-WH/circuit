@@ -177,16 +177,16 @@ describe('workspace transitions and file actions', () => {
     expect(button('조립 안내').getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('keeps error diagnostics collapsed and reachable in every workspace', async () => {
+  it('keeps a shorted source operating warning collapsed and reachable in every workspace', async () => {
     saveLocal(layoutExample(requireDocument(shortCircuit.document)));
     await act(async () => root.render(createElement(App)));
     for (const mode of ['회로 만들기', '분석하기', '회로도 출력']) {
       await click(mode);
-      const trigger = button('회로 연결 확인');
-      expect(trigger.closest('.is-warning')).not.toBeNull();
+      const trigger = button('파손 주의');
+      expect(trigger.closest('.is-damage')).not.toBeNull();
       expect(trigger.getAttribute('aria-expanded')).toBe('false');
-      await click('회로 연결 확인');
-      expect(document.querySelector('[role="dialog"]')?.textContent).toContain('전원이 단락되어 있어요');
+      await click('파손 주의');
+      expect(document.querySelector('[role="dialog"]')?.textContent?.normalize('NFKC')).toContain(mode==='분석하기'?'전력이 너무 커서 손상됐어요':'분석하면 V1이 손상돼요');
       await click('안내 닫기');
       expect(document.activeElement).toBe(trigger);
       expect(document.querySelector('[role="dialog"]')).toBeNull();

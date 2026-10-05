@@ -18,11 +18,11 @@ export interface MeasurementEntry {
   currentDirection?: { from: EndpointRef; to: EndpointRef };
 }
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
-const key = 'edu-circuit:measurement-notebook:v4';
+const key = 'edu-circuit:measurement-notebook:v5';
 
 function parse(text: string): MeasurementEntry[] {
   const data = JSON.parse(text);
-  if (data.version !== 4 || !Array.isArray(data.entries)) throw new Error('Invalid notebook');
+  if (data.version !== 5 || !Array.isArray(data.entries)) throw new Error('Invalid notebook');
   const ids = new Set<string>();
   return data.entries.map((entry: MeasurementEntry) => {
     if (
@@ -128,7 +128,7 @@ export function saveMeasurementNotebook(
 ): boolean {
   try {
     storage ??= localStorage;
-    const serialized = JSON.stringify({ version: 4, entries });
+    const serialized = JSON.stringify({ version: 5, entries });
     parse(serialized);
     const previous = storage.getItem(key);
     if (previous) {

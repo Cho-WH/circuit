@@ -1,4 +1,5 @@
 import type { CompiledCircuit, SimulationResult } from '../domain';
+export { operatingMarkSvg, type ComponentOperatingMark } from './operating';
 export { buildCurrentModel, currentBand, currentFullWidth, type CurrentModel, type CurrentSample, type CurrentValue, type CurrentDisplay } from './current';
 export { buildCurrentPaths, hasCurrentBridge, type CurrentPath, type CurrentPoint } from './current-paths';
 export { flowMarks, flowSpeed, flowSpacing, flowLength, currentSpacing, flowJunctionOpacity, flowJunctionRadius, type FlowMark, type FlowViewport } from './flow-geometry';

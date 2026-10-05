@@ -53,6 +53,7 @@ const layouts: Record<string, ExampleLayout> = {
   'fix-10': series,
   'fix-11': series,
   'fix-12': parallel,
+  'fix-13': { ...series, components: { V1: series.components.V1, R1: series.components.R1, D1: series.components.R2 } },
 };
 
 export function layoutExample(input: CircuitDocument): CircuitDocument {

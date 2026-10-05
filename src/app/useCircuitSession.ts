@@ -13,6 +13,8 @@ import {
 import { loadLocal, saveLocal } from '../persistence';
 import { examples } from '../fixtures';
 import { layoutExample } from './examples';
+import { analyze } from './analyze';
+import { acceptOperatingPoint, analysisLocked, freshAnalysisSession } from './analysis-session';
 
 export type WorkspaceMode = 'build' | 'analysis' | 'worksheet';
 
@@ -48,9 +50,39 @@ export function useCircuitSession(mode: WorkspaceMode) {
     return createHistory(saved?.ok ? saved.document : layoutExample(examples[1].document));
   });
   const current = useRef(history);
+  const [analysisSession, setAnalysisSession] = useState(freshAnalysisSession);
+  const operating = useRef(analysisSession);
+  const workspace = useRef(mode);
+  workspace.current = mode;
   const group = useRef<{ token: object; base: History; past: History['past'] } | null>(null);
   const [documentEpoch, setDocumentEpoch] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed'>('saving');
+
+  function updateOperating(next: typeof analysisSession) {
+    operating.current = next;
+    setAnalysisSession(next);
+  }
+  function assess(document: CircuitDocument) {
+    const evaluation = analyze(document, operating.current.componentModel);
+    updateOperating(acceptOperatingPoint(operating.current, evaluation.assessment,
+      evaluation.result.provenance?.physicalModel === 'component'));
+  }
+  function changeWorkspace(next: WorkspaceMode) {
+    if (next === workspace.current && (next !== 'analysis' || operating.current.active)) return;
+    workspace.current = next;
+    updateOperating(freshAnalysisSession());
+    if (next === 'analysis') assess(current.current.present);
+  }
+  useEffect(() => {
+    if (analysisSession.phase !== 'breaking') return;
+    const finish = () => {
+      if (operating.current === analysisSession)
+        updateOperating({ ...analysisSession, phase: 'broken' });
+    };
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
+    const timer = window.setTimeout(finish, 500);
+    return () => window.clearTimeout(timer);
+  }, [analysisSession]);
 
   function publish(next: History) {
     current.current = next;
@@ -59,7 +91,7 @@ export function useCircuitSession(mode: WorkspaceMode) {
 
   function execute(command: Command | readonly Command[], token?: object): ExecuteCommandResult {
     const commands: readonly Command[] = 'type' in command ? [command] : command;
-    const denied = commands.find((item) => !allowedInMode(current.current.present, mode, item));
+    const denied = commands.find((item) => analysisLocked(operating.current) || !allowedInMode(current.current.present, workspace.current, item));
     if (denied)
       return {
         ok: false,
@@ -82,6 +114,7 @@ export function useCircuitSession(mode: WorkspaceMode) {
       }
       if (commands.some((item) => item.type === 'ReplaceDocument'))
         setDocumentEpoch((value) => value + 1);
+      if (workspace.current === 'analysis') assess(result.history.present);
       publish(result.history);
     }
     return result;
@@ -124,15 +157,25 @@ export function useCircuitSession(mode: WorkspaceMode) {
     history,
     documentEpoch,
     saveStatus,
+    analysisSession,
+    changeWorkspace,
+    canMeasure: () => !analysisLocked(operating.current),
+    automaticEpoch: () => operating.current.stopEpoch,
     execute,
     placeComponent,
     undo: () => {
+      if (analysisLocked(operating.current)) return;
       group.current = null;
-      publish(undo(current.current));
+      const next = undo(current.current);
+      if (workspace.current === 'analysis') assess(next.present);
+      publish(next);
     },
     redo: () => {
+      if (analysisLocked(operating.current)) return;
       group.current = null;
-      publish(redo(current.current));
+      const next = redo(current.current);
+      if (workspace.current === 'analysis') assess(next.present);
+      publish(next);
     },
   };
 }

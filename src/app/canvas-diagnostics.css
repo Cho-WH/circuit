@@ -2,6 +2,8 @@
 .canvas-diagnostics-trigger{position:absolute;top:10px;left:10px;z-index:8}
 .canvas-diagnostics-trigger>.floating-panel-trigger{width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface,#fcfbf8);color:var(--muted);box-shadow:0 2px 8px #30382f0d}
 .canvas-diagnostics-trigger.is-warning>.floating-panel-trigger{color:#986121;border-color:#ddc9a4;background:#fffaf0}
+.canvas-diagnostics-trigger.is-damage>.floating-panel-trigger{color:#b63934;border-color:#dca19a;background:#fff5f2}
+.canvas-diagnostics-bubble .operating-caution{margin-top:8px;color:var(--ink)}
 .canvas-diagnostics-trigger>.floating-panel-trigger:hover,.canvas-diagnostics-trigger>.floating-panel-trigger[aria-expanded=true]{color:var(--ink);background:#f0efe8}
 .floating-panel-content.canvas-diagnostics-bubble{padding:14px;color:var(--ink);font-size:13px;line-height:1.6}
 .canvas-diagnostics-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}

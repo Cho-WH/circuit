@@ -126,10 +126,21 @@ describe('measurement notebook', () => {
   it('rejects old notebook versions and numeric values in current records', () => {
     for (const corrupt of [
       { version: 2, entries: [entry()] },
-      { version: 4, entries: [{ ...entry(), record: { ...entry().record, value: 1 / 3 } }] },
+      { version: 4, entries: [entry()] },
+      { version: 5, entries: [{ ...entry(), record: { ...entry().record, value: 1 / 3 } }] },
     ]) {
       const store = storage();
-      store.data.set('edu-circuit:measurement-notebook:v4', JSON.stringify(corrupt));
+      store.data.set('edu-circuit:measurement-notebook:v5', JSON.stringify(corrupt));
+      expect(loadMeasurementNotebook(store)).toMatchObject({ entries: [], warning: expect.any(String) });
+    }
+  });
+  it('round trips physical model provenance and rejects malformed provenance', () => {
+    const store = storage(), saved = entry();
+    saved.record.provenance = { physicalModel: 'component', profileRevision: 'edu-source@1|edu-resistor@1', arithmeticQuality: 'exact' };
+    expect(saveMeasurementNotebook([saved], store)).toBe(true);
+    expect(loadMeasurementNotebook(store).entries).toEqual([saved]);
+    for (const provenance of [null, 'component', { physicalModel: 'unknown', profileRevision: 'test', arithmeticQuality: 'exact' }]) {
+      store.data.set('edu-circuit:measurement-notebook:v5', JSON.stringify({ version: 5, entries: [{ ...saved, record: { ...saved.record, provenance } }] }));
       expect(loadMeasurementNotebook(store)).toMatchObject({ entries: [], warning: expect.any(String) });
     }
   });

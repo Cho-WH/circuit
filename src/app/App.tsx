@@ -63,12 +63,17 @@ import {
   parameterRangeProperties,
   parameterContext,
   parameterScales,
+  includeCurrentScales,
 } from './parameters';
 import { copySelection, type Command, type PastePayload } from '../editor';
 import { parseDocument, serializeDocument } from '../persistence';
 import { useCircuitSession, type WorkspaceMode } from './useCircuitSession';
 import { examples } from '../fixtures';
 import { analyze } from './analyze';
+import { failedResult } from '../simulation';
+import { analysisLocked } from './analysis-session';
+import { operatingReason } from './operating-text';
+import type { ComponentOperatingMark } from '../visualization';
 import { diagnosticText } from './diagnostic-text';
 import { layoutExample } from './examples';
 import { CircuitCanvas } from './CircuitCanvas';
@@ -105,6 +110,7 @@ import { FloatingPanel } from './FloatingPanel';
 import './styles.css';
 import './ux.css';
 import './mobile.css';
+import './operating.css';
 const FeedbackFeature = lazy(() => import('./FeedbackBoard'));
 const noSelection: string[] = [];
 
@@ -134,6 +140,10 @@ export function App() {
     history,
     documentEpoch,
     saveStatus,
+    analysisSession,
+    changeWorkspace,
+    canMeasure,
+    automaticEpoch,
     execute,
     placeComponent,
     undo: undoEdit,
@@ -145,6 +155,7 @@ export function App() {
     failed: '이 브라우저에 자동 저장 실패',
   }[saveStatus];
   const doc = history.present;
+  const stopped = analysisLocked(analysisSession);
   const [selected, setSelected] = useState<string[]>([]);
   const [tool, setTool] = useState('select');
   const [placement, setPlacement] = useState<ComponentType | null>(null);
@@ -170,6 +181,7 @@ export function App() {
   const showGraph = analysisPanel === 'path';
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [focusIds, setFocusIds] = useState<string[]>([]);
+  const [riskHighlights, setRiskHighlights] = useState<string[]>([]);
   const [showNumbers, setShowNumbers] = useState(true);
   const [showColors, setShowColors] = useState(true);
   const [potentialPalette, setPotentialPalette] =
@@ -205,15 +217,16 @@ export function App() {
   const [measurementConsoleHost, setMeasurementConsoleHost] = useState<HTMLDivElement | null>(null);
   const [sourcesDetached, setSourcesDetached] = useState(false);
   const hasSources = doc.components.some((c) => c.type === 'dc-voltage-source');
-  const resistanceMode = mode === 'analysis' && measurementKind === 'resistance';
+  const resistanceMode = mode === 'analysis' && !stopped && measurementKind === 'resistance';
   const needsIsolation = resistanceMode && hasSources && !sourcesDetached;
   const isolated = resistanceMode && !needsIsolation;
   const analysisView = resistanceMode ? '2d' : potentialView;
   const measurementActive =
-    mode === 'analysis' && measurementKind !== null && analysisView === '2d' && !needsIsolation && (!compact || mobileMeasuring);
+    mode === 'analysis' && !stopped && measurementKind !== null && analysisView === '2d' && !needsIsolation && (!compact || mobileMeasuring);
   const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation;
-  const showOperatingState = mode === 'analysis' && !isolated;
+  const showOperatingState = mode === 'analysis' && !isolated && !stopped;
   function chooseMeasurement(kind: MeasurementKind | null) {
+    if (kind && !canMeasure()) return;
     setMeasurementKind(kind);
     setMobileMeasuring(kind !== null);
     setSourcesDetached(false);
@@ -270,14 +283,30 @@ export function App() {
     mode === 'analysis' && comparisonComponent && comparisonParameter
       ? parameterContext(doc, comparisonComponent.id, comparisonParameter)
       : null;
-  const comparisonScales = useMemo(
+  const comparisonBaseline = useMemo(
     () =>
       scaleContext && comparisonComponent && comparisonParameter
         ? parameterScales(doc, comparisonComponent.id, comparisonParameter)
         : null,
     [scaleContext],
   );
-  const { compilation, result } = useMemo(() => analyze(doc), [doc]);
+  const evaluation = useMemo(() => analyze(doc, analysisSession.componentModel), [doc, analysisSession.componentModel]);
+  const { compilation } = evaluation;
+  const result = useMemo(() => stopped ? { ...failedResult([]), provenance: evaluation.result.provenance } : evaluation.result, [evaluation, stopped]);
+  const assessment = mode === 'analysis' ? analysisSession.assessment : evaluation.assessment;
+  const operatingMarks = useMemo(() => {
+    if (mode !== 'analysis') return undefined;
+    const marks: Record<string, ComponentOperatingMark> = {};
+    for (const cause of assessment.components) {
+      if (marks[cause.componentId]) continue;
+      marks[cause.componentId] = {
+        state: cause.level === 'damage' ? analysisSession.phase === 'broken' ? 'broken' : 'breaking' : 'overload',
+        event: analysisSession.events[cause.componentId] ?? 0,
+        label: operatingReason(cause, cause.level === 'damage'),
+      };
+    }
+    return marks;
+  }, [mode, assessment, analysisSession.phase, analysisSession.events]);
   const voltageReading = useMemo(
     () =>
       probeVoltage(
@@ -291,10 +320,10 @@ export function App() {
   const voltageLabel = formatQuantity(
     voltageReading.ok ? voltageReading.value.voltageV : undefined,
     'V',
-    quantityFormatForTargets(doc, [redProbe, blackProbe]),
+    { ...quantityFormatForTargets(doc, [redProbe, blackProbe]), modelApproximation: result.provenance?.physicalModel === 'component' },
   );
   const voltageMeasurement = useMemo<VoltageMeasurement | undefined>(() => {
-    if (mode !== 'analysis' || measurementKind !== 'voltage') return undefined;
+    if (mode !== 'analysis' || stopped || measurementKind !== 'voltage') return undefined;
     const probe = (anchor: MeasurementAnchor | null) => {
       const pose = anchorPose(doc, anchor),
         endpoint = anchorEndpoint(doc, anchor);
@@ -303,12 +332,19 @@ export function App() {
     const red = probe(measurementAnchors.red),
       black = probe(measurementAnchors.black);
     return { red, black, label: voltageReading.ok ? voltageLabel : null };
-  }, [doc, storedMeasurementAnchors, voltageReading, voltageLabel, measurementKind, mode]);
+  }, [doc, storedMeasurementAnchors, voltageReading, voltageLabel, measurementKind, mode, stopped]);
 
   const currents = useMemo(
     () => buildCurrentModel(doc, compilation, result),
     [doc, compilation, result],
   );
+  const heldScales = useRef<{ context: string; scales: NonNullable<typeof comparisonBaseline> } | null>(null);
+  let comparisonScales = comparisonBaseline;
+  if (scaleContext && comparisonBaseline && doc.components.some(c => c.type === 'diode')) {
+    const previous = heldScales.current?.context === scaleContext ? heldScales.current.scales : comparisonBaseline;
+    comparisonScales = includeCurrentScales(previous, compilation, result, currents.maxMagnitude);
+    heldScales.current = { context: scaleContext, scales: comparisonScales };
+  } else heldScales.current = null;
   const {
     display: currentDisplay,
     setPaused: setCurrentPaused,
@@ -680,6 +716,7 @@ export function App() {
     if (fileInput.current) fileInput.current.value = '';
   }
   function changeMode(next: Mode) {
+    changeWorkspace(next);
     setMode(next);
     if (compact) { setDetailsOpen(false); setPresentation(false); }
     cancelTool();
@@ -724,7 +761,7 @@ export function App() {
       <button className={showColors ? 'active' : ''} aria-pressed={showColors} onClick={togglePotentialColors}>전위</button>
       <button className={showCurrent ? 'active' : ''} aria-pressed={showCurrent} onClick={toggleCurrentDisplay}>전류</button>
     </div>
-    <button className="compact-measure-start" onClick={() => chooseMeasurement(measurementKind ?? 'voltage')}>측정</button>
+    <button className="compact-measure-start" disabled={stopped} onClick={() => chooseMeasurement(measurementKind ?? 'voltage')}>측정</button>
     <FloatingPanel label="보기 더보기" contentLabel="보기 더보기" className="compact-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
       {close => <>
         <div className="compact-palette-row">
@@ -738,11 +775,15 @@ export function App() {
     </FloatingPanel>
   </>;
   const canvasDiagnostics =
-    !isolated && result.diagnostics.length > 0 ? (
+    !isolated && (result.diagnostics.length > 0 || assessment.components.length > 0) ? (
       <CanvasDiagnostics
         key={`${documentEpoch}:${doc.documentId}:${mode}`}
         document={doc}
         diagnostics={result.diagnostics}
+        assessment={assessment}
+        analyzing={mode === 'analysis'}
+        selectedId={selected[0]}
+        onHighlight={setRiskHighlights}
         onLocate={(ids) => {
           setSelection(ids);
           setFocusIds([...ids]);
@@ -774,6 +815,7 @@ export function App() {
         ) : undefined
       }
       document={doc}
+      operatingMarks={operatingMarks}
       largeLabels={presentation}
       measurement={
         measurementActive
@@ -791,7 +833,7 @@ export function App() {
       }
       readOnly={mode === 'analysis'}
       readOnlyLabel="분석 회로"
-      allowValueEditing={mode === 'analysis' && !measurementActive}
+      allowValueEditing={mode === 'analysis' && !measurementActive && !stopped}
       onWiringCommit={mode === 'build' ? commitWiring : undefined}
       wiringResetKey={wiringResetKey}
       selected={
@@ -823,7 +865,7 @@ export function App() {
           ? Object.fromEntries(
               Object.entries(potential.endpoints).map(([id, v]) => [
                 id,
-                formatQuantity(v.exactVoltage, 'V'),
+                formatQuantity(v.exactVoltage, 'V', {modelApproximation:potential.modelApproximation}),
               ]),
             )
           : undefined
@@ -831,7 +873,7 @@ export function App() {
       highlightedEndpoints={
         mode === 'analysis' && selectedNet ? potential.nets[selectedNet]?.endpointIds : undefined
       }
-      highlightedElements={!measurementActive && hovered ? [hovered] : undefined}
+      highlightedElements={riskHighlights.length ? riskHighlights : !measurementActive && hovered ? [hovered] : undefined}
       onHoverElement={setHovered}
       onSelect={selectElement}
       onMove={(positions) => dispatch({ type: 'MoveComponents', positions })}
@@ -958,10 +1000,11 @@ export function App() {
         <aside className="library-panel" hidden={mode === 'worksheet'}>
           {mode === 'analysis' ? (!compact &&
             <AnalysisTools
+              stopped={stopped}
               kind={measurementKind}
               onChoose={chooseMeasurement}
               needsIsolation={needsIsolation}
-              onIsolate={() => setSourcesDetached(true)}
+              onIsolate={() => { if (canMeasure()) setSourcesDetached(true); }}
               threeDimensional={analysisView === '3d'}
             />
           ) : (!compact &&
@@ -1024,11 +1067,13 @@ export function App() {
                     </span>
                   </div>
                   <ParameterControl
+                    stopEpoch={analysisSession.stopEpoch}
+                    inspectIntermediate={doc.components.some(c => c.type === 'diode')}
                     onAdjustingChange={onParameterAdjusting}
                     component={adjustableComponent}
                     parameter={parameter}
                     disabled={
-                      !!doc.activity && !doc.activity.allowedCommands.includes('SetProperties')
+                      stopped || (!!doc.activity && !doc.activity.allowedCommands.includes('SetProperties'))
                     }
                     onChange={(value, group, fraction) => {
                       if (
@@ -1037,7 +1082,8 @@ export function App() {
                           (adjustableComponent.properties[parameter.property + 'Fraction'] ?? '')
                       )
                         return true;
-                      return execute(
+                      const before = automaticEpoch();
+                      const applied = execute(
                         {
                           type: 'SetProperties',
                           id: adjustableComponent.id,
@@ -1049,7 +1095,8 @@ export function App() {
                           },
                         },
                         group,
-                      ).ok;
+                      );
+                      return !applied.ok ? false : automaticEpoch() !== before ? 'stop' : true;
                     }}
                   />
                 </section>
@@ -1115,12 +1162,12 @@ export function App() {
           </div>
           {mode === 'worksheet' && <div id="worksheet-actions" className="worksheet-topbar" />}
           {mode === 'analysis' && !compact && (
-            <div className={`potential-controls${isolated || !showColors ? ' no-legend' : ''}`}>
+            <div className={`potential-controls${isolated || stopped || !showColors ? ' no-legend' : ''}`}>
               {viewSwitcher}
               <label>
                 <input
                   type="checkbox"
-                  disabled={isolated}
+                  disabled={isolated || stopped}
                   checked={!isolated && showColors}
                   onChange={togglePotentialColors}
                 />
@@ -1129,7 +1176,7 @@ export function App() {
               <label>
                 <input
                   type="checkbox"
-                  disabled={isolated}
+                  disabled={isolated || stopped}
                   checked={!isolated && showNumbers}
                   onChange={(e) => setShowNumbers(e.target.checked)}
                 />
@@ -1138,21 +1185,21 @@ export function App() {
               <label className="potential-current">
                 <input
                   type="checkbox"
-                  disabled={isolated}
+                  disabled={isolated || stopped}
                   checked={!isolated && showCurrent}
                   onChange={toggleCurrentDisplay}
                 />
                 전류 흐름
               </label>
               <button
-                disabled={isolated}
+                disabled={isolated || stopped}
                 aria-expanded={showGraph}
                 onClick={() => setAnalysisPanel(showGraph ? null : 'path')}
               >
                 경로 그래프
               </button>
               <div className="potential-legend-tools">
-                <div className="potential-legend" hidden={isolated || !showColors}>
+                <div className="potential-legend" hidden={isolated || stopped || !showColors}>
                   {potential.undefinedCount === Object.keys(potential.nets).length ? (
                     <span>전위 미정</span>
                   ) : (
@@ -1177,7 +1224,7 @@ export function App() {
               mobile={compact ? {
                 viewControls: mobileViewControls, measuring: mobileMeasuring,
                 onBack: () => { setMobileMeasuring(false); setAnalysisPanel(null); if (measurementKind === 'resistance') chooseMeasurement(null); },
-                onChoose: chooseMeasurement, needsIsolation, onIsolate: () => setSourcesDetached(true),
+                onChoose: chooseMeasurement, needsIsolation, onIsolate: () => { if (canMeasure()) setSourcesDetached(true); },
               } : undefined}
               consoleHost={measurementConsoleHost}
               kind={measurementKind}
@@ -1189,6 +1236,8 @@ export function App() {
               document={doc}
               compilation={compilation}
               result={result}
+              canRecord={canMeasure}
+              stopped={stopped}
               voltageReading={voltageReading}
               voltageLabel={voltageLabel}
               active={mode === 'analysis'}
@@ -1211,6 +1260,9 @@ export function App() {
                   overlayControls={
                     <>
                       {canvasDiagnostics}
+                      {evaluation.result.provenance?.physicalModel === 'component' && <span className="physical-model-badge">부품 특성</span>}
+                      {assessment.components.length > 0 && <div className="analysis-session-controls"><button onClick={() => changeMode('build')}>회로 수정</button></div>}
+                      <span className="measurement-sr-only" role="status" key={analysisSession.stopEpoch}>{assessment.representative ? `${doc.components.find(c => c.id === assessment.representative!.componentId)?.label ?? ''}: ${operatingReason(assessment.representative,assessment.representative.level === 'damage')}` : ''}</span>
                       {showOperatingState && showCurrent && (
                         <CurrentControls
                           paused={currentDisplay.paused}
@@ -1228,6 +1280,8 @@ export function App() {
                   }
                   onReturnTo2D={() => setPotentialView('2d')}
                   document={doc}
+                  operatingMarks={operatingMarks}
+                  operatingStopped={stopped}
                   potential={potential}
                   voltageMeasurement={voltageMeasurement}
                   currentDisplay={showOperatingState && showCurrent ? currentDisplay : undefined}
@@ -1235,8 +1289,8 @@ export function App() {
                   selectedIds={measurementKind === 'voltage' ? noSelection : selected}
                   highlightedId={hovered}
                   selectedNet={selectedNet}
-                  showNumbers={!isolated && showNumbers}
-                  showColors={!isolated && showColors}
+                  showNumbers={showOperatingState && showNumbers}
+                  showColors={showOperatingState && showColors}
                   referenceLabel={
                     doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'
                   }
@@ -1507,7 +1561,7 @@ export function App() {
                     </button>
                   </div>
                 </div>
-                <div hidden={mode === 'analysis' && (isolated || !showNumbers)}>
+                <div hidden={mode === 'analysis' && (isolated || stopped || !showNumbers)}>
                   <div className="library-divider" />
                   <div className="section-heading">
                     <h2>빠른 값 보기</h2>
@@ -1521,7 +1575,7 @@ export function App() {
                         {formatQuantity(
                           result.componentVoltages[component.id],
                           'V',
-                          quantityFormatFor(component.properties),
+                          {...quantityFormatFor(component.properties),modelApproximation:result.provenance?.physicalModel==='component'},
                         )}
                       </strong>
                     </div>
@@ -1531,7 +1585,7 @@ export function App() {
                         {formatQuantity(
                           result.branchCurrents[component.id],
                           'A',
-                          quantityFormatFor(component.properties),
+                          {...quantityFormatFor(component.properties),modelApproximation:result.provenance?.physicalModel==='component'},
                         )}
                       </strong>
                     </div>
@@ -1545,7 +1599,7 @@ export function App() {
                         {formatQuantity(
                           result.componentPowers[component.id] === undefined ? undefined : q.abs(result.componentPowers[component.id]),
                           'W',
-                          quantityFormatFor(component.properties),
+                          {...quantityFormatFor(component.properties),modelApproximation:result.provenance?.physicalModel==='component'},
                         )}
                       </strong>
                     </div>

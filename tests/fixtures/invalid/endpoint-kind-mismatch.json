@@ -5,7 +5,7 @@
   "purpose": "존재하는 ID를 잘못된 끝점 종류로 참조할 때 거부하는지 검증",
   "document": {
     "format": "edu-circuit",
-    "version": 5,
+    "version": 6,
     "documentId": "endpoint-kind-mismatch",
     "title": "끝점 종류 불일치",
     "components": [

@@ -11,7 +11,7 @@ export function PotentialGraph({ path, result, hovered, onHover, document }: { d
   const steps = pathVoltages(path, result);
   if (steps.some(s => s.fromVoltage === undefined || s.toVoltage === undefined)) return <div className="graph-empty">전위가 정해지지 않아 그래프를 그릴 수 없습니다. 기준점과 회로 연결을 확인하세요.</div>;
   const values = steps.flatMap(s => [s.fromVoltage, s.toVoltage]); const min = values.reduce<q.Scalar>((a,b)=>q.compare(a,b)<0?a:b,0), max = values.reduce<q.Scalar>((a,b)=>q.compare(a,b)>0?a:b,0);
-  const scale=createQuantityScale(values,'V');
+  const scale=createQuantityScale(values,'V',{modelApproximation:result.provenance?.physicalModel==='component'});
   const left=Math.max(50,Math.ceil(Math.max(notationWidth(scale.format(min),12),notationWidth(scale.format(max),12)))+20);
   const y = (v: q.Scalar) => 80 - q.toNumber(q.div(q.sub(v,min),q.equal(max,min)?q.ONE:q.sub(max,min))) * 60; const width = Math.max(680,left+520); const right=width-30, segment=(right-left-15) / steps.length;
   return <div className="quantity-graph-scroll"><svg style={{minWidth:width>900?width:undefined}} className="potential-graph" viewBox={`0 0 ${width} 110`} role="img" aria-label="경로 전위 그래프: 도선은 수평, 부품은 전위 변화">

@@ -31,6 +31,9 @@ export const physicalProperties = [
   'resistanceOhm',
   'resistanceMinOhm',
   'resistanceMaxOhm',
+  'sourceResistanceOhm',
+  'diodeThresholdV',
+  'diodeOnResistanceOhm',
 ] as const;
 function scalarData(n: bigint, d = 1n): StoredScalar {
   if (d === 0n) throw new RangeError('ZERO_DENOMINATOR');

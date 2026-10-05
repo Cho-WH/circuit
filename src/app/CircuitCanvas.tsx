@@ -2,7 +2,7 @@ import { InlineComponentEditor, type ComponentEdit } from './InlineComponentEdit
 import { SvgNotation } from './Notation';
 import { PlacementFailure } from './PlacementFailure';
 import { CanvasCurrentLayer } from './CanvasCurrentLayer';
-import type { CurrentDisplay } from '../visualization';
+import { operatingMarkSvg, type CurrentDisplay, type ComponentOperatingMark } from '../visualization';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   useCanvasDragSession,
@@ -86,6 +86,7 @@ export interface CanvasProps {
   currentDisplay?: CurrentDisplay;
   measurement?: Omit<MeasurementLayerProps, 'document' | 'scale' | 'bounds' | 'point'>;
   largeLabels?: boolean;
+  operatingMarks?: Record<string, ComponentOperatingMark>;
 }
 export function CircuitCanvas(props: CanvasProps) {
   const canEditValues = !props.readOnly || Boolean(props.allowValueEditing);
@@ -926,6 +927,7 @@ export function CircuitCanvas(props: CanvasProps) {
           );
           const select = selected.includes(c.id);
           const glow = props.highlightedElements?.includes(c.id);
+          const operating = props.operatingMarks?.[c.id];
           if (c.id === previewId) return null;
           const presentation = {
             label: c.label,
@@ -946,6 +948,7 @@ export function CircuitCanvas(props: CanvasProps) {
               key={c.id}
               className="circuit-element"
               data-component-id={c.id}
+              data-operating-state={operating?.state}
               data-source-isolated={isolated || undefined}
               data-selected={select}
               data-dragging={Boolean(activeDrag?.positions[c.id])}
@@ -957,7 +960,7 @@ export function CircuitCanvas(props: CanvasProps) {
                 role="button"
                 tabIndex={0}
                 aria-pressed={select}
-                aria-label={`${c.label} ${componentValue(c)}`}
+                aria-label={`${c.label} ${componentValue(c)}${operating ? ` · ${operating.label}` : ''}`}
                 className="component"
                 onPointerDown={(e) => {
                   if (e.button !== 0 || capturedPointer.current !== null) return;
@@ -1023,6 +1026,12 @@ export function CircuitCanvas(props: CanvasProps) {
                   />
                 </g>
               </g>
+              {operating && <g key={`${operating.event}:${operating.state === 'overload' ? 'overload' : 'damage'}`}
+                className={`component-operating-mark is-${operating.state}`}
+                transform={`translate(${c.position.x},${c.position.y})`} pointerEvents="none">
+                <title>{operating.label}</title>
+                <g dangerouslySetInnerHTML={{ __html: operatingMarkSvg(operating.state) }} />
+              </g>}
               <SvgNotation
                 opacity={isolated ? 0.35 : undefined}
                 x={textLayout.label.x}

@@ -23,3 +23,7 @@
 ## 검증 진입점 통합 (2026-10-02)
 
 로컬·검증 CI·배포 CI는 package.json의 `npm run verify`를 공유한다. 명세 검증은 기존 TypeScript/Vitest 테스트와 공통 JSON Schema를 사용하고, 문서 ID·연결 참조는 앱의 공개 `domain.validateDocument`로 검사한다. Python의 중복 검증 및 전용 의존성은 제거하고 고유했던 저장소 Markdown 링크 검사만 TypeScript 테스트로 옮긴다. 링크 검사는 로컬 파일 존재와 저장소 경계만 확인하며 외부 URL·문서 내 앵커 검증은 범위 밖이다. 배포의 Firestore 에뮬레이터 검사는 기존 별도 명령을 유지한다.
+
+## 다이오드 확장 계약 (2026-10-05)
+
+[ADR-026](ADR-026-diode-boundary-analysis.md)이 이 절과 겹치는 이전 범위를 확장한다. 현재 지원 형식은 회로 v6·측정 기록 v5로 갱신한다. 이전 버전의 변환·호환은 제공하지 않는다. ComponentInstance.operatingProfile은 타입별 내장 ID와 revision 1을 보존하고, 생략 시 v6에 고정된 기본 프로필을 사용한다. 선택적 전기 특성 편차도 정규형 정확값이다. 다이오드 단자는 anode/cathode를 강제하며 CompiledElement는 A→K로 정규화한다. 내부 행렬·아핀 기저는 엔진 내부에 두고 결과에는 physicalModel·profileRevision·arithmeticQuality 출처를 구별한다.

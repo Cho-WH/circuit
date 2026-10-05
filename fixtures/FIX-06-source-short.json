@@ -5,7 +5,7 @@
   "purpose": "이상적 전원의 직접 단락을 수치값 없이 진단",
   "document": {
     "format": "edu-circuit",
-    "version": 5,
+    "version": 6,
     "documentId": "fix-06",
     "title": "전원 단락",
     "components": [

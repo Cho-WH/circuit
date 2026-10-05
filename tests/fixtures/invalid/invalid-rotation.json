@@ -5,7 +5,7 @@
   "purpose": "CircuitDocument 스키마가 직각이 아닌 회전을 거부하는지 검증",
   "document": {
     "format": "edu-circuit",
-    "version": 5,
+    "version": 6,
     "documentId": "invalid-rotation",
     "title": "허용되지 않은 회전",
     "components": [

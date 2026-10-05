@@ -5,7 +5,7 @@
   "purpose": "서로 다른 저항의 비가 같을 때 브리지 균형과 중앙 전류 방향 전환 확인",
   "document": {
     "format": "edu-circuit",
-    "version": 5,
+    "version": 6,
     "documentId": "fix-09",
     "title": "휘트스톤 브릿지",
     "components": [

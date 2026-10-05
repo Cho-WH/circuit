@@ -24,7 +24,7 @@
 
 ## 핵심 타입 예시
 
-현재 v5 저장·공개 계산 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 따른다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 현재 형식만 지원한다.
+현재 v6 저장·공개 계산 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 따른다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 현재 형식만 지원한다.
 
 ```ts
 interface Rational { readonly numerator: bigint; readonly denominator: bigint }
@@ -36,7 +36,7 @@ type EndpointRef =
 
 interface CircuitDocument {
   format: 'edu-circuit';
-  version: 5;
+  version: 6;
   documentId: string;
   title: string;
   components: ComponentInstance[];
@@ -80,6 +80,14 @@ interface SimulationResult {
 - 회전은 MVP에서 0°, 90°, 180°, 270°다.
 - SIM-008에 따라 0·부호·동일 전위·제약 일치를 정확 비교하며 좌표·화면 기하의 근사 계산과 분리한다.
 
+## 다이오드와 부품 프로필
+
+다이오드의 두 단자는 `anode`와 `cathode`이며 전기 방향은 A→K다. 역할은 배열·화면 회전과 독립적이다. `operatingProfile?: { id, revision: 1 }`은 타입별 교육용 프로필을 참조한다. 생략된 참조는 v6에서 고정한 기본값으로 해석한다. 값과 범위는 [부품 경계](../physics/circuit-operating-boundaries.md)의 D0 표를 따른다.
+
+선택적 `properties.sourceResistanceOhm`, `diodeThresholdV`, `diodeOnResistanceOhm`은 재현할 특성 차이만 정확값으로 저장한다. 기본 프로필·경계는 `domain.operatingProfileFor`를 통해 컴파일에 전달하며 계산 전용 요소를 문서에 추가하지 않는다. 모르는 프로필이나 잘못된 단자 역할·특성값은 문서 검증에서 거부한다.
+
+위 특성을 명시한 부품에는 컴파일 시 `explicitCharacteristics`를 표시한다. 분석 모델 선택은 이를 사용해 안전 범위에서도 명시한 부품 특성을 관찰할 수 있게 한다. 이 표시는 계산 입력의 파생 정보이며 저장 문서에 별도 플래그로 넣지 않는다.
+
 ## 저장하지 않는 값
 
 다음 값은 파일에 정답처럼 저장하지 않는다.
@@ -109,8 +117,8 @@ interface SimulationResult {
 
 ## 부품별 숫자 표시
 
-ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성이며 미설정 기본은 auto다. 문서에 저장할 부품 표기 속성으로 위치·이름과 함께 저장·복사·실행 취소한다. 숫자값·Fraction 원문·연결·계산식은 바꾸지 않는다. v5 properties 계약을 사용하며 ADR-019를 따른다.
+ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성이며 미설정 기본은 auto다. 문서에 저장할 부품 표기 속성으로 위치·이름과 함께 저장·복사·실행 취소한다. 숫자값·Fraction 원문·연결·계산식은 바꾸지 않는다. v6 properties 계약을 사용하며 ADR-019를 따른다.
 
 ## 가변저항 범위
 
-resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. v5의 정확값 필드를 사용한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.
+resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. v6의 정확값 필드를 사용한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.

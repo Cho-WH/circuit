@@ -1,4 +1,5 @@
 import * as q from '../rational';
+import { queryVoltage, queryCurrent } from '../simulation';
 import { isStoredScalar, type Rational, type StoredScalar } from '../domain';
 import {
   cloneDocument,
@@ -13,6 +14,7 @@ import {
   type SimulationEngine,
   type SimulationResult,
   type Wire,
+  type SimulationProvenance,
 } from '../domain';
 
 export type MeasurementResult<T> =
@@ -44,7 +46,7 @@ export function probeCurrent(
 ): MeasurementResult<CurrentReading> {
   if (!target) return fail('INCOMPLETE_PROBE');
   const upstream = [...compilation.diagnostics, ...result.diagnostics];
-  if (result.status === 'error' || hasErrors(upstream))
+  if (result.status === 'error' || hasErrors(compilation.diagnostics))
     return {
       ok: false,
       diagnostics: upstream.length
@@ -53,7 +55,11 @@ export function probeCurrent(
     };
   const pair = (c: ComponentInstance) => {
     const positive =
-      c.type === 'dc-voltage-source' ? c.terminals.find((t) => t.role === 'positive') : undefined;
+      c.type === 'dc-voltage-source'
+        ? c.terminals.find((t) => t.role === 'positive')
+        : c.type === 'diode'
+          ? c.terminals.find((t) => t.role === 'anode')
+          : undefined;
     const first = positive ?? c.terminals[0];
     return [first, c.terminals.find((t) => t.id !== first?.id)] as const;
   };
@@ -92,7 +98,7 @@ export function probeCurrent(
         queue.push(id);
       }
   if (side.has(wire.end.id)) return fail('WIRE_CURRENT_UNDEFINED', [wire.id]);
-  let amperes = q.ZERO;
+  const terms: { componentId: string; coefficient: number }[] = [];
   // KCL on one side of the cut. Sum all terminal injections, including several
   // components at a junction; assigning one current to an entire net is invalid.
   for (const c of [...document.components].sort((a, b) => a.id.localeCompare(b.id))) {
@@ -100,11 +106,11 @@ export function probeCurrent(
     if (!a || !b) return fail('MEASUREMENT_UNAVAILABLE', [c.id]);
     const sign = Number(side.has(b.id)) - Number(side.has(a.id));
     if (!sign) continue;
-    const current = result.branchCurrents[c.id];
-    if (!owns(result.branchCurrents, c.id) || !q.isRational(current))
-      return fail('MEASUREMENT_UNAVAILABLE', [wire.id, c.id]);
-    amperes = q.add(amperes, q.mul(sign, current));
+    terms.push({ componentId: c.id, coefficient: sign });
   }
+  const queried = queryCurrent(result, terms);
+  if (queried.status !== 'unique') return fail('MEASUREMENT_UNAVAILABLE', [wire.id]);
+  const amperes = queried.value;
   if (!q.isRational(amperes)) return fail('MEASUREMENT_UNAVAILABLE', [wire.id]);
   return ok({ amperes, from: wire.start, to: wire.end });
 }
@@ -163,6 +169,7 @@ export type MeasurementQuantity = 'voltage' | 'current' | 'resistance' | 'power'
 export type MeasurementUnit = 'V' | 'A' | 'Ω' | 'W';
 
 export interface MeasurementRecordFields {
+  provenance?: SimulationProvenance;
   condition: string;
   source: 'simulation' | 'external';
   quantity: MeasurementQuantity;
@@ -221,7 +228,7 @@ export function probeVoltage(
   if (missing.length) return fail('INVALID_REFERENCE', missing);
 
   const upstreamDiagnostics = [...compilation.diagnostics, ...result.diagnostics];
-  if (hasErrors(upstreamDiagnostics) || result.status === 'error') {
+  if (result.status === 'error' || hasErrors(compilation.diagnostics)) {
     return {
       ok: false,
       diagnostics:
@@ -231,10 +238,9 @@ export function probeVoltage(
     };
   }
 
-  if (!owns(result.nodeVoltages, redNetId) || !owns(result.nodeVoltages, blackNetId)) {
-    return fail('MEASUREMENT_UNAVAILABLE', [red.id, black.id]);
-  }
-  const voltageV = q.sub(result.nodeVoltages[redNetId], result.nodeVoltages[blackNetId]);
+  const queried = queryVoltage(result, redNetId, blackNetId);
+  if (queried.status !== 'unique') return fail('MEASUREMENT_UNAVAILABLE', [red.id, black.id]);
+  const voltageV = queried.value;
   if (!q.isRational(voltageV)) {
     return fail('MEASUREMENT_UNAVAILABLE', [red.id, black.id]);
   }
@@ -478,12 +484,23 @@ const unitsByQuantity: Record<MeasurementQuantity, MeasurementUnit> = {
   power: 'W',
 };
 
+function validProvenance(value: unknown): value is SimulationProvenance {
+  if (!value || typeof value !== 'object') return false;
+  const provenance = value as Partial<SimulationProvenance>;
+  return (
+    (provenance.physicalModel === 'textbook' || provenance.physicalModel === 'component') &&
+    typeof provenance.profileRevision === 'string' &&
+    (provenance.arithmeticQuality === 'exact' || provenance.arithmeticQuality === 'approximate')
+  );
+}
+
 function validateRecordFields(
   fields: MeasurementRecordFields,
   affectedIds?: string[],
 ): Diagnostic[] {
   const diagnosticIds = affectedIds ?? (Array.isArray(fields.targetIds) ? fields.targetIds : []);
   if (
+    (fields.provenance !== undefined && !validProvenance(fields.provenance)) ||
     ('quality' in fields &&
       fields.quality !==
         (fields.value !== null && typeof fields.value === 'object' && fields.value.approximation
@@ -514,6 +531,7 @@ export function createMeasurementRecord(
   if (diagnostics.length) return { ok: false, diagnostics };
   return ok({
     ...fields,
+    ...(fields.provenance ? { provenance: { ...fields.provenance } } : {}),
     quality: fields.value !== null && q.from(fields.value).approximation ? 'approximate' : 'exact',
     value: fields.value === null ? null : q.store(fields.value),
     targetIds: [...fields.targetIds],
@@ -546,6 +564,9 @@ export function measurementsToCsv(records: MeasurementRecord[]): MeasurementResu
       'documentSnapshot',
       'quality',
       'approximation',
+      'physicalModel',
+      'profileRevision',
+      'arithmeticQuality',
     ].join(','),
   ];
 
@@ -571,6 +592,9 @@ export function measurementsToCsv(records: MeasurementRecord[]): MeasurementResu
         csvCell(JSON.stringify(record.documentSnapshot)),
         record.quality,
         csvCell(record.value?.approximation ? JSON.stringify(record.value.approximation) : ''),
+        record.provenance?.physicalModel ?? '',
+        csvCell(record.provenance?.profileRevision ?? ''),
+        record.provenance?.arithmeticQuality ?? record.quality,
       ].join(','),
     );
   }

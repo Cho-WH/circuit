@@ -24,7 +24,11 @@ export const diagnosticText: Record<string, { title: string; detail: string; act
   UNCONNECTED_TERMINAL: { title: '연결되지 않은 단자가 있어요', detail: '도선이 연결되지 않은 단자입니다.', action: '단자를 선택해 필요한 도선을 연결하세요.' },
   INVALID_COMPONENT_VALUE: { title: '부품값을 확인해 주세요', detail: '저항은 0 이상, 전압은 유한한 숫자여야 합니다.', action: '부품을 선택하고 유효한 값을 입력하세요.' },
   UNSUPPORTED_TERMINALS: { title: '지원하지 않는 단자 구성이에요', detail: '현재 모델은 두 단자 부품과 명시적인 전원 극성을 사용합니다.', action: '파일의 부품 단자 구성을 확인하세요.' },
-  INVALID_DOCUMENT: { title: '회로 파일 형식이 올바르지 않아요', detail: '현재 파일은 edu-circuit v1 형식이어야 합니다.', action: '올바른 JSON 파일을 다시 선택하세요. 현재 회로는 유지됩니다.' },
+  INFEASIBLE_OPERATING_POINT: { title: '이 연결의 값을 계산할 수 없어요', detail: '', action: '' },
+  OPERATING_POINT_UNVERIFIED: { title: '계산을 확인하지 못했어요', detail: '', action: '' },
+  NONUNIQUE_OPERATING_POINT: { title: '일부 값이 하나로 정해지지 않아요', detail: '', action: '' },
+  NONLINEAR_RESISTANCE_UNSUPPORTED: { title: '다이오드가 있는 부분은 저항을 측정할 수 없어요', detail: '', action: '' },
+  INVALID_DOCUMENT: { title: '회로 파일 형식이 올바르지 않아요', detail: '현재 저장 형식의 회로 파일을 선택해 주세요.', action: '' },
   INVALID_REFERENCE: { title: '연결 대상이 존재하지 않아요', detail: '도선이나 주석이 삭제된 단자 또는 분기점을 가리킵니다.', action: '해당 연결을 수정하세요.' },
   DUPLICATE_ID: { title: '같은 식별자가 중복되었어요', detail: '회로의 부품·단자·도선 식별자는 고유해야 합니다.', action: 'JSON 파일에서 중복 식별자를 수정하세요.' },
 };

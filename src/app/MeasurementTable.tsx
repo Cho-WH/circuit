@@ -29,6 +29,7 @@ function ConditionSummary({ entry }: { entry: MeasurementEntry }) {
           </span>
         ))}
         {entry.sourcesDisconnected && <span className="record-isolation">모든 전원 분리</span>}
+        {entry.record.provenance?.physicalModel === 'component' && <span className="record-isolation">부품 특성</span>}
       </div>
     </div>
   );

@@ -19,6 +19,7 @@ interface Props {
   align?: 'start' | 'end';
   width?: number;
   onOpen?: () => void;
+  onOpenChange?: (open: boolean) => void;
   children: (close: (action?: () => void) => void) => ReactNode;
 }
 
@@ -33,10 +34,13 @@ export function FloatingPanel({
   align = 'end',
   width = 258,
   onOpen,
+  onOpenChange,
   children,
 }: Props) {
   const [open, setOpen] = useState(false),
     id = useId();
+  const notifyOpen = useRef(onOpenChange); notifyOpen.current = onOpenChange;
+  useEffect(() => { notifyOpen.current?.(open); return () => notifyOpen.current?.(false); }, [open]);
   const root = useRef<HTMLDivElement>(null),
     trigger = useRef<HTMLButtonElement>(null),
     panel = useRef<HTMLDivElement>(null);

@@ -29,6 +29,7 @@ export interface PotentialOptions {
   palette?: PotentialPaletteId;
 }
 export interface PotentialModel {
+  modelApproximation?: boolean;
   voltageUnit: q.StoredScalar;
   approximation?: import('../domain').Approximation;
   nets: Record<string, PotentialValue>;
@@ -136,6 +137,7 @@ export function buildPotentialModel(
   }
   return {
     ...axis,
+    ...(result.provenance?.physicalModel === 'component' ? { modelApproximation: true } : {}),
     approximation: exactValues.find((v) => v.approximation)?.approximation,
     nets,
     endpoints,

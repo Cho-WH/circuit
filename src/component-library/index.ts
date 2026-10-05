@@ -1,6 +1,6 @@
 import type { ComponentProperties } from '../domain';
 import * as q from '../rational';
-import { isStoredScalar } from '../domain';
+import { isStoredScalar, defaultOperatingProfileRef } from '../domain';
 import { quantityInput, storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
 export { parameterValueAt, adjustableParameter, type AdjustableParameter } from './parameters';
@@ -16,18 +16,21 @@ export const componentDefinitions: Record<ComponentType, { name: string; short: 
   ammeter: { name: '전류계', short: 'A', unit: 'A' },
   voltmeter: { name: '전압계', short: 'M', unit: 'V' },
   'resistive-load': { name: '가변저항', short: 'VR', unit: 'Ω', property: 'resistanceOhm' },
+  diode: { name: '다이오드', short: 'D', unit: 'V' },
 };
 export function createComponent(type: ComponentType, id: string, position: Point): ComponentInstance {
   const source = type === 'dc-voltage-source';
+  const operatingProfile = defaultOperatingProfileRef(type);
   return {
     id, type, label: type === 'resistive-load' ? id.replace(/^VR(\d+)$/, 'VR_$1') : id, position, rotation: source ? 90 : 0,
     properties: source ? { voltageV: q.store(9) } : type === 'resistive-load' ? { resistanceOhm: q.store(10), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(100) } : type === 'resistor' ? { resistanceOhm: q.store(10) } : type === 'switch' ? { state: 'open' } : {},
-    terminals: [{ id: `${id}.a`, role: source ? 'positive' : 'a' }, { id: `${id}.b`, role: source ? 'negative' : 'b' }],
+    ...(operatingProfile ? { operatingProfile } : {}),
+    terminals: [{ id: `${id}.a`, role: source ? 'positive' : type === 'diode' ? 'anode' : 'a' }, { id: `${id}.b`, role: source ? 'negative' : type === 'diode' ? 'cathode' : 'b' }],
   };
 }
 export function terminalPosition(component: ComponentInstance, index: number): Point {
   const terminal = component.terminals[index];
-  const first = component.type === 'dc-voltage-source' && component.terminals.some(t => t.role === 'positive') ? terminal?.role === 'positive' : index === 0;
+  const first = component.type === 'diode' ? terminal?.role === 'anode' : component.type === 'dc-voltage-source' && component.terminals.some(t => t.role === 'positive') ? terminal?.role === 'positive' : index === 0;
   const p = terminal?.localPosition ?? { x: first ? -44 : 44, y: 0 };
   const angle = component.rotation * Math.PI / 180;
   return { x: component.position.x + Math.round(p.x * Math.cos(angle) - p.y * Math.sin(angle)), y: component.position.y + Math.round(p.x * Math.sin(angle) + p.y * Math.cos(angle)) };
@@ -100,7 +103,7 @@ function terminalName(document: CircuitDocument, id: string): string | undefined
     const i=c.terminals.findIndex(t=>t.id===id);
     if(i<0)continue;
     const t=c.terminals[i], p=terminalPosition(c,i), other=terminalPosition(c,i===0?1:0);
-    return `${c.label} · ${t.role==='positive'?'＋극':t.role==='negative'?'−극':Math.abs(p.x-other.x)>=Math.abs(p.y-other.y)?(p.x<other.x?'왼쪽':'오른쪽'):(p.y<other.y?'위쪽':'아래쪽')} 단자`;
+    return `${c.label} · ${t.role==='positive'?'＋극':t.role==='negative'?'−극':t.role==='anode'?'A':t.role==='cathode'?'K':Math.abs(p.x-other.x)>=Math.abs(p.y-other.y)?(p.x<other.x?'왼쪽':'오른쪽'):(p.y<other.y?'위쪽':'아래쪽')} 단자`;
   }
   return undefined;
 }
@@ -167,12 +170,14 @@ export const escapeXml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&
 export function componentValue(component: ComponentInstance, options?: QuantityFormatOptions): string {
   options=quantityFormatFor(component.properties,options);
   const def = componentDefinitions[component.type];
+  if (component.type === 'diode') return formatQuantity(q.rational(7n, 10n), 'V', options);
   if (component.type === 'switch') return component.properties.state === 'closed' ? '닫힘' : '열림';
   const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
   return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(isStoredScalar(component.properties[def.property]) ? component.properties[def.property] as q.StoredScalar : undefined, def.unit, options) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
 export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean } = {}): string {
+  if (component.type === 'diode') return '<path d="M-44 0H-16 M16 0H44 M-16 -18L16 0 -16 18Z M16 -18V18" fill="none"/><text x="-30" y="-10" stroke="none" fill="currentColor" font-size="11" text-anchor="middle">A</text><text x="30" y="-10" stroke="none" fill="currentColor" font-size="11" text-anchor="middle">K</text>';
   if (component.type === 'resistor' || component.type === 'resistive-load') {
     const resistor='<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
     return resistor+(component.type==='resistive-load'?'<path data-symbol="adjustment-arrow" d="M-18 20L18 -20 M8 -18L18 -20 17 -10" fill="none"/>':'');
@@ -197,11 +202,12 @@ export function presentationText(properties:ComponentProperties,actual:string,pr
 export function componentPresentation(component: ComponentInstance, result?: SimulationResult, options?: QuantityFormatOptions): { label: string | null; value: string | null; voltage: string | null; current: string | null } {
   options=quantityFormatFor(component.properties,options);
   const value = componentValue(component, options);
+  const resultOptions={...options,modelApproximation:result?.provenance?.physicalModel==='component'};
   const rule=(actual:string,prefix:string)=>component.properties[prefix+'Visible']===false ? null : component.properties[prefix+'Blank']===true ? '□' : actual;
   return {
     label: rule(component.label, 'label'), value: rule(value, 'answer'),
-    voltage: component.properties.showVoltage === true ? rule(formatQuantity(result?.componentVoltages[component.id], 'V', options), 'voltage') : null,
-    current: component.properties.showCurrent === true ? rule(formatQuantity(result?.branchCurrents[component.id], 'A', options), 'current') : null,
+    voltage: component.properties.showVoltage === true ? rule(formatQuantity(result?.componentVoltages[component.id], 'V', resultOptions), 'voltage') : null,
+    current: component.properties.showCurrent === true ? rule(formatQuantity(result?.branchCurrents[component.id], 'A', resultOptions), 'current') : null,
   };
 }
 export function annotationPresentation(annotation: Annotation): string | null {
