@@ -1,11 +1,13 @@
+import { channelStorageKey, readChannelStorage } from '../release';
 import { useCallback, useState } from 'react';
 
-export const QUICK_START_SEEN_KEY = 'circuit.quick-start-seen';
+const legacyKey = 'circuit.quick-start-seen';
+export const QUICK_START_SEEN_KEY = channelStorageKey(legacyKey);
 
 export function useQuickStart() {
   const [firstVisit, setFirstVisit] = useState(() => {
     try {
-      return localStorage.getItem(QUICK_START_SEEN_KEY) !== 'true';
+      return readChannelStorage(localStorage, legacyKey, value => value === 'true') !== 'true';
     } catch {
       return true;
     }

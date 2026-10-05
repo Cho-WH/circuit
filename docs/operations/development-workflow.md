@@ -19,8 +19,8 @@
 
 ## 브랜치와 PR
 
-- `main`은 항상 실행 가능한 상태를 유지한다.
-- 짧은 기능 브랜치를 사용한다.
+- `main`은 수업용 안정판, `dev`는 다음 변경을 확인하는 개발판이다. 두 브랜치를 상시 유지한다.
+- 개발은 `dev`에서 하거나 `dev`에서 나눈 짧은 기능 브랜치를 사용한다. 안정판 반영은 검증된 변경을 `dev`에서 `main`으로 병합할 때만 한다.
 - 큰 기능은 데이터→계산→표현→테스트의 작은 PR로 나눈다.
 - PR 설명에 요구사항 ID, 화면 변화, 데이터 변화, 테스트, 마이그레이션 여부를 기록한다.
 - 문서 스키마나 공개 인터페이스가 바뀌면 코드와 같은 PR에서 문서와 ADR을 갱신한다.
@@ -55,7 +55,7 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 | 모듈 의존 | `npm run check:boundaries` |
 | 요구사항·스키마·fixture | `npm test -- tests/specifications.test.ts` |
 | 문서 정리만 변경 | `npm test -- tests/document-links.test.ts`; 변경한 앵커는 별도 확인 |
-| 배포 산출물 | `npm run build`; Pages 경로는 `GITHUB_PAGES=true` 적용 |
+| 배포 산출물 | `npm run build`; Pages 빌드는 `GITHUB_PAGES=true`, `VITE_RELEASE_CHANNEL=main` 또는 `dev` 지정 |
 
 계산 변경은 관련 fixture·물리 불변식, 편집 변경은 실행 취소·다시 실행, 출력 변경은 실제 SVG·PNG를 확인한다. 실제 사용자·기기 검증과 자동화·브라우저 크기 검증을 구분해 기록한다. 새 요청 전까지 메인이 직접 구현·검증하며 예전 에이전트 분담은 이력에만 남긴다.
 
@@ -79,12 +79,30 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 - 핵심 자산과 파일 입출력은 서버 API에 의존하지 않는다.
 
 
-### MVP 정적 사이트 게시
+### 안정판과 개발판 게시
 
-GitHub Pages + Actions로 `codex/mvp`의 검증된 `dist`를 게시한다. URL은 https://cho-wh.github.io/circuit/ 이다. `GITHUB_PAGES=true`는 배포 빌드에만 적용한다. `github-pages` 환경은 이 브랜치만 허용하고 deploy job에만 `pages: write`, `id-token: write`를 부여한다. 빌드 검증 실패 시 배포 job을 실행하지 않는다. 단계 6의 학생 활동·공유 서버 기능과 별개인 현재 정적 MVP의 게시다.
+| 브랜치 | 주소 | 빌드 채널 |
+|---|---|---|
+| `main` | https://cho-wh.github.io/circuit/ | `VITE_RELEASE_CHANNEL=main` |
+| `dev` | https://cho-wh.github.io/circuit/dev/ | `VITE_RELEASE_CHANNEL=dev` |
 
-`codex/mvp` push 또는 수동 실행 시 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 `npm run verify`(GITHUB_PAGES=true) → Java 21 준비 → `npm run test:firestore`를 수행한다. Verify 워크플로는 다른 브랜치의 push와 모든 PR에서 같은 `npm run verify`를 실행한다. 배포 브랜치 push는 Pages 워크플로에서만 검증하며 PR의 병합 결과 검증은 유지한다. 일반 테스트에서 건너뛴 Firestore 규칙 검사는 이 별도 에뮬레이터 단계에서 실행한다. 모든 검사가 성공한 산출물만 Pages에 업로드·배포한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**를 사용한다. 게시 브랜치를 바꿀 때 push 대상·Verify의 제외 브랜치·build 조건·github-pages 환경의 허용 브랜치를 함께 바꾼다.
+최초 안정판은 다이오드 추가 직전 `6c44400`의 기능에 배포·저장 분리만 더한 버전이다. 다이오드·과부하·설명 물음표는 개발판에서 이어간다. 이후 같은 소스를 main으로 승격하면 빌드 채널만 바뀌어 안정판 주소와 저장 공간을 사용한다. 기능별 브랜치 이름이나 URL 탐색 결과로 채널을 추측하지 않는다.
 
-배포 빌드는 `/circuit/`, 로컬 개발은 `/` 경로다. 빌드 결과만 업로드하며 소스·테스트·브라우저 저장 데이터는 배포하지 않는다. 다른 기기로 회로를 옮길 때는 JSON을 사용한다.
+어느 브랜치든 push하면 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 **main과 dev 양쪽 최신 커밋**을 각각 checkout한다. 각 빌드는 `npm run verify` → Java 21 준비 → `npm run test:firestore`를 실행한다. 검증된 main의 dist를 사이트 루트에, dev의 dist를 그 안의 dev/에 합쳐 **하나의 Pages 산출물**로 게시한다. Pages는 사이트 전체를 교체하므로 한쪽만 게시하지 않는다. 한쪽 검사라도 실패하면 기존 사이트 전체를 유지한다. 실행은 github-pages 동시성 그룹에서 직렬 처리한다.
 
-배포 실패 시 Actions의 **Deploy GitHub Pages** 로그를 확인한다. 재배포는 해당 실행의 Re-run jobs를 사용한다. 회귀가 있으면 문제 커밋을 되돌리는 새 커밋을 배포 브랜치에 푸시한다. 로컬 구현·푸시·Actions 성공·공개 사이트 확인을 서로 다른 상태로 기록한다.
+Verify 워크플로는 다른 브랜치 push와 모든 PR에서 동작한다. main/dev push는 Pages 워크플로에서 검증한다. 저장소 Settings → Pages의 Source는 **GitHub Actions**, github-pages 환경의 허용 브랜치는 **main과 dev만**으로 설정한다. deploy job에만 pages: write와 id-token: write를 부여한다. 이전 codex/mvp 브랜치는 배포 대상으로 쓰지 않는다.
+
+평소 개발·검증 후 `git push origin dev`로 개발판을 갱신한다. 안정판 승격은 dev→main PR로 변경 범위와 지원 파일 형식을 확인한 뒤 병합한다. 급한 안정판 수정은 main에서 먼저 반영하고 dev에도 병합해 양쪽 운영 설정을 유지한다. 브랜치를 강제 초기화하거나 과거 커밋으로 force push하지 않는다. 회귀 복구는 해당 브랜치에 revert 커밋을 추가한다.
+
+로컬 `npm run dev`와 일반 build의 기본 채널은 dev이고 기본 경로는 /다. 안정판을 로컬에서 확인할 때만 환경 변수 VITE_RELEASE_CHANNEL=main을 지정한다. Pages 경로는 GITHUB_PAGES=true일 때 main=/circuit/, dev=/circuit/dev/다. 예를 들어 PowerShell에서:
+
+```powershell
+$env:GITHUB_PAGES = 'true'
+$env:VITE_RELEASE_CHANNEL = 'dev' # 안정판 빌드는 main
+npm run build
+Remove-Item Env:GITHUB_PAGES, Env:VITE_RELEASE_CHANNEL
+```
+
+자동 저장·보관·측정 기록·백업·첫 안내와 로컬 후기 미리보기는 main:/dev: 키로 분리한다. 브라우저는 경로가 달라도 같은 저장소를 공유하므로 이 접두사가 필수다. 기존 접두사 없는 데이터는 해당 버전의 검증을 통과할 때만 비어 있는 채널 키에 복사하며 원본은 보존한다. 지원하지 않는 형식은 옮기거나 변환하지 않는다. JSON 내보내기는 기존 형식 그대로다. Firebase 운영 후기·인증은 같은 프로젝트를 계속 사용한다. [저장 계약](../architecture/persistence-and-sharing.md), [ADR-027](../../decisions/ADR-027-release-channels.md).
+
+빌드 결과만 게시한다. 각 주소의 release.json은 channel과 실제 빌드 commit을 담으므로 Actions 성공 뒤 양쪽 게시 커밋과 자산 경로를 확인한다. 소스·테스트·브라우저 저장 데이터는 배포하지 않는다. 장애는 **Deploy GitHub Pages** 로그에서 확인하고 수동 실행 또는 Re-run jobs로 재검증·배포한다. 로컬 구현·푸시·Actions 성공·공개 사이트 확인을 구분해 기록한다.

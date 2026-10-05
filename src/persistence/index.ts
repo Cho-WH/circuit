@@ -1,3 +1,4 @@
+import { channelStorageKey, readChannelStorage } from '../release';
 import {
   DocumentError,
   diagnostic,
@@ -67,12 +68,12 @@ export function saveLocal(
   try {
     const serialized = serializeDocument(document);
     const target = storage ?? defaultStorage();
-    const key = STORAGE_KEYS[kind];
+    const key = channelStorageKey(STORAGE_KEYS[kind]);
 
     if (kind === 'auto') {
       const previous = target.getItem(key);
       if (previous !== null && parseDocument(previous).ok) {
-        target.setItem(AUTO_BACKUP_KEY, previous);
+        target.setItem(channelStorageKey(AUTO_BACKUP_KEY), previous);
       }
     }
 
@@ -89,13 +90,13 @@ export function loadLocal(
 ): DocumentValidation | null {
   try {
     const target = storage ?? defaultStorage();
-    const stored = target.getItem(STORAGE_KEYS[kind]);
+    const stored = readChannelStorage(target, STORAGE_KEYS[kind], text => parseDocument(text).ok);
     if (stored === null) return null;
 
     const primary = parseDocument(stored);
     if (primary.ok || kind === 'manual') return primary;
 
-    const backup = target.getItem(AUTO_BACKUP_KEY);
+    const backup = readChannelStorage(target, AUTO_BACKUP_KEY, text => parseDocument(text).ok);
     if (backup === null) return primary;
     const recovery = parseDocument(backup);
     return recovery.ok ? recovery : primary;

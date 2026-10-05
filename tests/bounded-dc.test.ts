@@ -1,3 +1,4 @@
+import { channelStorageKey } from '../src/release';
 import { describe, expect, it } from 'vitest';
 import type { CompiledCircuit, Rational } from '../src/domain';
 import { createBudget } from '../src/simulation/budget';
@@ -239,9 +240,9 @@ describe('bounded exact DC and explicit approximate values', () => {
       ok: true,
       value: expect.stringContaining('≈ '),
     });
-    const stored = JSON.parse(data.get('edu-circuit:measurement-notebook:v4')!);
+    const stored = JSON.parse(data.get(channelStorageKey('edu-circuit:measurement-notebook:v4'))!);
     delete stored.entries[0].record.value.approximation;
-    data.set('edu-circuit:measurement-notebook:v4', JSON.stringify(stored));
+    data.set(channelStorageKey('edu-circuit:measurement-notebook:v4'), JSON.stringify(stored));
     expect(loadMeasurementNotebook(storage).entries).toEqual([]);
     expect(formatQuantity(q.from(12), 'V')).toBe('12 V');
   });

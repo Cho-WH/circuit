@@ -1,7 +1,7 @@
 name: Verify circuit
 on:
   push:
-    branches-ignore: [codex/mvp]
+    branches-ignore: [main, dev]
   pull_request:
 permissions:
   contents: read

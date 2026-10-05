@@ -38,3 +38,4 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-023](ADR-023-live-parameters.md) | 가변저항 조절과 연속 갱신 | accepted | 가변저항 학습 조작 |
 | [ADR-024](ADR-024-exact-dc-arithmetic.md) | 선형 직류 회로의 정확 유리수 연산 | accepted | 정확 연산·회로 v5·비용 검증 완료, 예산 초과 정책은 ADR-025 |
 | [ADR-025](ADR-025-bounded-approximate-dc.md) | 계산 예산을 넘는 직류 회로의 명시적 근사 해석 | accepted | 계산 예산·근사·품질 전달·기록 v4 구현 |
+| [ADR-027](ADR-027-release-channels.md) | 안정판·개발판 배포와 브라우저 저장 분리 | accepted | main/dev 상시 운영 |

@@ -1,6 +1,6 @@
 # 현재 작업 현황
 
-기준일: 2026-10-04. 앱 `0.1.0`, 저장 형식 `edu-circuit` v5, 브랜치 `codex/mvp`.
+기준일: 2026-10-06. 앱 `0.1.0`, 저장 형식 `edu-circuit` v5, 브랜치 `main`. 다이오드 추가 직전 `6c44400`의 기능을 안정판으로 유지하며 개발판은 `dev`에서 진행한다.
 
 **단계 0~5 기능 MVP와 후속 개선을 구현했다. 단계 6 활동·공유와 단계 7 교실 알파는 미완료다.** 범위와 종료 조건은 [단계 계획](phases.md), 미반영 후보·실기기 과제는 [남은 작업](follow-up.md)을 따른다.
 
@@ -34,7 +34,7 @@ SIM-008 / [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)에 따라 �
 
 ## 커밋과 배포 확인 기준
 
-- 게시 주소는 [공개 앱](https://cho-wh.github.io/circuit/)이며, `codex/mvp` 푸시로 배포한다. 최신 게시 커밋과 성공 여부는 [Pages 실행 기록](https://github.com/Cho-WH/circuit/actions/workflows/deploy-pages.yml)에서 확인한다. 로컬 작업 트리와 공개 사이트의 반영 상태는 구분한다.
+- 안정판은 [main](https://cho-wh.github.io/circuit/), 개발판은 [dev](https://cho-wh.github.io/circuit/dev/)다. 어느 브랜치든 푸시하면 양쪽을 검증해 함께 배포하며 브라우저 저장 공간은 분리한다. [운영 절차](../operations/development-workflow.md)를 따른다. 최신 게시 커밋과 성공 여부는 [Pages 실행 기록](https://github.com/Cho-WH/circuit/actions/workflows/deploy-pages.yml)에서 확인한다. 로컬 작업 트리와 공개 사이트의 반영 상태는 구분한다.
 - 2026-09-30 게시 대상에는 분석 화면·측정표 통합, 3D 전압 탐침, 자동 높이·회전축 수정, L자 전압 눈금과 드래그 중 수평 스냅이 포함된다. 놓은 시점은 유지한다.
 - 검증 근거는 [검증 범위](../testing/mvp-coverage.md), 최근 변경 기록은 [작업 추적](mvp-tracker.md)에 모은다. 실제 교사·학생·모바일·보조기술 검증을 코드 완료와 구분한다.
 
