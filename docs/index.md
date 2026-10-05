@@ -7,6 +7,16 @@
 - [작업 추적](implementation/mvp-tracker.md): 최근 변경과 주요 완료 결과
 - [요구사항](../requirements/requirements.yaml) · [스키마](../schemas/) · [기술 결정 색인](../decisions/README.md): 규범과 계약
 
+## 다이오드 확장 — 설계 확정·구현 전
+
+- [기획과 구현 순서](implementation/diode-mvp.md): 목표 경험, 범위, 기존 모듈 연결, 단계별 종료 조건
+- [ADR-026](../decisions/ADR-026-diode-boundary-analysis.md): 채택한 설계와 기존 규범의 관계
+- [다이오드 DC 모델](physics/diode-dc-model.md): 정확한 0.7 V, 상태·해 집합, 유한 부품 모델, 계산 예산
+- [작동 경계](physics/circuit-operating-boundaries.md): 프로필, 정상·노랑·빨강, 모델 선택과 기록
+- [분석 UX](ux/diode-analysis.md): 만들기 경고, 분석 확정, 가변저항 트리거, 과부하·파손·수정 복귀
+- [수용 사례](testing/diode-cases.md): 시험 회로, 경계 포함 관계, 표시·세션 회귀 기준
+- [참고 조사](research/diode-engines.md): 오픈소스와 부품 자료, 채택 근거와 적용 한계
+
 ## 제품
 
 - [`product/brief.md`](product/brief.md): 제품 정의, 사용자, 원칙, 성공 지표
