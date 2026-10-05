@@ -110,14 +110,12 @@ export function loadMeasurementNotebook(storage?: StorageAdapter): {
   try {
     storage ??= localStorage;
     const raw = readChannelStorage(storage, key, text => { parse(text); return true; });
-    if (raw === null) return { entries: [] };
-    try {
-      return { entries: parse(raw) };
-    } catch {
-      const backup = readChannelStorage(storage, `${key}:backup`, text => { parse(text); return true; });
-      if (backup) return { entries: parse(backup), warning: '이전 측정 기록을 복원했어요.' };
-      return { entries: [], warning: '저장된 측정 기록을 읽지 못했어요.' };
+    if (raw !== null) {
+      try { return { entries: parse(raw) }; } catch { /* Try the valid recovery copy below. */ }
     }
+    const backup = readChannelStorage(storage, `${key}:backup`, text => { parse(text); return true; });
+    if (backup) return { entries: parse(backup), warning: '이전 측정 기록을 복원했어요.' };
+    return raw === null ? { entries: [] } : { entries: [], warning: '저장된 측정 기록을 읽지 못했어요.' };
   } catch {
     return { entries: [], warning: '이 브라우저에서는 측정 기록을 불러올 수 없어요.' };
   }
