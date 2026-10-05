@@ -1,9 +1,14 @@
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
+const channel = process.env.VITE_RELEASE_CHANNEL ?? 'dev';
+if (!['main', 'dev'].includes(channel)) throw new Error('VITE_RELEASE_CHANNEL must be main or dev');
+
 export default defineConfig({
-  base: process.env.GITHUB_PAGES === 'true' ? '/circuit/' : '/',
+  define: { 'import.meta.env.VITE_RELEASE_CHANNEL': JSON.stringify(channel) },
+  base:
+    process.env.GITHUB_PAGES === 'true' ? (channel === 'dev' ? '/circuit/dev/' : '/circuit/') : '/',
   plugins: [react()],
   build: {
     rollupOptions: {
@@ -14,7 +19,7 @@ export default defineConfig({
     },
   },
   test: {
-    environment: "node",
-    include: ["tests/**/*.test.ts"],
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
   },
 });

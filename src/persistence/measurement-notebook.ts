@@ -1,3 +1,4 @@
+import { channelStorageKey, readChannelStorage } from '../release';
 import { isStoredScalar, type EndpointRef } from '../domain';
 import { createMeasurementRecord, type MeasurementRecord } from '../measurement';
 import { wirePoints } from '../component-library';
@@ -108,12 +109,12 @@ export function loadMeasurementNotebook(storage?: StorageAdapter): {
 } {
   try {
     storage ??= localStorage;
-    const raw = storage.getItem(key);
+    const raw = readChannelStorage(storage, key, text => { parse(text); return true; });
     if (raw === null) return { entries: [] };
     try {
       return { entries: parse(raw) };
     } catch {
-      const backup = storage.getItem(`${key}:backup`);
+      const backup = readChannelStorage(storage, `${key}:backup`, text => { parse(text); return true; });
       if (backup) return { entries: parse(backup), warning: '이전 측정 기록을 복원했어요.' };
       return { entries: [], warning: '저장된 측정 기록을 읽지 못했어요.' };
     }
@@ -130,16 +131,16 @@ export function saveMeasurementNotebook(
     storage ??= localStorage;
     const serialized = JSON.stringify({ version: 5, entries });
     parse(serialized);
-    const previous = storage.getItem(key);
+    const previous = readChannelStorage(storage, key, text => { parse(text); return true; });
     if (previous) {
       try {
         parse(previous);
-        storage.setItem(`${key}:backup`, previous);
+        storage.setItem(channelStorageKey(`${key}:backup`), previous);
       } catch {
         /* Keep an existing valid backup. */
       }
     }
-    storage.setItem(key, serialized);
+    storage.setItem(channelStorageKey(key), serialized);
     return true;
   } catch {
     return false;

@@ -1,3 +1,4 @@
+import { channelStorageKey } from '../src/release';
 import * as q from '../src/rational';
 import { describe, expect, it } from 'vitest';
 import { examples } from '../src/fixtures';
@@ -121,7 +122,7 @@ describe('measurement notebook', () => {
     expect(loadMeasurementNotebook(store).entries).toEqual([voltage, current, resistance]);
     expect(measurementValue(current)).toBe('1 A');
     expect(measurementDirection(current)).toMatch(/오른쪽 단자.*→.*왼쪽 단자/);
-    expect(store.data.has('edu-circuit:auto:v1')).toBe(false);
+    expect(store.data.has(channelStorageKey('edu-circuit:auto:v1'))).toBe(false);
   });
   it('rejects old notebook versions and numeric values in current records', () => {
     for (const corrupt of [
@@ -130,7 +131,7 @@ describe('measurement notebook', () => {
       { version: 5, entries: [{ ...entry(), record: { ...entry().record, value: 1 / 3 } }] },
     ]) {
       const store = storage();
-      store.data.set('edu-circuit:measurement-notebook:v5', JSON.stringify(corrupt));
+      store.data.set(channelStorageKey('edu-circuit:measurement-notebook:v5'), JSON.stringify(corrupt));
       expect(loadMeasurementNotebook(store)).toMatchObject({ entries: [], warning: expect.any(String) });
     }
   });
@@ -140,7 +141,7 @@ describe('measurement notebook', () => {
     expect(saveMeasurementNotebook([saved], store)).toBe(true);
     expect(loadMeasurementNotebook(store).entries).toEqual([saved]);
     for (const provenance of [null, 'component', { physicalModel: 'unknown', profileRevision: 'test', arithmeticQuality: 'exact' }]) {
-      store.data.set('edu-circuit:measurement-notebook:v5', JSON.stringify({ version: 5, entries: [{ ...saved, record: { ...saved.record, provenance } }] }));
+      store.data.set(channelStorageKey('edu-circuit:measurement-notebook:v5'), JSON.stringify({ version: 5, entries: [{ ...saved, record: { ...saved.record, provenance } }] }));
       expect(loadMeasurementNotebook(store)).toMatchObject({ entries: [], warning: expect.any(String) });
     }
   });
@@ -191,7 +192,7 @@ describe('measurement notebook', () => {
       expect(saveMeasurementNotebook([broken], storage())).toBe(false);
     }
     const legacy = storage();
-    legacy.setItem('edu-circuit:measurement-notebook:v1', JSON.stringify({version:1,entries:[saved]}));
+    legacy.setItem(channelStorageKey('edu-circuit:measurement-notebook:v1'), JSON.stringify({version:1,entries:[saved]}));
     expect(loadMeasurementNotebook(legacy)).toEqual({entries:[]});
   });
   it('separates electrical conditions while ignoring layout, labels, formatting and array order', () => {

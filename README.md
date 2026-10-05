@@ -41,4 +41,4 @@ Node.js 20.19 이상이 필요하다. 기본 주소는 http://localhost:5173 이
 
 ## 개발과 배포
 
-로컬과 CI의 공통 검증 명령은 `npm run verify`다. 변경에 맞는 개별 검증 명령과 GitHub Pages 운영 절차는 [개발 운영](docs/operations/development-workflow.md)에 모았다. 게시 주소는 https://cho-wh.github.io/circuit/ 이며, `codex/mvp`에 푸시하면 Actions가 검증 후 정적 빌드를 게시한다. 작업 트리의 변경은 푸시·배포 전까지 공개 사이트에 반영되지 않는다.
+로컬과 CI의 공통 검증 명령은 `npm run verify`다. 변경에 맞는 개별 검증 명령과 GitHub Pages 운영 절차는 [개발 운영](docs/operations/development-workflow.md)에 모았다. 안정판은 [main](https://cho-wh.github.io/circuit/), 개발판은 [dev](https://cho-wh.github.io/circuit/dev/)다. 두 브랜치 중 하나에 푸시하면 Actions가 양쪽을 검증해 함께 게시한다. 브라우저 회로·측정 기록과 복구본은 버전별로 분리된다. 개발은 dev에서 진행하고 안정판 반영은 dev→main 병합으로 한다. 작업 트리의 변경은 푸시·배포 전까지 공개 사이트에 반영되지 않는다.

@@ -1,3 +1,4 @@
+import { channelStorageKey, readChannelStorage } from '../release';
 import { feedbackDay, feedbackLimits, validFeedbackDraft, type FeedbackEntry, type FeedbackPost, type AdminFeedbackPost, type FeedbackDraft, type FeedbackGateway, type FeedbackAdminGateway, type FeedbackResult, type FeedbackError } from '../feedback';
 
 interface StoredPost extends AdminFeedbackPost { ownerId: string }
@@ -93,11 +94,14 @@ export function createLocalFeedback(deps: LocalDependencies): { gateway: Feedbac
 
 export function createBrowserFeedbackPreview() {
   return createLocalFeedback({
-    storage: { getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value) },
+    storage: {
+      getItem: key => readChannelStorage(window.localStorage, key, text => { readSnapshot(JSON.parse(text)); return true; }),
+      setItem: (key, value) => window.localStorage.setItem(channelStorageKey(key), value),
+    },
     crypto: globalThis.crypto, now: () => new Date(),
     exclusive: async task => {
       if (!navigator.locks) return Promise.reject(new Error('Web Locks unavailable'));
-      return navigator.locks.request('circuit.feedback.preview', task);
+      return navigator.locks.request(channelStorageKey('circuit.feedback.preview'), task);
     },
   });
 }

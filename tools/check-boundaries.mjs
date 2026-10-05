@@ -31,6 +31,7 @@ const uiAndBrowserModules = new Set([
   'current-view',
   'export',
   'persistence',
+  'release',
   'shared-ui',
   'feedback-local',
   'feedback-firebase',

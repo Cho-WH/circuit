@@ -1,3 +1,4 @@
+import { channelStorageKey } from '../src/release';
 import * as q from '../src/rational';
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -538,8 +539,8 @@ describe("versioned JSON persistence", () => {
     expect(loadLocal("auto", storage)).toEqual({ ok: true, document: automatic });
     expect(loadLocal("manual", storage)).toEqual({ ok: true, document: manual });
     expect([...storage.values.keys()].sort()).toEqual([
-      "edu-circuit:auto:v1",
-      "edu-circuit:manual:v1",
+      channelStorageKey("edu-circuit:auto:v1"),
+      channelStorageKey("edu-circuit:manual:v1"),
     ]);
   });
 
@@ -549,7 +550,7 @@ describe("versioned JSON persistence", () => {
     const second = fixture("FIX-02");
     expect(saveLocal(first, "auto", storage)).toEqual({ ok: true });
     expect(saveLocal(second, "auto", storage)).toEqual({ ok: true });
-    storage.values.set("edu-circuit:auto:v1", "corrupt JSON");
+    storage.values.set(channelStorageKey("edu-circuit:auto:v1"), "corrupt JSON");
 
     expect(loadLocal("auto", storage)).toEqual({ ok: true, document: first });
     expect(loadLocal("manual", storage)).toBeNull();
@@ -559,12 +560,12 @@ describe("versioned JSON persistence", () => {
     const storage = new MemoryStorage();
     const first = fixture("FIX-01");
     expect(saveLocal(first, "auto", storage)).toEqual({ ok: true });
-    const original = storage.values.get("edu-circuit:auto:v1");
+    const original = storage.values.get(channelStorageKey("edu-circuit:auto:v1"));
     storage.setFailure = new DOMException("Quota exceeded", "QuotaExceededError");
 
     const result = saveLocal(fixture("FIX-02"), "auto", storage);
     expect(result.ok).toBe(false);
-    expect(storage.values.get("edu-circuit:auto:v1")).toBe(original);
+    expect(storage.values.get(channelStorageKey("edu-circuit:auto:v1"))).toBe(original);
     expect(loadLocal("auto", Object.assign(storage, { setFailure: null }))).toEqual({
       ok: true,
       document: first,
