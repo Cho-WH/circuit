@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentType } from '../domain';
 import { componentDefinitions, createComponent, symbolMarkup } from '../component-library';
+import { SelectionButton } from './SelectionButton';
 
 export interface PaletteDrag { type:ComponentType; x:number; y:number; phase:'start'|'move'|'drop'|'cancel' }
 export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},resetKey,tapOnly=false}:{placement:ComponentType|null;onChoose:(type:ComponentType)=>void;onClear:()=>void;onDrag?:(event:PaletteDrag)=>void;resetKey:unknown;tapOnly?:boolean}) {
@@ -18,7 +19,7 @@ export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},reset
     window.addEventListener('pointerdown',extra,true);window.addEventListener('pointerup',release,true);window.addEventListener('pointercancel',release,true);window.addEventListener('blur',blur);window.addEventListener('resize',cancel);window.addEventListener('keydown',escape);
     return()=>{cancel();window.removeEventListener('pointerdown',extra,true);window.removeEventListener('pointerup',release,true);window.removeEventListener('pointercancel',release,true);window.removeEventListener('blur',blur);window.removeEventListener('resize',cancel);window.removeEventListener('keydown',escape);};
   },[]);
-  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentType[]).map(type=><button key={type} className={`component-tile${placement===type?' chosen':''}${held===type?' is-held':''}`} aria-pressed={placement===type} draggable={!tapOnly}
+  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentType[]).map(type=><SelectionButton key={type} className={`component-tile${held===type?' is-held':''}`} selected={placement===type} draggable={!tapOnly}
     onDragStart={e=>{if(lastInput.current==='touch'){e.preventDefault();return;}e.dataTransfer.setData('component',type);onChoose(type);}} onDragEnd={onClear}
     onContextMenu={e=>{if(lastInput.current==='touch')e.preventDefault();}}
     onPointerDown={e=>{
@@ -41,5 +42,5 @@ export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},reset
     onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')suppress.current=false;}}
     onClick={e=>{if(suppress.current){e.preventDefault();return;}onChoose(type);}}>
     <span className="tile-symbol"><svg width="62" height="32" viewBox="-50 -27 100 54" aria-hidden="true" stroke="currentColor" fill="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:symbolMarkup(createComponent(type,'palette',{x:0,y:0}))}}/></span><span>{componentDefinitions[type].name}</span>
-  </button>)}</div>;
+  </SelectionButton>)}</div>;
 }

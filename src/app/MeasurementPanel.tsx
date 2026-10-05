@@ -18,11 +18,12 @@ import {
   type MeasurementTool,
 } from './measurement-tools';
 import type { CurrentReading, MeasurementResult, ProbeVoltage } from '../measurement';
-import { ArrowLeftRight, RotateCcw, Plus, NotebookPen, Unplug, Power } from 'lucide-react';
+import { ArrowLeftRight, Plus, NotebookPen, Power } from 'lucide-react';
 import './measurement.css';
 import { diagnosticText } from './diagnostic-text';
 import { useMeasurementRecords } from './useMeasurementRecords';
 import { MeasurementTable } from './MeasurementTable';
+import { SelectionButton } from './SelectionButton';
 import { CompactMeasurementBar } from './CompactMeasurementBar';
 
 interface Props {
@@ -228,11 +229,11 @@ export function MeasurementPanel(props: Props) {
               const name = color === 'red' ? '빨강' : '검정',
                 attached = Boolean(ref(color === 'red' ? red : black));
               return (
-                <button
+                <SelectionButton
                   key={color}
-                  className={`probe-choice probe-${color}${props.activeProbe === color ? ' is-active' : ''}`}
+                  className={`probe-choice probe-${color}`}
                   aria-label={`${name} 탐침`}
-                  aria-pressed={props.activeProbe === color}
+                  selected={props.activeProbe === color}
                   onClick={() => props.onActiveProbe(color)}
                   data-tooltip={anchorName(doc, props.anchors[color]) || `${name} 탐침 놓기`}
                 >
@@ -244,7 +245,7 @@ export function MeasurementPanel(props: Props) {
                     className={attached ? 'attached' : ''}
                     aria-label={attached ? '연결됨' : '연결 안 됨'}
                   />
-                </button>
+                </SelectionButton>
               );
             })}
             <button
@@ -257,8 +258,8 @@ export function MeasurementPanel(props: Props) {
             </button>
           </div>
         ) : (
-          <div className="current-tool">
-            <svg width="36" height="48" viewBox="-18 -39 36 54" aria-hidden="true">
+          <div className="current-tool" data-tooltip={measuredTarget ? targetName : undefined}>
+            <svg width="24" height="32" viewBox="-18 -39 36 54" aria-hidden="true">
               <CurrentGlyph />
             </svg>
             <span>
@@ -272,20 +273,6 @@ export function MeasurementPanel(props: Props) {
               )}
             </span>
           </div>
-        )}
-        <button
-          className="measure-icon-button"
-          aria-label="측정 위치 지우기"
-          data-tooltip="측정 위치 지우기"
-          onClick={props.onReset}
-        >
-          <RotateCcw size={16} />
-        </button>
-        {isolated && (
-          <span className="isolation-state">
-            <Unplug size={15} />
-            {excluded.length ? '전지 분리 상태' : '전원 없는 회로'}
-          </span>
         )}
       </div>
       <div className="measure-readout">

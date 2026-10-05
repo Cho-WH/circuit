@@ -71,13 +71,14 @@ describe('resistance mode source disconnection',()=>{
     expect(host.querySelector('[data-source-isolated]')).toBeNull();
     expect(host.querySelector('[data-component-id="V1"] .component-ink path')?.getAttribute('d')).toContain('M-44 0H-7 M7 0H44');
   });
-  it('shows the detached state and records the all-source condition',()=>{
+  it('omits the redundant detached caption and records the all-source condition',()=>{
     localStorage.clear();
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
     const host=globalThis.document.createElement('div');globalThis.document.body.append(host);const root=createRoot(host);
     try {
       act(()=>root.render(createElement(MeasurementPanel,props(example('FIX-02'),'R1.a','R1.b'))));
-      expect(host.querySelector('.isolation-state')?.textContent).toBe('전지 분리 상태');
+      expect(host.textContent).not.toContain('전지 분리 상태');
+      expect(host.querySelector('[aria-label="측정 위치 지우기"]')).toBeNull();
       act(()=>host.querySelector<HTMLButtonElement>('[aria-label="측정값 기록"]')!.click());
       expect(host.querySelector('tbody')?.textContent).toContain('모든 전원 분리');
       expect(host.querySelector('tbody')?.textContent).toContain('3 Ω');

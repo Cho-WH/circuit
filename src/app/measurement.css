@@ -4,8 +4,7 @@
 .measure-console{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;justify-content:space-between;padding:6px 16px;min-height:64px;border-bottom:1px solid var(--line,#deded5);background:var(--surface,#f7f7f2)}
 .measure-connections{flex:1;min-width:0;display:flex;align-items:center;gap:12px}
 .probe-pair{display:flex;align-items:center;gap:8px}
-.probe-choice{min-width:94px;min-height:48px;gap:8px;padding:2px 10px;border-radius:4px;border-bottom:2px solid transparent;font-size:13px}
-.probe-choice.is-active{background:#edf0e7;border-bottom-color:var(--accent)}
+.probe-choice{min-width:94px;min-height:48px;gap:8px;padding:2px 10px;border-radius:4px;font-size:13px}
 .probe-choice i{width:5px;height:5px;border:1px solid #9ca393;border-radius:50%}.probe-choice i.attached{background:var(--accent);border-color:var(--accent)}
 .measure-icon-button{min-width:40px;min-height:44px;padding:8px;color:var(--muted)}
 .current-tool{display:flex;align-items:center;gap:10px;font-size:14px;min-width:140px}

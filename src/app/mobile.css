@@ -40,7 +40,7 @@
 .compact-layout .compact-analysis-bar .compact-probe{flex:0 1 52px;min-width:44px;padding:4px 2px;gap:3px}
 .compact-layout .compact-probe svg{flex:none;transform:rotate(22deg)}
 .compact-layout .compact-probe span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums}
-.compact-layout .compact-probe.active{border-radius:4px;border-bottom:2px solid var(--accent)}
+.compact-layout .compact-probe{border-radius:4px}
 .compact-layout .compact-current-target{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px}
 .compact-layout .compact-isolate{flex:1;white-space:normal}
 .compact-layout .compact-record-status{position:absolute;top:calc(100% + 8px);left:8px;right:8px;z-index:12;width:fit-content;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:var(--surface);box-shadow:0 3px 12px #30382f14;font-size:12px}

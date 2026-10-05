@@ -157,8 +157,8 @@
 .library-panel{width:174px;padding:18px 12px;background:var(--surface)}
 .library-panel h2{font-size:12px;color:var(--muted);font-weight:500}
 .component-grid{gap:4px;margin-top:4px}.component-tile{height:76px;gap:5px;border:0;background:transparent;border-radius:5px;color:var(--ink)}
-.component-tile:hover,.component-tile.chosen{background:#e9eee3;color:var(--accent);border:0}
-.component-tile.chosen{box-shadow:inset 0 -2px var(--accent)}.tile-symbol{color:var(--ink)}
+.component-tile:hover{background:#e9eee3;color:var(--accent);border:0}
+.tile-symbol{color:var(--ink)}
 .library-divider{margin:18px 0}.wide-button{font-size:13px;border-radius:5px}.library-panel>.wide-button{border:0;background:transparent;justify-content:flex-start;padding-left:4px}
 .field-label{font-size:12px;color:var(--muted)}.field-label input,.field-label select{font-size:13px}
 button,input,select,textarea{border-radius:5px}input,select,textarea{color:var(--ink);border-color:var(--line)}
@@ -296,7 +296,6 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
 .analysis-tool-hint{font-size:12px;color:var(--muted);line-height:1.6;margin:16px 4px}
 .isolation-prompt{padding:12px 10px;margin-top:12px;border:1px solid var(--line);border-radius:6px;background:#fff;box-shadow:0 3px 12px #30382f0a;font-size:12px;line-height:1.6}
 .isolation-prompt button{margin-top:10px;width:100%;padding:8px 4px;font-size:12px;white-space:normal}
-.isolation-state{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--accent)}
 .measure-notebook .notebook-heading button{padding:6px}
 .mode-analysis .measure-circuit .canvas-shell{min-height:180px}
 .presentation.mode-analysis .library-panel{display:flex}
@@ -305,7 +304,7 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
  .analysis-tool-hint{margin:0 6px;font-size:11px}.isolation-prompt{display:flex;align-items:center;gap:8px;flex-basis:100%;margin:0;padding:6px 8px;box-shadow:none}.isolation-prompt button{width:auto;flex-shrink:0;margin:0;min-height:40px}
  .potential-controls.no-legend .potential-legend-tools{flex:0 0 auto;margin-left:auto}
  .measure-console{gap:2px 6px}
- .mode-analysis .measure-circuit .canvas-shell{min-height:160px}.isolation-state{font-size:11px}
+ .mode-analysis .measure-circuit .canvas-shell{min-height:160px}
 }
 
 @media(min-width:641px){
@@ -314,14 +313,15 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
  .analysis-tools .component-tile{height:66px;padding:5px 0;font-size:11px}
  .analysis-console-host{min-width:0}
  .analysis-console-host .measure-console{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin-top:12px;padding:12px 0 0;border-top:1px solid var(--line);border-bottom:0}
- .analysis-console-host .measure-connections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;flex:none}
- .analysis-console-host .probe-pair{display:contents}
- .analysis-console-host .probe-choice{min-width:0;min-height:42px;flex-direction:row;gap:4px;padding:3px 0;font-size:12px}
+ .analysis-console-host .measure-connections{display:flex;align-items:center;height:44px;flex:none}
+ .analysis-console-host .probe-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) 32px;gap:4px;width:100%}
+ .analysis-console-host .probe-choice{min-width:0;height:44px;min-height:44px;flex-direction:row;gap:4px;padding:3px 0;font-size:12px}
  .analysis-console-host .probe-choice svg{width:20px;height:32px}
  .analysis-console-host .probe-choice i{position:static}
  .analysis-console-host .notebook-toggle.standalone{margin-top:6px;padding:6px 8px}
- .analysis-console-host .measure-icon-button{min-width:0;min-height:34px;padding:6px}
- .analysis-console-host .current-tool{grid-column:1/-1;min-width:0;gap:6px;flex-wrap:wrap;justify-content:center}
- .analysis-console-host .isolation-state{grid-column:1/-1;justify-content:center;margin-top:6px;line-height:1.6}
+ .analysis-console-host .measure-icon-button{min-width:0;min-height:44px;padding:6px}
+ .analysis-console-host .current-tool{width:100%;height:44px;min-width:0;gap:6px;justify-content:center;font-size:12px}
+ .analysis-console-host .current-tool>svg{flex:none}
+ .analysis-console-host .current-tool>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  .analysis-console-host .measure-diagnostics{flex-basis:auto}
 }

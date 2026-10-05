@@ -4,6 +4,7 @@ import { ActionMenu } from './ActionMenu';
 import { FloatingPanel } from './FloatingPanel';
 import { measurementLabels, type MeasurementKind } from './AnalysisTools';
 import { ProbeGlyph } from './measurement-tools';
+import { SelectionButton } from './SelectionButton';
 
 interface Props {
   kind: MeasurementKind;
@@ -51,12 +52,12 @@ export function CompactMeasurementBar(props: Props) {
         </>}
       </FloatingPanel>
       {props.kind === 'current' ? <span className="compact-current-target" data-tooltip={props.targetName}>{props.targetName || '위치 선택'}</span> :
-        (['red', 'black'] as const).map(color => <button key={color} className={`compact-probe ${props.activeProbe === color ? 'active' : ''}`}
+        (['red', 'black'] as const).map(color => <SelectionButton key={color} className="compact-probe"
           aria-label={`${color === 'red' ? '빨강' : '검정'} 탐침${props.kind === 'voltage' ? ` 전위 ${props.potentials[color]}` : ''}`}
-          aria-pressed={props.activeProbe === color} onClick={() => props.onActiveProbe(color)}>
+          selected={props.activeProbe === color} onClick={() => props.onActiveProbe(color)}>
           <svg width="13" height="23" viewBox="-11 -47 22 42" aria-hidden="true"><ProbeGlyph color={color} compact /></svg>
           {props.kind === 'voltage' && <span>{props.potentials[color]}</span>}
-        </button>)}
+        </SelectionButton>)}
     </>}
     <FloatingPanel label="측정 더보기" contentLabel="측정 더보기" className="compact-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
       {close => <>

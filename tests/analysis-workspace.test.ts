@@ -323,7 +323,7 @@ it('keeps voltage probes, polarity, display preferences and recording across 2D/
   expect(host.querySelector<HTMLElement>('.measure-console')?.hidden).toBe(false);
   expect(button('빨강 탐침')).toBeDefined();
   expect(button('검정 탐침')).toBeDefined();
-  expect(button('측정 위치 지우기')).toBeDefined();
+  expect(button('측정 위치 지우기')).toBeUndefined();
   expect(button('2D에서 위치 변경')).toBeUndefined();
   expect(toggle('색상').checked).toBe(false);
   expect(toggle('숫자').checked).toBe(false);
@@ -348,9 +348,6 @@ it('keeps voltage probes, polarity, display preferences and recording across 2D/
   expect(button('전압 탐침').getAttribute('aria-pressed')).toBe('true');
   expect(value()).toBe('-3 V');
   await click('3D');
-  await click('측정 위치 지우기');
-  expect(observed.measurement).toEqual({red:null,black:null,label:null});
-  expect(button('측정값 기록').disabled).toBe(true);
   await click('도구 종료');
   expect(observed.measurement).toBeUndefined();
   expect(button('3D').getAttribute('aria-pressed')).toBe('true');

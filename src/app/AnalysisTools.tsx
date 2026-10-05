@@ -1,4 +1,5 @@
 import { CurrentGlyph, ProbeGlyph } from './measurement-tools';
+import { SelectionButton } from './SelectionButton';
 
 export type MeasurementKind = 'voltage' | 'current' | 'resistance';
 export type AnalysisPanel = 'records' | 'path' | null;
@@ -26,10 +27,10 @@ export function AnalysisTools({
       </div>
       <div className="component-grid analysis-tools" aria-label="분석 도구">
         {(['voltage', 'current', 'resistance'] as const).map((value) => (
-          <button
+          <SelectionButton
             key={value}
-            className={`component-tile${kind === value ? ' chosen' : ''}`}
-            aria-pressed={kind === value}
+            className="component-tile"
+            selected={kind === value}
             onClick={() => onChoose(kind === value && !threeDimensional ? null : value)}
           >
             <span className="tile-symbol">
@@ -55,7 +56,7 @@ export function AnalysisTools({
             <span>
               {measurementLabels[value]}
             </span>
-          </button>
+          </SelectionButton>
         ))}
       </div>
       {needsIsolation && (
