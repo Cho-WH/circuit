@@ -39,6 +39,7 @@ interface Props {
   result: SimulationResult;
   canRecord?: () => boolean;
   stopped?: boolean;
+  resistanceDisabled?: boolean;
   voltageReading: MeasurementResult<ProbeVoltage>;
   voltageLabel: string;
   active: boolean;
@@ -114,7 +115,7 @@ export function MeasurementPanel(props: Props) {
     .filter((e) => e.type === 'dc-voltage-source')
     .map((e) => e.id);
   const resistance =
-    enabled && !props.stopped &&
+    enabled && !props.stopped && !props.resistanceDisabled &&
     isolated &&
     kind === 'resistance' &&
     redNet &&
@@ -366,6 +367,7 @@ export function MeasurementPanel(props: Props) {
         <div ref={compactBar} className="compact-analysis-bar tool-group" aria-label={props.mobile.measuring ? '측정 도구' : '회로 시각화'}>
           {props.mobile.measuring && kind ? <CompactMeasurementBar
             stopped={props.stopped}
+            resistanceDisabled={props.resistanceDisabled}
             kind={kind} onChoose={props.mobile.onChoose} onBack={props.mobile.onBack}
             reading={formattedReading} ready={ready} potentials={{red: probePotentials('red'), black: probePotentials('black')}}
             activeProbe={props.activeProbe} onActiveProbe={props.onActiveProbe} targetName={targetName}

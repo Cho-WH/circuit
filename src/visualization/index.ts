@@ -1,4 +1,5 @@
 import type { CompiledCircuit, SimulationResult } from '../domain';
+export type { ComponentLabelLayout, ScreenRectangle } from './component-labels';
 export { operatingMarkSvg, type ComponentOperatingMark } from './operating';
 export { buildCurrentModel, currentBand, currentFullWidth, type CurrentModel, type CurrentSample, type CurrentValue, type CurrentDisplay } from './current';
 export { buildCurrentPaths, hasCurrentBridge, type CurrentPath, type CurrentPoint } from './current-paths';

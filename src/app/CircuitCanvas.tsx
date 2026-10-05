@@ -2,8 +2,8 @@ import { InlineComponentEditor, type ComponentEdit } from './InlineComponentEdit
 import { SvgNotation } from './Notation';
 import { PlacementFailure } from './PlacementFailure';
 import { CanvasCurrentLayer } from './CanvasCurrentLayer';
-import { operatingMarkSvg, type CurrentDisplay, type ComponentOperatingMark } from '../visualization';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { operatingMarkSvg, type CurrentDisplay, type ComponentOperatingMark, type ComponentLabelLayout } from '../visualization';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import {
   useCanvasDragSession,
   dragPositions,
@@ -47,6 +47,7 @@ import {
 } from '../component-library';
 
 export interface CanvasProps {
+  onComponentLabelLayout?: (layout: ComponentLabelLayout) => void;
   paletteDrag?: PaletteDrag | null;
   initialView?: { x: number; y: number; width: number; height: number };
   viewLabel?: ReactNode;
@@ -173,6 +174,19 @@ export function CircuitCanvas(props: CanvasProps) {
     0.01,
     Math.min(viewport.width / view.width, viewport.height / view.height),
   );
+  useLayoutEffect(() => {
+    const root = svg.current;
+    if (!root || !props.onComponentLabelLayout) return;
+    const rect = (node: Element) => {
+      const r = node.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    props.onComponentLabelLayout({
+      bounds: rect(root),
+      labels: [...root.querySelectorAll('[data-component-label]')].map(node => ({ ...rect(node), componentId: node.getAttribute('data-component-label')! })),
+      obstacles: [...root.querySelectorAll('.component-ink,text,[data-endpoint-id],.component-operating-mark,.measurement-handle')].map(rect).filter(r => r.width > 0 && r.height > 0),
+    });
+  });
   const wiring = useContextWiring({
     document,
     enabled:
@@ -1033,6 +1047,7 @@ export function CircuitCanvas(props: CanvasProps) {
                 <g dangerouslySetInnerHTML={{ __html: operatingMarkSvg(operating.state) }} />
               </g>}
               <SvgNotation
+                data-component-label={c.id}
                 opacity={isolated ? 0.35 : undefined}
                 x={textLayout.label.x}
                 y={textLayout.label.y}
@@ -1383,7 +1398,7 @@ export function CircuitCanvas(props: CanvasProps) {
         height={viewport.height}
         cancel={cancelWiring}
       />
-      {editingComponent && (
+      {editingComponent && canEditValues && (
         <InlineComponentEditor
           key={editingComponent.id}
           component={editingComponent}

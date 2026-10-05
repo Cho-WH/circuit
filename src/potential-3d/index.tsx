@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
-import { operatingMarkSvg, potentialAxisValue, buildCurrentPaths, type ComponentOperatingMark, type CurrentDisplay, type PotentialRange, type PotentialModel } from '../visualization';
+import { operatingMarkSvg, potentialAxisValue, buildCurrentPaths, type ComponentOperatingMark, type CurrentDisplay, type PotentialRange, type PotentialModel, type ComponentLabelLayout } from '../visualization';
 import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
 import { createHorizontalAttraction } from './camera-snap';
@@ -22,6 +22,8 @@ export { voltageTicks, minorVoltageTicks, sceneAnchors, sceneExtent, selectedVol
 export { projectCurrentPaths } from './current-projection';
 
 export interface Potential3DProps {
+  onComponentLabelLayout?: (layout: ComponentLabelLayout) => void;
+  onViewInteraction?: () => void;
   quantityFormat?: QuantityFormatOptions;
   document: CircuitDocument;
   potential: PotentialModel;
@@ -193,6 +195,7 @@ export function Potential3D(props: Potential3DProps) {
       }
       r.voltageOverlay?.update(latest.current.voltageMeasurement, latestPotential.current, camera, r.width, r.height, r.progress);
       const hostRect = element.getBoundingClientRect();
+      const labels: ComponentLabelLayout['labels'] = [];
       const occupied = [...(element.closest('.potential-scene')?.querySelectorAll('.scene-toolbar,.scene-footer,.voltage-reading,.voltage-probe') ?? [])].map(item => {
         const rect = item.getBoundingClientRect();
         return { x: rect.left - hostRect.left, y: rect.top - hostRect.top, w: rect.width, h: rect.height };
@@ -212,15 +215,23 @@ export function Potential3D(props: Potential3DProps) {
         const x = (p.x + 1) * r.width / 2, y = (1 - p.y) * r.height / 2;
         const w = label.element.offsetWidth || 52, h = label.element.offsetHeight || 25;
         const rect = { x: x - w / 2, y: label.element.classList.contains('axis-tag') || label.element.classList.contains('operating-tag') ? y - h / 2 : y - h - 9, w, h };
+        if (label.key.startsWith('component:') && latest.current.operatingMarks?.[label.key.slice(10)]) rect.y = y - h - 43;
         const nearAxis = !label.element.classList.contains('axis-tag') && axisGutters.some(gutter => rect.x < gutter.right && rect.x + w > gutter.left && rect.y < gutter.bottom && rect.y + h > gutter.top);
         const hidden = nearAxis || p.z < -1 || p.z > 1 || rect.x < 3 || rect.x + w > r.width - 3 || rect.y < 2 || rect.y + h > r.height - 2 || occupied.some(b => rect.x < b.x+b.w+5 && rect.x+w+5 > b.x && rect.y < b.y+b.h+4 && rect.y+h+4 > b.y);
         label.element.style.visibility = hidden ? 'hidden' : 'visible';
         // Projection owns position. Do not feed coordinates into button transform transitions.
         label.element.style.translate = `${rect.x}px ${rect.y}px`;
-        if (!hidden) occupied.push(rect);
+        if (!hidden) {
+          occupied.push(rect);
+          if (label.key.startsWith('component:')) labels.push({ componentId: label.key.slice(10), x: hostRect.x + rect.x, y: hostRect.y + rect.y, width: w, height: h });
+        }
       }
+      latest.current.onComponentLabelLayout?.({ bounds: { x: hostRect.x, y: hostRect.y, width: r.width, height: r.height }, labels, obstacles: [
+        ...occupied.map(rect => ({ x: hostRect.x + rect.x, y: hostRect.y + rect.y, width: rect.w, height: rect.h })),
+        ...axisGutters.map(g => ({ x: hostRect.x + g.left, y: hostRect.y + g.top, width: g.right - g.left, height: g.bottom - g.top })),
+      ] });
     };
-    r.stop = () => { cancelAnimationFrame(r.frame); r.frame = 0; const entering = r.progress < 1; r.progress = 1; r.raised.scale.z = 1; if (entering) latest.current.onEntered?.(); };
+    r.stop = () => { latest.current.onViewInteraction?.(); cancelAnimationFrame(r.frame); r.frame = 0; const entering = r.progress < 1; r.progress = 1; r.raised.scale.z = 1; if (entering) latest.current.onEntered?.(); };
     r.begin = () => {
       if (r.ready || !r.floorReady || !r.modelReady) return;
       r.ready = true;

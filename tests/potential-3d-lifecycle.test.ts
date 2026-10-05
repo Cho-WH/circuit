@@ -65,6 +65,21 @@ async function advanceFrame(now: number) {
 }
 
 describe('3D prepared first frame and camera lifetime', () => {
+  it('publishes label geometry through the existing renderer and reports camera interaction without rebuilding resources', async () => {
+    const { update } = await mount();
+    const layout = vi.fn(), interaction = vi.fn();
+    await update({ onComponentLabelLayout: layout, onViewInteraction: interaction });
+    await act(async () => resolveFont()); await act(async () => images[0].onload!());
+    await advanceFrame(performance.now() + 2000);
+    expect(layout).toHaveBeenCalled();
+    expect(layout.mock.lastCall![0].bounds).toMatchObject({ width: 1000, height: 600 });
+    const scene = observed.render.mock.lastCall![0] as THREE.Scene, content = scene.children[1], count = images.length;
+    layout.mockClear(); interaction.mockClear();
+    await act(async () => { observed.start(); observed.change(); });
+    expect(interaction).toHaveBeenCalledOnce(); expect(layout).toHaveBeenCalled();
+    expect((observed.render.mock.lastCall![0] as THREE.Scene).children[1]).toBe(content);
+    expect(images).toHaveLength(count);
+  });
   it('retains the floor, GPU geometry, camera and ticks while a bounded resistance changes', async () => {
     const { circuit, update, ready, entered } = await mount();
     const variable = circuit.components.find(c => c.id === 'R1')!;

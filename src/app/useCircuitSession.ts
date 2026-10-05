@@ -14,7 +14,7 @@ import { loadLocal, saveLocal } from '../persistence';
 import { examples } from '../fixtures';
 import { layoutExample } from './examples';
 import { analyze } from './analyze';
-import { acceptOperatingPoint, analysisLocked, freshAnalysisSession } from './analysis-session';
+import { acceptOperatingPoint, analysisLocked, analysisStopped, freshAnalysisSession } from './analysis-session';
 
 export type WorkspaceMode = 'build' | 'analysis' | 'worksheet';
 
@@ -159,7 +159,8 @@ export function useCircuitSession(mode: WorkspaceMode) {
     saveStatus,
     analysisSession,
     changeWorkspace,
-    canMeasure: () => !analysisLocked(operating.current),
+    canMeasure: () => !analysisStopped(operating.current),
+    canChangeValues: () => !analysisLocked(operating.current),
     automaticEpoch: () => operating.current.stopEpoch,
     execute,
     placeComponent,

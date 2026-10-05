@@ -46,6 +46,12 @@ export function ParameterControl({
   useEffect(() => {
     if (!editing) setDraft(componentValueInput(component));
   }, [component, editing]);
+  useEffect(() => {
+    if (!disabled) return;
+    setDraft(componentValueInput(component));
+    setEditing(false);
+    setError('');
+  }, [disabled, component]);
   function commit() {
     if (disabled) return;
     const parsed = parseComponentValue(component, draft);

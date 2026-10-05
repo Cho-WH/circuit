@@ -26,6 +26,7 @@ interface Props {
   records: number;
   diagnostics: ReactNode;
   stopped?: boolean;
+  resistanceDisabled?: boolean;
 }
 
 /** A different mobile layout over the same measurement values and commands. */
@@ -36,7 +37,7 @@ export function CompactMeasurementBar(props: Props) {
     </button>
     <ActionMenu label={props.kind === 'voltage' ? '전압' : props.kind === 'current' ? '전류' : '저항'} contentLabel="측정 도구 선택" className="compact-measure-kind" align="start">
       {close => (Object.keys(measurementLabels) as MeasurementKind[]).map(kind =>
-        <button key={kind} role="menuitemradio" disabled={props.stopped} aria-checked={props.kind === kind} onClick={() => close(() => props.onChoose(kind))}>{measurementLabels[kind]}</button>,
+        <button key={kind} role="menuitemradio" disabled={props.stopped || (kind === 'resistance' && props.resistanceDisabled)} aria-checked={props.kind === kind} onClick={() => close(() => props.onChoose(kind))}>{measurementLabels[kind]}</button>,
       )}
     </ActionMenu>
     {props.needsIsolation ? <button className="compact-isolate" onClick={props.onIsolate} data-tooltip="등가저항은 전지를 분리하고 측정해요">

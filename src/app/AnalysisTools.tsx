@@ -14,6 +14,7 @@ export function AnalysisTools({
   onIsolate,
   threeDimensional,
   stopped,
+  resistanceDisabled,
 }: {
   kind: MeasurementKind | null;
   onChoose: (kind: MeasurementKind | null) => void;
@@ -21,6 +22,7 @@ export function AnalysisTools({
   onIsolate: () => void;
   threeDimensional: boolean;
   stopped?: boolean;
+  resistanceDisabled?: boolean;
 }) {
   return (
     <>
@@ -33,7 +35,7 @@ export function AnalysisTools({
             key={value}
             className="component-tile"
             selected={kind === value}
-            disabled={stopped}
+            disabled={stopped || (value === 'resistance' && resistanceDisabled)}
             onClick={() => onChoose(kind === value && !threeDimensional ? null : value)}
           >
             <span className="tile-symbol">

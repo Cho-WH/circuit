@@ -15,6 +15,9 @@ export const freshAnalysisSession = (): AnalysisSession => ({
 });
 
 export const analysisLocked = (session: AnalysisSession) =>
+  session.active && session.phase !== 'normal';
+
+export const analysisStopped = (session: AnalysisSession) =>
   session.active && (session.phase === 'breaking' || session.phase === 'broken');
 
 /** Only committed electrical changes and entering analysis can create an event. */

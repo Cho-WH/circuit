@@ -16,7 +16,7 @@ import {
   type MeasurementTool,
 } from './measurement-tools';
 import { probeCurrent, probeVoltage } from '../measurement';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Zap,
   MousePointer2,
@@ -71,7 +71,7 @@ import { useCircuitSession, type WorkspaceMode } from './useCircuitSession';
 import { examples } from '../fixtures';
 import { analyze } from './analyze';
 import { failedResult } from '../simulation';
-import { analysisLocked } from './analysis-session';
+import { analysisLocked, analysisStopped } from './analysis-session';
 import { operatingReason } from './operating-text';
 import type { ComponentOperatingMark } from '../visualization';
 import { diagnosticText } from './diagnostic-text';
@@ -103,6 +103,8 @@ import { useQuickStart } from './useQuickStart';
 import { FileMenu } from './FileMenu';
 import { FeedbackLoading } from './FeedbackLoading';
 import { PotentialWorkspace, type PotentialWorkspaceStatus } from './PotentialWorkspace';
+import type { ComponentLabelLayout } from '../visualization';
+import { resolveOperatingHelp, measuredHelpComponents, OperatingHelp, OperatingHelpOverlay, type OperatingHelpOverlayHandle } from './operating-help';
 import { CurrentControls, CurrentSettings, useCurrentDisplay } from './CurrentControls';
 import { useVisibleViewport } from './useVisibleViewport';
 import { useCompactLayout } from './useCompactLayout';
@@ -143,6 +145,7 @@ export function App() {
     analysisSession,
     changeWorkspace,
     canMeasure,
+    canChangeValues,
     automaticEpoch,
     execute,
     placeComponent,
@@ -155,7 +158,8 @@ export function App() {
     failed: '이 브라우저에 자동 저장 실패',
   }[saveStatus];
   const doc = history.present;
-  const stopped = analysisLocked(analysisSession);
+  const locked = analysisLocked(analysisSession);
+  const stopped = analysisStopped(analysisSession);
   const [selected, setSelected] = useState<string[]>([]);
   const [tool, setTool] = useState('select');
   const [placement, setPlacement] = useState<ComponentType | null>(null);
@@ -182,6 +186,23 @@ export function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [focusIds, setFocusIds] = useState<string[]>([]);
   const [riskHighlights, setRiskHighlights] = useState<string[]>([]);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [openHelp, setOpenHelp] = useState<string | null>(null);
+  const [visibleHelpIds, setVisibleHelpIds] = useState<string[]>([]);
+  const helpOverlay = useRef<OperatingHelpOverlayHandle>(null);
+  const helpLayouts = useRef<Partial<Record<'2d' | '3d', ComponentLabelLayout>>>({});
+  const helpView = useRef<'2d' | '3d'>('2d');
+  const receiveHelpLayout = useCallback((view: '2d' | '3d', layout: ComponentLabelLayout) => {
+    helpLayouts.current[view] = layout;
+    if (helpView.current === view) helpOverlay.current?.updateLayout(layout);
+  }, []);
+  const receive2DHelpLayout = useCallback((layout: ComponentLabelLayout) => receiveHelpLayout('2d', layout), [receiveHelpLayout]);
+  const receive3DHelpLayout = useCallback((layout: ComponentLabelLayout) => receiveHelpLayout('3d', layout), [receiveHelpLayout]);
+  const closeOperatingHelp = useCallback(() => setOpenHelp(null), []);
+  function showOperatingHelp(key: string | null) {
+    setOpenHelp(key);
+    if (key) { setDiagnosticsOpen(false); setRiskHighlights([]); }
+  }
   const [showNumbers, setShowNumbers] = useState(true);
   const [showColors, setShowColors] = useState(true);
   const [potentialPalette, setPotentialPalette] =
@@ -217,16 +238,22 @@ export function App() {
   const [measurementConsoleHost, setMeasurementConsoleHost] = useState<HTMLDivElement | null>(null);
   const [sourcesDetached, setSourcesDetached] = useState(false);
   const hasSources = doc.components.some((c) => c.type === 'dc-voltage-source');
-  const resistanceMode = mode === 'analysis' && !stopped && measurementKind === 'resistance';
+  const resistanceMode = mode === 'analysis' && !locked && measurementKind === 'resistance';
   const needsIsolation = resistanceMode && hasSources && !sourcesDetached;
   const isolated = resistanceMode && !needsIsolation;
   const analysisView = resistanceMode ? '2d' : potentialView;
+  helpView.current = analysisView === '3d' && (potentialStatus === 'entering' || potentialStatus === 'ready') ? '3d' : '2d';
+  useLayoutEffect(() => {
+    const layout = helpLayouts.current[helpView.current];
+    if (layout) helpOverlay.current?.updateLayout(layout);
+  });
+  useEffect(() => { setOpenHelp(null); setDiagnosticsOpen(false); setRiskHighlights([]); }, [mode, documentEpoch, doc.documentId, analysisView, potentialStatus]);
   const measurementActive =
-    mode === 'analysis' && !stopped && measurementKind !== null && analysisView === '2d' && !needsIsolation && (!compact || mobileMeasuring);
-  const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation;
+    mode === 'analysis' && !stopped && measurementKind !== null && !(locked && measurementKind === 'resistance') && analysisView === '2d' && !needsIsolation && (!compact || mobileMeasuring);
+  const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation && !(locked && measurementKind === 'resistance');
   const showOperatingState = mode === 'analysis' && !isolated && !stopped;
   function chooseMeasurement(kind: MeasurementKind | null) {
-    if (kind && !canMeasure()) return;
+    if (kind && (!canMeasure() || (kind === 'resistance' && !canChangeValues()))) return;
     setMeasurementKind(kind);
     setMobileMeasuring(kind !== null);
     setSourcesDetached(false);
@@ -405,7 +432,7 @@ export function App() {
   }, [notice]);
   useEffect(() => {
     setValueDraft(component && definition?.property ? componentValueInput(component) : '');
-  }, [component?.id, component?.properties, definition?.property]);
+  }, [component?.id, component?.properties, definition?.property, locked]);
   function copy() {
     if (!selected.length) return;
     setClipboard(copySelection(doc, selected, newId, { x: 40, y: 40 }));
@@ -534,6 +561,18 @@ export function App() {
     currentAnchor && currentAnchor.kind !== 'endpoint'
       ? { kind: currentAnchor.kind, id: currentAnchor.id }
       : null;
+  const helpItems = useMemo(() => resolveOperatingHelp({
+    document: doc, circuit: compilation.circuit, result, assessment,
+    active: mode === 'analysis' && !isolated, phase: analysisSession.phase, selectedIds: selected, showNumbers,
+    measuredComponentIds: measurementEnabled && !stopped ? measuredHelpComponents(compilation.circuit,
+      measurementKind === 'voltage' ? redProbe : '', measurementKind === 'voltage' ? blackProbe : '',
+      measurementKind === 'current' ? currentTarget?.id : undefined) : [],
+  }), [doc, compilation.circuit, result, assessment, mode, isolated, analysisSession.phase, selected, showNumbers, measurementEnabled, stopped, measurementKind, redProbe, blackProbe, currentTarget?.id]);
+  const openedHelpItem = helpItems.find(item => openHelp === `canvas:${item.key}` || openHelp === `detail:${item.key}`);
+  const selectedHelp = helpItems.find(item => item.componentId === selected[0] && !visibleHelpIds.includes(item.componentId));
+  useEffect(() => {
+    if (openHelp && (!openedHelpItem || (openHelp.startsWith('detail:') && openHelp !== `detail:${selectedHelp?.key}`))) setOpenHelp(null);
+  }, [openHelp, openedHelpItem, selectedHelp]);
   const currentReading = useMemo(
     () => probeCurrent(doc, compilation, result, currentTarget),
     [doc, compilation, result, currentAnchor],
@@ -597,7 +636,7 @@ export function App() {
     });
   }
   function applyValue() {
-    if (!component || !definition?.property) return;
+    if (!canChangeValues() || !component || !definition?.property) return;
     const parsed = parseComponentValue(component, valueDraft);
     if (!parsed.ok) {
       setNotice(parsed.error);
@@ -761,7 +800,7 @@ export function App() {
       <button className={showColors ? 'active' : ''} aria-pressed={showColors} onClick={togglePotentialColors}>전위</button>
       <button className={showCurrent ? 'active' : ''} aria-pressed={showCurrent} onClick={toggleCurrentDisplay}>전류</button>
     </div>
-    <button className="compact-measure-start" disabled={stopped} onClick={() => chooseMeasurement(measurementKind ?? 'voltage')}>측정</button>
+    <button className="compact-measure-start" disabled={stopped} onClick={() => chooseMeasurement(locked && measurementKind === 'resistance' ? 'voltage' : measurementKind ?? 'voltage')}>측정</button>
     <FloatingPanel label="보기 더보기" contentLabel="보기 더보기" className="compact-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
       {close => <>
         <div className="compact-palette-row">
@@ -777,6 +816,8 @@ export function App() {
   const canvasDiagnostics =
     !isolated && (result.diagnostics.length > 0 || assessment.components.length > 0) ? (
       <CanvasDiagnostics
+        open={diagnosticsOpen}
+        onOpenChange={open => { setDiagnosticsOpen(open); if (open) closeOperatingHelp(); }}
         key={`${documentEpoch}:${doc.documentId}:${mode}`}
         document={doc}
         diagnostics={result.diagnostics}
@@ -784,6 +825,7 @@ export function App() {
         analyzing={mode === 'analysis'}
         selectedId={selected[0]}
         onHighlight={setRiskHighlights}
+        onReset={locked ? () => changeMode('build') : undefined}
         onLocate={(ids) => {
           setSelection(ids);
           setFocusIds([...ids]);
@@ -792,12 +834,14 @@ export function App() {
     ) : null;
   const circuitCanvas = (
     <CircuitCanvas
+      onComponentLabelLayout={mode === 'analysis' ? receive2DHelpLayout : undefined}
       paletteDrag={paletteDrag}
       preserveViewOnResize={mode === 'analysis'}
       initialView={
         canvasView.current?.documentId === doc.documentId ? canvasView.current.view : undefined
       }
       onViewChange={(view) => {
+        closeOperatingHelp();
         canvasView.current = { documentId: doc.documentId, view };
       }}
       viewLabel={
@@ -833,7 +877,7 @@ export function App() {
       }
       readOnly={mode === 'analysis'}
       readOnlyLabel="분석 회로"
-      allowValueEditing={mode === 'analysis' && !measurementActive && !stopped}
+      allowValueEditing={mode === 'analysis' && !measurementActive && !locked}
       onWiringCommit={mode === 'build' ? commitWiring : undefined}
       wiringResetKey={wiringResetKey}
       selected={
@@ -873,7 +917,7 @@ export function App() {
       highlightedEndpoints={
         mode === 'analysis' && selectedNet ? potential.nets[selectedNet]?.endpointIds : undefined
       }
-      highlightedElements={riskHighlights.length ? riskHighlights : !measurementActive && hovered ? [hovered] : undefined}
+      highlightedElements={openedHelpItem ? [openedHelpItem.componentId] : riskHighlights.length ? riskHighlights : !measurementActive && hovered ? [hovered] : undefined}
       onHoverElement={setHovered}
       onSelect={selectElement}
       onMove={(positions) => dispatch({ type: 'MoveComponents', positions })}
@@ -1001,10 +1045,11 @@ export function App() {
           {mode === 'analysis' ? (!compact &&
             <AnalysisTools
               stopped={stopped}
+              resistanceDisabled={locked}
               kind={measurementKind}
               onChoose={chooseMeasurement}
               needsIsolation={needsIsolation}
-              onIsolate={() => { if (canMeasure()) setSourcesDetached(true); }}
+              onIsolate={() => { if (canChangeValues()) setSourcesDetached(true); }}
               threeDimensional={analysisView === '3d'}
             />
           ) : (!compact &&
@@ -1073,7 +1118,7 @@ export function App() {
                     component={adjustableComponent}
                     parameter={parameter}
                     disabled={
-                      stopped || (!!doc.activity && !doc.activity.allowedCommands.includes('SetProperties'))
+                      locked || (!!doc.activity && !doc.activity.allowedCommands.includes('SetProperties'))
                     }
                     onChange={(value, group, fraction) => {
                       if (
@@ -1224,7 +1269,7 @@ export function App() {
               mobile={compact ? {
                 viewControls: mobileViewControls, measuring: mobileMeasuring,
                 onBack: () => { setMobileMeasuring(false); setAnalysisPanel(null); if (measurementKind === 'resistance') chooseMeasurement(null); },
-                onChoose: chooseMeasurement, needsIsolation, onIsolate: () => { if (canMeasure()) setSourcesDetached(true); },
+                onChoose: chooseMeasurement, needsIsolation, onIsolate: () => { if (canChangeValues()) setSourcesDetached(true); },
               } : undefined}
               consoleHost={measurementConsoleHost}
               kind={measurementKind}
@@ -1238,6 +1283,7 @@ export function App() {
               result={result}
               canRecord={canMeasure}
               stopped={stopped}
+              resistanceDisabled={locked}
               voltageReading={voltageReading}
               voltageLabel={voltageLabel}
               active={mode === 'analysis'}
@@ -1260,8 +1306,11 @@ export function App() {
                   overlayControls={
                     <>
                       {canvasDiagnostics}
-                      {evaluation.result.provenance?.physicalModel === 'component' && <span className="physical-model-badge">부품 특성</span>}
-                      {assessment.components.length > 0 && <div className="analysis-session-controls"><button onClick={() => changeMode('build')}>회로 수정</button></div>}
+                      <OperatingHelpOverlay ref={helpOverlay} items={helpItems} openKey={openHelp?.startsWith('canvas:') ? openHelp.slice(7) : null}
+                        onOpen={key => showOperatingHelp(key ? `canvas:${key}` : null)} onVisible={ids => {
+                          setVisibleHelpIds(ids);
+                          setOpenHelp(key => key?.startsWith('canvas:') && !helpItems.some(item => `canvas:${item.key}` === key && ids.includes(item.componentId)) ? null : key);
+                        }} />
                       <span className="measurement-sr-only" role="status" key={analysisSession.stopEpoch}>{assessment.representative ? `${doc.components.find(c => c.id === assessment.representative!.componentId)?.label ?? ''}: ${operatingReason(assessment.representative,assessment.representative.level === 'damage')}` : ''}</span>
                       {showOperatingState && showCurrent && (
                         <CurrentControls
@@ -1272,6 +1321,8 @@ export function App() {
                     </>
                   }
                   onStatusChange={setPotentialStatus}
+                  onComponentLabelLayout={receive3DHelpLayout}
+                  onViewInteraction={closeOperatingHelp}
                   active={analysisView === '3d'}
                   sourceView={
                     canvasView.current?.documentId === doc.documentId
@@ -1287,7 +1338,7 @@ export function App() {
                   currentDisplay={showOperatingState && showCurrent ? currentDisplay : undefined}
                   heightMultiplier={heightScale}
                   selectedIds={measurementKind === 'voltage' ? noSelection : selected}
-                  highlightedId={hovered}
+                  highlightedId={openedHelpItem?.componentId ?? hovered}
                   selectedNet={selectedNet}
                   showNumbers={showOperatingState && showNumbers}
                   showColors={showOperatingState && showColors}
@@ -1485,7 +1536,7 @@ export function App() {
                     <p>{definition.name}</p>
                   </div>
                 </div>
-                <div>
+                <fieldset className="component-properties" disabled={locked}>
                   <label className="field-label">
                     이름
                     <ComponentNameInput
@@ -1560,7 +1611,8 @@ export function App() {
                       삭제
                     </button>
                   </div>
-                </div>
+                </fieldset>
+                {selectedHelp && <div className="operating-help-fallback"><span>부품 설명</span><OperatingHelp item={selectedHelp} open={openHelp === `detail:${selectedHelp.key}`} onOpenChange={open => showOperatingHelp(open ? `detail:${selectedHelp.key}` : null)} /></div>}
                 <div hidden={mode === 'analysis' && (isolated || stopped || !showNumbers)}>
                   <div className="library-divider" />
                   <div className="section-heading">

@@ -15,9 +15,12 @@ interface Props {
   analyzing?: boolean;
   selectedId?: string;
   onHighlight?: (ids: string[]) => void;
+  onReset?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function CanvasDiagnostics({ document, diagnostics, onLocate, assessment, analyzing, selectedId, onHighlight }: Props) {
+export function CanvasDiagnostics({ document, diagnostics, onLocate, assessment, analyzing, selectedId, onHighlight, onReset, open, onOpenChange }: Props) {
   const risk = assessment?.components.length ? assessment : undefined;
   const cause = risk?.components.find(c => c.componentId === selectedId) ?? risk?.representative ?? risk?.components[0];
   const component = document.components.find(c => c.id === cause?.componentId);
@@ -36,7 +39,9 @@ export function CanvasDiagnostics({ document, diagnostics, onLocate, assessment,
     }, {}),
   );
   return (
+    <div className="canvas-status-actions">
     <FloatingPanel
+      open={open}
       label={title}
       trigger={
         cause || warning ? (
@@ -50,7 +55,7 @@ export function CanvasDiagnostics({ document, diagnostics, onLocate, assessment,
       contentClassName="canvas-diagnostics-bubble"
       align="start"
       width={320}
-      onOpenChange={open => onHighlight?.(open && risk ? risk.components.map(c => c.componentId) : [])}
+      onOpenChange={open => { onOpenChange?.(open); onHighlight?.(open && risk ? risk.components.map(c => c.componentId) : []); }}
     >
       {(close) => (
         <>
@@ -102,5 +107,7 @@ export function CanvasDiagnostics({ document, diagnostics, onLocate, assessment,
         </>
       )}
     </FloatingPanel>
+    {onReset && <button type="button" className="analysis-reset" onClick={onReset}>회로 초기화</button>}
+    </div>
   );
 }
