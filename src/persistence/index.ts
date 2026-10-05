@@ -91,10 +91,8 @@ export function loadLocal(
   try {
     const target = storage ?? defaultStorage();
     const stored = readChannelStorage(target, STORAGE_KEYS[kind], text => parseDocument(text).ok);
-    if (stored === null) return null;
-
-    const primary = parseDocument(stored);
-    if (primary.ok || kind === 'manual') return primary;
+    const primary = stored === null ? null : parseDocument(stored);
+    if (primary?.ok || kind === 'manual') return primary;
 
     const backup = readChannelStorage(target, AUTO_BACKUP_KEY, text => parseDocument(text).ok);
     if (backup === null) return primary;

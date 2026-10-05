@@ -55,6 +55,27 @@ function entry(note: string): MeasurementEntry {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('release channel storage', () => {
+  it('recovers compatible legacy backups even when their primary copy is damaged', () => {
+    const store = storage();
+    vi.stubEnv('VITE_RELEASE_CHANNEL', 'main');
+    store.setItem('edu-circuit:auto:v1', '{broken');
+    store.setItem('edu-circuit:auto:v1:backup', serializeDocument(document('recovered')));
+    expect(loadLocal('auto', store)).toMatchObject({ ok: true, document: { title: 'recovered' } });
+    saveMeasurementNotebook([entry('recovered notes')], store);
+    const scoped = [...store.values.keys()].find((k) => k.includes('measurement-notebook:'))!;
+    const raw = store.getItem(scoped)!;
+    const legacy = scoped.slice('main:'.length);
+    store.values.delete(scoped);
+    store.setItem(legacy, '{broken');
+    store.setItem(legacy + ':backup', raw);
+    expect(loadMeasurementNotebook(store)).toMatchObject({
+      entries: [{ note: 'recovered notes' }],
+      warning: expect.any(String),
+    });
+    expect(store.getItem(legacy)).toBe('{broken');
+    expect(store.getItem(legacy + ':backup')).toBe(raw);
+  });
+
   it('keeps auto, manual and recovery copies separate on the same origin', () => {
     const store = storage();
     for (const channel of ['main', 'dev'] as const) {
