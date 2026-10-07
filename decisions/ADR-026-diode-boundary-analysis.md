@@ -59,3 +59,5 @@
 - [부품 경계](../docs/physics/circuit-operating-boundaries.md): 프로필, 위험 판정, 모델 선택.
 - [사용자 경험](../docs/ux/diode-analysis.md): 모드 전이, 경고, 연출, 수정 복귀.
 - [구현 순서](../docs/implementation/diode-mvp.md), [수용 사례](../docs/testing/diode-cases.md), [참고 근거](../docs/research/diode-engines.md).
+
+2026-10-07: [ADR-028](ADR-028-diode-kinds.md)에 따라 두 다이오드 종류와 만들기 전용 교체 명령을 추가한다. 기존 프로필·분석 잠금·물리 원인 설명을 보존한다.

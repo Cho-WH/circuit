@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { diagnostic, type CircuitDocument, type ComponentInstance } from '../domain';
+import { diagnostic, defaultOperatingProfileRef, type CircuitDocument, type ComponentInstance } from '../domain';
 import {
   createHistory,
   executeCommand,
@@ -153,7 +153,21 @@ export function useCircuitSession(mode: WorkspaceMode) {
     return () => window.clearTimeout(timer);
   }, [history.present]);
 
+  function canRestore(document: CircuitDocument | undefined): boolean {
+    if (!document || analysisLocked(operating.current)) return false;
+    if (workspace.current === 'build') return true;
+    const profiles = (doc: CircuitDocument) => JSON.stringify(doc.components
+      .filter(c => c.type === 'diode')
+      .map(c => {
+        const ref = c.operatingProfile ?? defaultOperatingProfileRef('diode')!;
+        return [c.id, ref.id, ref.revision];
+      })
+      .sort(([a], [b]) => String(a).localeCompare(String(b))));
+    return profiles(document) === profiles(current.current.present);
+  }
   return {
+    canUndo: () => canRestore(current.current.past.at(-1)),
+    canRedo: () => canRestore(current.current.future[0]),
     history,
     documentEpoch,
     saveStatus,
@@ -165,14 +179,14 @@ export function useCircuitSession(mode: WorkspaceMode) {
     execute,
     placeComponent,
     undo: () => {
-      if (analysisLocked(operating.current)) return;
+      if (!canRestore(current.current.past.at(-1))) return;
       group.current = null;
       const next = undo(current.current);
       if (workspace.current === 'analysis') assess(next.present);
       publish(next);
     },
     redo: () => {
-      if (analysisLocked(operating.current)) return;
+      if (!canRestore(current.current.future[0])) return;
       group.current = null;
       const next = redo(current.current);
       if (workspace.current === 'analysis') assess(next.present);

@@ -73,6 +73,8 @@ function requireDocument(input: unknown): CircuitDocument;
 
 ## 연결망 구성
 
+전환 스위치의 역할·선택 쌍·다음 상태는 domain의 switch helpers가 소유한다. component-library는 목록용 ComponentKind와 기호·상태 문구·선택 접점 기하를 제공한다. connectivity는 선택된 한 쌍을 기존 닫힌 스위치 하나로 컴파일하며 measurement/visualization/potential-3d도 같은 쌍을 사용한다. 자세한 계약은 [ADR-029](../../decisions/ADR-029-changeover-switch.md)를 따른다.
+
 1. 모든 부품 단자, 도선 끝, 분기점을 ID로 읽는다.
 2. 명시적으로 연결된 항목을 같은 집합으로 묶는다.
 3. 화면상 교차하지만 연결 참조가 없는 선은 묶지 않는다.
@@ -164,3 +166,5 @@ component-library.adjustableParameter는 부품의 조절 속성·범위·단위
 `app/operating-help`는 확정된 분석 결과·공개 질의에서 설명 후보를 고르는 순수 함수, 학생용 문구, 화면 충돌 배치, 공통 HTML UI를 분리한다. `CircuitCanvas`와 `Potential3D`의 선택적 `onComponentLabelLayout`은 `visualization.ComponentLabelLayout`(뷰포트 픽셀 기준 bounds·부품 라벨·장애물 사각형)만 전달한다. 3D는 기존 render 투영을 재사용하고 `onViewInteraction`으로 카메라 이동 시작을 알린다. app는 열림 상태를 소유하며 `FloatingPanel`의 선택적 controlled open과 기존 포털·키보드 처리를 재사용한다. 계산 모델·위험 판정·파손 효과 SVG와 설명 문구는 독립적으로 수정할 수 있다. [ADR-026](../../decisions/ADR-026-diode-boundary-analysis.md), [설명 계약](../ux/operating-help.md).
 
 `rational/conversion`은 단위 없는 10진 토큰 해석과 화면용 binary64 변환을 소유하고, quantity는 이를 재사용해 분수·SI 단위 문법과 표시를 처리한다. domain에는 최소 타입과 저장 정규형 검증만 둔다. `visualization/potential`은 정확 전위와 표시 좌표·축 단위 변환을 함께 관리한다. 2D 범례와 3D 눈금은 같은 공개 변환 함수를 사용하고, 숫자 표시는 정확 전위를 사용한다. 3D 높이 맞춤과 장면 경계는 같은 눈금 계산을 재사용한다.
+
+`domain`은 다이오드 종류와 프로필 ID·특성·경계의 대응을 제공한다. `editor.SetDiodeKind`는 프로필 교체와 이전 편차 제거를 한 번에 처리한다. app의 `DiodeKindField`를 인라인 초안 편집과 상세 즉시 편집에서 공유하며 입력 수치는 quantity로 표시한다. useCircuitSession이 모드·잠금·종류를 바꾸는 이력 복원을 검사한다. [ADR-028](../../decisions/ADR-028-diode-kinds.md).

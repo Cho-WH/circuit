@@ -5,16 +5,17 @@ interface Props {
   properties: ComponentProperties;
   label: string | null | undefined;
   value: string | null | undefined;
+  valueLabel?: string;
   onChange: (values: Record<string, string | number | boolean>) => void;
   onLabelChange?: (label: string) => boolean;
 }
-export function OutputNotationFields({ properties, label, value, onChange, onLabelChange }: Props) {
+export function OutputNotationFields({ properties, label, value, valueLabel = '값', onChange, onLabelChange }: Props) {
   const fieldId = useId();
   return (
     <>
       {[
         { prefix: 'label', label: '기호·이름', value: label },
-        { prefix: 'answer', label: '값', value },
+        { prefix: 'answer', label: valueLabel, value },
       ].map(({ prefix, label, value }) => {
         const visible =
           properties[prefix + 'Visible'] !== false &&
@@ -44,7 +45,7 @@ export function OutputNotationFields({ properties, label, value, onChange, onLab
               />
             </div>
             {onLabelChange && prefix === 'answer' ? (
-              <output id={fieldId + '-' + prefix} aria-label="실제 부품 값">
+              <output id={fieldId + '-' + prefix} aria-label={'실제 부품 ' + valueLabel}>
                 {value}
               </output>
             ) : onLabelChange ? (
@@ -67,7 +68,7 @@ export function OutputNotationFields({ properties, label, value, onChange, onLab
               />
             )}
             {onLabelChange && prefix === 'answer' && (
-              <small>값은 회로 만들기에서 수정합니다.</small>
+              <small>{valueLabel === '종류' ? '종류는' : '값은'} 회로 만들기에서 수정합니다.</small>
             )}
             <div className="output-field-actions">
               <label className="check-label">

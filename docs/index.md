@@ -15,6 +15,7 @@
 - [ADR-026](../decisions/ADR-026-diode-boundary-analysis.md): 채택한 설계와 기존 규범의 관계
 - [다이오드 DC 모델](physics/diode-dc-model.md): 정확한 0.7 V, 상태·해 집합, 유한 부품 모델, 계산 예산
 - [작동 경계](physics/circuit-operating-boundaries.md): 프로필, 정상·노랑·빨강, 모델 선택과 기록
+- [다이오드 종류 선택](ux/diode-kinds.md): 신호용·대전류용 특성과 기존 편집 UI
 - [분석 UX](ux/diode-analysis.md): 만들기 경고, 분석 확정, 가변저항 트리거, 과부하·파손·수정 복귀
 - [설명 물음표](ux/operating-help.md): H01~H07 학생용 문구, 등장 조건·예외, 2D/3D 배치와 모듈 경계 — accepted, 로컬 구현 완료
 - [수용 사례](testing/diode-cases.md): 시험 회로, 경계 포함 관계, 표시·세션 회귀 기준

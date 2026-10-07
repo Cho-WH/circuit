@@ -2,8 +2,10 @@ import { isStoredScalar, physicalProperties, type Rational, type ComponentProper
 export { validApproximation, type Approximation, isStoredScalar, physicalProperties, type Rational, type StoredScalar, type ComponentProperties } from './scalar';
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../schemas/circuit-document.schema.json';
-import { defaultOperatingProfileRef, type OperatingProfileRef, type OperatingProfile, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
-export { defaultOperatingProfileRef, operatingProfileFor, type OperatingBoundary, type OperatingProfile, type OperatingProfileRef, type OperatingQuantity, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
+import { isChangeoverSwitch, validSwitchState } from './switches';
+export { isChangeoverSwitch, validSwitchState, switchTerminals, switchClosed, nextSwitchState } from './switches';
+import { supportsOperatingProfile, type OperatingProfileRef, type OperatingProfile, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
+export { defaultOperatingProfileRef, operatingProfileFor, diodeProfileRef, diodeKindFor, isDiodeKind, type DiodeKind, type OperatingBoundary, type OperatingProfile, type OperatingProfileRef, type OperatingQuantity, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
 
 export type Point = { x: number; y: number };
 export type EndpointRef = { kind: 'terminal' | 'junction'; id: string };
@@ -84,8 +86,14 @@ export function validateDocument(input: unknown): DocumentValidation {
   const diagnostics: Diagnostic[] = [];
   const endpoints = new Map<string, EndpointRef['kind']>();
   for (const c of doc.components) {
-    const expectedProfile = defaultOperatingProfileRef(c.type);
-    if (c.operatingProfile && (!expectedProfile || c.operatingProfile.id !== expectedProfile.id || c.operatingProfile.revision !== 1))
+    if (c.properties.switchKind !== undefined && (c.type !== 'switch' || c.properties.switchKind !== 'spdt'))
+      diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'switchKind' }));
+    if (isChangeoverSwitch(c)) {
+      if (c.terminals.length !== 3 || ['common', 'throw-a', 'throw-b'].some(role => c.terminals.filter(t => t.role === role).length !== 1))
+        diagnostics.push(diagnostic('UNSUPPORTED_TERMINALS', [c.id], 'error', { reason: 'AMBIGUOUS_SWITCH_CONTACTS' }));
+      if (!validSwitchState(c)) diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'state' }));
+    }
+    if (c.operatingProfile && !supportsOperatingProfile(c.type, c.operatingProfile))
       diagnostics.push(diagnostic('INVALID_COMPONENT_PROFILE', [c.id]));
     if (c.type === 'diode' && (c.terminals.length !== 2 || c.terminals.filter(t => t.role === 'anode').length !== 1 || c.terminals.filter(t => t.role === 'cathode').length !== 1))
       diagnostics.push(diagnostic('UNSUPPORTED_TERMINALS', [c.id], 'error', { reason: 'AMBIGUOUS_DIODE_POLARITY' }));

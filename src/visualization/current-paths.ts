@@ -1,5 +1,6 @@
 import type { CircuitDocument, ComponentInstance, ComponentType, EndpointRef } from '../domain';
-import { endpointPosition, wireDisplayPoints, wireCrossings } from '../component-library';
+import { switchClosed, isChangeoverSwitch, switchTerminals } from '../domain';
+import { endpointPosition, wireDisplayPoints, wireCrossings, switchContactPath } from '../component-library';
 import type { PotentialModel } from './index';
 import type { CurrentModel, CurrentSample } from './current';
 
@@ -22,7 +23,7 @@ const policies: Record<ComponentType, (component: ComponentInstance) => boolean>
   'resistive-load': () => true,
   'dc-voltage-source': () => true,
   ammeter: () => true,
-  switch: (c) => c.properties.state === 'closed',
+  switch: switchClosed,
   voltmeter: () => false,
 };
 export function hasCurrentBridge(component: ComponentInstance): boolean {
@@ -57,13 +58,13 @@ export function buildCurrentPaths(
       component.type === 'dc-voltage-source'
         ? (component.terminals.find((t) => t.role === 'positive') ?? component.terminals[0])
         : component.terminals[0];
-    const last = component.terminals.find((t) => t.id !== first?.id);
+    const last = isChangeoverSwitch(component) ? switchTerminals(component)[1] : component.terminals.find((t) => t.id !== first?.id);
     if (!first || !last) continue;
     const refs: EndpointRef[] =
       sample.value.status === 'known'
         ? [sample.value.from, sample.value.to]
         : [
-            { kind: 'terminal', id: first.id },
+            { kind: 'terminal', id: isChangeoverSwitch(component) ? switchTerminals(component)[0]!.id : first.id },
             { kind: 'terminal', id: last.id },
           ];
     const heights = refs.map(lift);
@@ -71,7 +72,7 @@ export function buildCurrentPaths(
     paths.push({
       id: component.id,
       sample,
-      points: refs.map((ref, i) => ({ ...endpointPosition(document, ref), z: heights[i]! })),
+      points: isChangeoverSwitch(component) ? switchContactPath(component).map(p => ({ ...p, z: heights[0]! })) : refs.map((ref, i) => ({ ...endpointPosition(document, ref), z: heights[i]! })),
     });
   }
   return paths;

@@ -1,3 +1,4 @@
+import type { ComponentKind } from '../component-library';
 import { InlineComponentEditor, type ComponentEdit } from './InlineComponentEditor';
 import { SvgNotation } from './Notation';
 import { PlacementFailure } from './PlacementFailure';
@@ -10,7 +11,7 @@ import {
   wireDragCommand,
   snapCanvasPoint as snap,
 } from './useCanvasDragSession';
-import type { CircuitDocument, ComponentType, EndpointRef, Point } from '../domain';
+import type { CircuitDocument, EndpointRef, Point } from '../domain';
 import { insertionCandidates, previewCommand, type Command } from '../editor';
 import {
   useContextWiring,
@@ -61,11 +62,11 @@ export interface CanvasProps {
   document: CircuitDocument;
   selected: string[];
   tool: string;
-  placement: ComponentType | null;
+  placement: ComponentKind | null;
   onSelect: (id: string | null, additive?: boolean) => void;
   onMove: (positions: Record<string, Point>) => void;
   onPlace: (
-    type: ComponentType,
+    type: ComponentKind,
     point: Point,
     target?: { wireId: string; segment: number },
   ) => void;
@@ -308,7 +309,7 @@ export function CircuitCanvas(props: CanvasProps) {
     : null;
   if (previewComponent && candidate) previewComponent.rotation = candidate.rotation;
   const insertionPreview =
-    previewComponent && candidate && !candidate.reason && placement !== 'voltmeter'
+    previewComponent && candidate && !candidate.reason && placement !== 'voltmeter' && placement !== 'changeover-switch'
       ? previewCommand(document, {
           type: 'InsertComponentOnWire',
           component: previewComponent,
@@ -319,14 +320,14 @@ export function CircuitCanvas(props: CanvasProps) {
       : null;
   const effective = insertionPreview?.ok ? insertionPreview.document : movedDocument;
   const crossings = wireCrossings(effective);
-  function placeAt(type: ComponentType, p: Point, touchConfirm = false) {
+  function placeAt(type: ComponentKind, p: Point, touchConfirm = false) {
     const all =
       touchConfirm && touchCandidates ? touchCandidates : insertionCandidates(document, p);
     const options = insertionWire
       ? all.filter((c) => `${c.wireId}:${c.segment}` === insertionWire)
       : all;
     if (all.length) {
-      if (all.every(c => c.reason) || type === 'voltmeter') { rejectPlacement(p); return; }
+      if (all.every(c => c.reason) || type === 'voltmeter' || type === 'changeover-switch') { rejectPlacement(p); return; }
       if (options.length !== 1) {
         setPointer(p);
         setChoosingInsertion(true);
@@ -355,7 +356,7 @@ export function CircuitCanvas(props: CanvasProps) {
     setTouchCandidates(options);
     return options.length === 1 ? options[0].position : snap(p);
   }
-  function touchPlaceAt(type: ComponentType, p: Point) {
+  function touchPlaceAt(type: ComponentKind, p: Point) {
     const options = touchInsertionOptions(p),
       target = options.length === 1 ? options[0].position : snap(p);
     setTouchCandidates(options);
@@ -363,7 +364,7 @@ export function CircuitCanvas(props: CanvasProps) {
     setInsertionWire(undefined);
     setPlacementMessage('');
     if (options.length) {
-      if (options.every(c => c.reason) || type === 'voltmeter') { rejectPlacement(target); return; }
+      if (options.every(c => c.reason) || type === 'voltmeter' || type === 'changeover-switch') { rejectPlacement(target); return; }
       setChoosingInsertion(true);
       return;
     }
@@ -718,12 +719,13 @@ export function CircuitCanvas(props: CanvasProps) {
         onDrop={(e) => {
           e.preventDefault();
           if (props.readOnly) return;
-          const type = e.dataTransfer.getData('component') as ComponentType;
+          const type = e.dataTransfer.getData('component') as ComponentKind;
           if (
             [
               'dc-voltage-source',
               'resistor',
               'switch',
+              'changeover-switch',
               'ammeter',
               'voltmeter',
               'resistive-load',
@@ -886,11 +888,15 @@ export function CircuitCanvas(props: CanvasProps) {
           <g key={w.id} className="wire-element">
             <path
               className="wire-ink"
-              visibility={props.currentDisplay ? 'hidden' : undefined}
+              data-current-base={props.currentDisplay ? true : undefined}
+              strokeOpacity={props.currentDisplay ? 0.14 : undefined}
+              vectorEffect={props.currentDisplay ? 'non-scaling-stroke' : undefined}
               d={wirePath(effective, w, crossings)}
               fill="none"
               stroke={
-                candidate?.wireId === w.id
+                props.currentDisplay
+                  ? '#334155'
+                  : candidate?.wireId === w.id
                   ? '#3478f6'
                   : highlighted(w.start.id)
                     ? '#f5a623'
@@ -898,7 +904,7 @@ export function CircuitCanvas(props: CanvasProps) {
                       ? '#3478f6'
                       : endColor(w.start.id)
               }
-              strokeWidth={highlighted(w.start.id) ? 5 : 2.5}
+              strokeWidth={props.currentDisplay ? 1.25 : highlighted(w.start.id) ? 5 : 2.5}
               strokeLinejoin="round"
               strokeLinecap="round"
             />
@@ -1403,6 +1409,7 @@ export function CircuitCanvas(props: CanvasProps) {
           key={editingComponent.id}
           component={editingComponent}
           editParameterRange={!props.readOnly}
+          editDiodeKind={!props.readOnly && (!props.document.activity || props.document.activity.allowedCommands.includes('SetDiodeKind'))}
           point={editorPoint}
           viewport={viewport}
           drawingScale={drawingScale}

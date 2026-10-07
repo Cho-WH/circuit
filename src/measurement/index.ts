@@ -1,6 +1,6 @@
 import * as q from '../rational';
 import { queryVoltage, queryCurrent } from '../simulation';
-import { isStoredScalar, type Rational, type StoredScalar } from '../domain';
+import { isStoredScalar, isChangeoverSwitch, switchTerminals, type Rational, type StoredScalar } from '../domain';
 import {
   cloneDocument,
   diagnostic,
@@ -54,6 +54,7 @@ export function probeCurrent(
         : [diagnostic('MEASUREMENT_UNAVAILABLE', [target.id])],
     };
   const pair = (c: ComponentInstance) => {
+    if (isChangeoverSwitch(c)) return switchTerminals(c);
     const positive =
       c.type === 'dc-voltage-source'
         ? c.terminals.find((t) => t.role === 'positive')
@@ -248,6 +249,7 @@ export function probeVoltage(
 }
 
 function insertionTerminal(component: ComponentInstance): string | null {
+  if (isChangeoverSwitch(component)) return switchTerminals(component)[0]?.id ?? null;
   if (component.type !== 'dc-voltage-source') return component.terminals[0]?.id ?? null;
   const positive = component.terminals.filter((terminal) => terminal.role === 'positive');
   return positive.length === 1 ? positive[0].id : null;

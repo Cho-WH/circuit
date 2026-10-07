@@ -1,4 +1,6 @@
 import type { ComponentProperties } from '../domain';
+import { diodeKindFor } from '../domain';
+import { DiodeKindField } from './DiodeKindField';
 import * as q from '../rational';
 import { parseComponentValue } from './component-value';
 import { Tooltip } from './Tooltip';
@@ -43,13 +45,15 @@ import {
 import {
   cloneDocument,
   emptyDocument,
+  nextSwitchState,
   type CircuitDocument,
-  type ComponentType,
   type EndpointRef,
   type Point,
 } from '../domain';
 import {
   componentDefinitions,
+  componentDefinition,
+  type ComponentKind,
   componentValueInput,
   createComponent,
   symbolMarkup,
@@ -147,6 +151,8 @@ export function App() {
     canMeasure,
     canChangeValues,
     automaticEpoch,
+    canUndo,
+    canRedo,
     execute,
     placeComponent,
     undo: undoEdit,
@@ -162,7 +168,7 @@ export function App() {
   const stopped = analysisStopped(analysisSession);
   const [selected, setSelected] = useState<string[]>([]);
   const [tool, setTool] = useState('select');
-  const [placement, setPlacement] = useState<ComponentType | null>(null);
+  const [placement, setPlacement] = useState<ComponentKind | null>(null);
   const [paletteDrag, setPaletteDrag] = useState<PaletteDrag | null>(null);
   const [wiringResetKey, setWiringResetKey] = useState(0);
   const [notice, updateNotice] = useState({ message: '', kind: 'status' as 'status' | 'error' });
@@ -394,7 +400,7 @@ export function App() {
     ? makePath(compilation.circuit, customPathIds)
     : (paths[activePath] ?? paths[0] ?? null);
   const component = doc.components.find((c) => c.id === selected[0]);
-  const definition = component ? componentDefinitions[component.type] : null;
+  const definition = component ? componentDefinition(component) : null;
   function newId(prefix: string) {
     const all = new Set(
       [
@@ -541,7 +547,7 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   });
   function place(
-    type: ComponentType,
+    type: ComponentKind,
     position: Point,
     target?: { wireId: string; segment: number },
   ) {
@@ -632,7 +638,7 @@ export function App() {
     return dispatch({
       type: 'SetProperties',
       id,
-      properties: { state: component.properties.state === 'closed' ? 'open' : 'closed' },
+      properties: { state: nextSwitchState(component) },
     });
   }
   function applyValue() {
@@ -930,6 +936,10 @@ export function App() {
         const c = doc.components.find((c) => c.id === id);
         if (!c || mode === 'worksheet') return false;
         const commands: Command[] = [];
+        if (edit.diodeKind !== undefined && edit.diodeKind !== diodeKindFor(c)) {
+          if (mode !== 'build') return false;
+          commands.push({ type: 'SetDiodeKind', id, kind: edit.diodeKind });
+        }
         if (edit.label !== c.label) commands.push({ type: 'SetLabel', id, label: edit.label });
         const property = componentDefinitions[c.type].property;
         const properties: ComponentProperties = {};
@@ -1184,7 +1194,7 @@ export function App() {
               <button
                 aria-label="실행 취소"
                 data-tooltip="실행 취소 Ctrl+Z"
-                disabled={!history.past.length}
+                disabled={!canUndo()}
                 onClick={() => undoEdit()}
               >
                 <Undo2 size={18} />
@@ -1192,7 +1202,7 @@ export function App() {
               <button
                 aria-label="다시 실행"
                 data-tooltip="다시 실행 Ctrl+Shift+Z"
-                disabled={!history.future.length}
+                disabled={!canRedo()}
                 onClick={() => redoEdit()}
               >
                 <Redo2 size={18} />
@@ -1481,8 +1491,8 @@ export function App() {
               onFontPreview={setOutputFontPreview}
               undo={() => undoEdit()}
               redo={() => redoEdit()}
-              canUndo={!!history.past.length}
-              canRedo={!!history.future.length}
+              canUndo={canUndo()}
+              canRedo={canRedo()}
             />
           </div>
 
@@ -1591,9 +1601,14 @@ export function App() {
                     />
                   )}
                   {!definition.property && quantityControl}
+                  {component.type === 'diode' && (
+                    <DiodeKindField component={component} value={diodeKindFor(component)!}
+                      disabled={mode !== 'build' || (!!doc.activity && !doc.activity.allowedCommands.includes('SetDiodeKind'))}
+                      onChange={kind => dispatch({ type: 'SetDiodeKind', id: component.id, kind })} />
+                  )}
                   {component.type === 'switch' && (
                     <SwitchStateButton
-                      closed={component.properties.state === 'closed'}
+                      component={component}
                       onToggle={() => toggleSwitch(component.id)}
                     />
                   )}

@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Layers3, RotateCcw, MoveUpRight, ScanLine, Eye, EyeOff } from 'lucide-react';
 import type { CircuitDocument } from '../domain';
+import { isChangeoverSwitch, switchTerminals } from '../domain';
 import { operatingMarkSvg, potentialAxisValue, buildCurrentPaths, type ComponentOperatingMark, type CurrentDisplay, type PotentialRange, type PotentialModel, type ComponentLabelLayout } from '../visualization';
 import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
@@ -457,7 +458,7 @@ export function Potential3D(props: Potential3DProps) {
       dot(r.raised, point({...p,z:net.height}), showColors ? net.color : '#667060', radius*1.3, undefined, !props.currentDisplay, net.netId);
     }
     for (const c of circuit.components) {
-      const ends = c.terminals.slice(0,2).map(t=>potential.endpoints[t.id]?.height);
+      const ends = (isChangeoverSwitch(c) ? switchTerminals(c) : c.terminals.slice(0,2)).map(t=>t && potential.endpoints[t.id]?.height);
       const z = ends.length===2 && ends.every(v=>v!==undefined) ? (ends[0]!+ends[1]!)/2 : 0;
       addLabel(`component:${c.id}`,adjustableParameter(c) ? `${c.label} = ${componentValue(c, props.quantityFormat ?? defaultQuantityFormat)}` : c.label,point({...c.position,z}),'component-tag',true,2,c.id);
       const mark = props.operatingMarks?.[c.id];

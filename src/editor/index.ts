@@ -1,5 +1,5 @@
 import type { ComponentProperties } from '../domain';
-import { isStoredScalar } from '../domain';
+import { isStoredScalar, diodeProfileRef, diodeKindFor, isDiodeKind, validSwitchState, type DiodeKind } from '../domain';
 import * as q from '../rational';
 import { normalizeComponentLabel } from '../domain';
 import { parseQuantity, isQuantityMode } from '../quantity';
@@ -38,6 +38,7 @@ export type Command =
       id: string;
       properties: ComponentProperties;
     }
+  | { type: 'SetDiodeKind'; id: string; kind: DiodeKind }
   | { type: 'SetLabel'; id: string; label: string }
   | { type: 'SetReference'; endpoint: EndpointRef | null }
   | { type: 'AddJunction'; junction: Junction; wireId?: string; newWireId?: string }
@@ -107,7 +108,7 @@ function invalidProperties(
   }
 
   if (component.type === 'switch' && Object.hasOwn(properties, 'state')) {
-    if (properties.state !== 'open' && properties.state !== 'closed') {
+    if (!validSwitchState({ ...component, properties: { ...component.properties, ...properties } })) {
       return [
         diagnostic('INVALID_COMPONENT_VALUE', [component.id], 'error', { property: 'state' }),
       ];
@@ -223,6 +224,18 @@ function applyCommand(
         if (key in command.properties && !(key+'Fraction' in command.properties)) delete component.properties[key+'Fraction'];
       }
       component.properties = { ...component.properties, ...properties };
+      break;
+    }
+
+    case 'SetDiodeKind': {
+      const component = document.components.find(item => item.id === command.id);
+      if (!component) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.id])];
+      if (component.type !== 'diode' || !isDiodeKind(command.kind))
+        return [diagnostic('INVALID_COMPONENT_PROFILE', [command.id])];
+      if (diodeKindFor(component) === command.kind) break;
+      component.operatingProfile = diodeProfileRef(command.kind);
+      delete component.properties.diodeThresholdV;
+      delete component.properties.diodeOnResistanceOhm;
       break;
     }
 

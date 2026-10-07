@@ -88,6 +88,10 @@ interface SimulationResult {
 
 위 특성을 명시한 부품에는 컴파일 시 `explicitCharacteristics`를 표시한다. 분석 모델 선택은 이를 사용해 안전 범위에서도 명시한 부품 특성을 관찰할 수 있게 한다. 이 표시는 계산 입력의 파생 정보이며 저장 문서에 별도 플래그로 넣지 않는다.
 
+## 전환 스위치
+
+전환 스위치는 [ADR-029](../../decisions/ADR-029-changeover-switch.md)에 따라 기존 switch의 switchKind=spdt·state=a|b와 common/throw-a/throw-b 세 단자를 사용한다. 기존 v6 JSON 구조를 유지하며 domain은 역할 중복/누락·미지원 종류·상태를 거부한다. 컴파일·측정은 공통→선택 접점만 사용하고 미선택 접점은 전류가 주입되지 않는 독립 단자로 남는다. 일반 스위치의 open/closed 계약은 유지한다.
+
 ## 저장하지 않는 값
 
 다음 값은 파일에 정답처럼 저장하지 않는다.
@@ -122,3 +126,5 @@ ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성
 ## 가변저항 범위
 
 resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. v6의 정확값 필드를 사용한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.
+
+다이오드 종류는 별도 UI 상태가 아닌 operatingProfile의 edu-diode-signal@1 / edu-diode-power@1로 저장한다. 새 부품은 신호용이다. 기존 edu-diode@1과 참조 생략의 고정 의미는 유지한다. [ADR-028](../../decisions/ADR-028-diode-kinds.md).

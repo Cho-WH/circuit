@@ -1,5 +1,5 @@
 import { from, ZERO, sign } from '../rational';
-import { isStoredScalar, operatingProfileFor, type Rational } from '../domain';
+import { isStoredScalar, operatingProfileFor, isChangeoverSwitch, switchTerminals, switchClosed, validSwitchState, type Rational } from '../domain';
 import {
   diagnostic,
   validateDocument,
@@ -107,6 +107,10 @@ function terminalPair(
   component: ComponentInstance,
   diagnostics: Diagnostic[],
 ): readonly [string, string] | null {
+  if (isChangeoverSwitch(component)) {
+    const [common, selected] = switchTerminals(component);
+    return common && selected ? [common.id, selected.id] : null;
+  }
   if (component.terminals.length !== 2) {
     diagnostics.push(
       diagnostic('UNSUPPORTED_TERMINALS', [component.id], 'error', {
@@ -177,7 +181,7 @@ function hasValidSwitchState(
   diagnostics: Diagnostic[],
 ): boolean {
   if (component.type !== 'switch') return true;
-  if (component.properties.state === 'open' || component.properties.state === 'closed') {
+  if (validSwitchState(component)) {
     return true;
   }
   diagnostics.push(
@@ -207,7 +211,7 @@ function compileElements(
       a: endpointToNet[terminals[0]],
       b: endpointToNet[terminals[1]],
       value,
-      closed: component.type === 'switch' && component.properties.state === 'closed',
+      closed: switchClosed(component),
       ...(operatingProfile ? { operatingProfile } : {}),
       ...((component.type === 'dc-voltage-source' ? component.properties.sourceResistanceOhm !== undefined : component.type === 'diode' && (component.properties.diodeThresholdV !== undefined || component.properties.diodeOnResistanceOhm !== undefined)) ? { explicitCharacteristics: true } : {}),
     });

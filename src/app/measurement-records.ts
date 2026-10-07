@@ -2,6 +2,7 @@ import * as q from '../rational';
 import type { MeasurementEntry } from '../persistence';
 import {
   componentDefinitions,
+  componentValue,
   endpointName,
   wireName,
   quantityFormatForTargets,
@@ -63,7 +64,7 @@ export function conditionValues(entry: MeasurementEntry): { label: string; value
         },
       ];
     return c.type === 'switch'
-      ? [{ label: c.label, value: c.properties.state === 'closed' ? '닫힘' : '열림' }]
+      ? [{ label: c.label, value: componentValue(c) }]
       : [];
   });
 }

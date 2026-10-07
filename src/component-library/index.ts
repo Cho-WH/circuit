@@ -1,6 +1,6 @@
 import type { ComponentProperties } from '../domain';
 import * as q from '../rational';
-import { isStoredScalar, defaultOperatingProfileRef } from '../domain';
+import { isStoredScalar, defaultOperatingProfileRef, diodeProfileRef, diodeKindFor, isChangeoverSwitch, switchTerminals } from '../domain';
 import { quantityInput, storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
 export { parameterValueAt, adjustableParameter, type AdjustableParameter } from './parameters';
@@ -9,18 +9,29 @@ export { compactWirePoints } from '../wire-geometry';
 import { notationTokens, notationDisplayText } from '../notation';
 import type { Annotation, CircuitDocument, ComponentInstance, ComponentType, EndpointRef, Point, Wire, SimulationResult } from '../domain';
 
-export const componentDefinitions: Record<ComponentType, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | ''; property?: string }> = {
+export type ComponentKind = ComponentType | 'changeover-switch';
+export const componentDefinitions: Record<ComponentKind, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | ''; property?: string }> = {
   'dc-voltage-source': { name: '직류 전원', short: 'V', unit: 'V', property: 'voltageV' },
   resistor: { name: '저항', short: 'R', unit: 'Ω', property: 'resistanceOhm' },
   switch: { name: '스위치', short: 'S', unit: '' },
+  'changeover-switch': { name: '전환 스위치', short: 'S', unit: '' },
   ammeter: { name: '전류계', short: 'A', unit: 'A' },
   voltmeter: { name: '전압계', short: 'M', unit: 'V' },
   'resistive-load': { name: '가변저항', short: 'VR', unit: 'Ω', property: 'resistanceOhm' },
   diode: { name: '다이오드', short: 'D', unit: 'V' },
 };
-export function createComponent(type: ComponentType, id: string, position: Point): ComponentInstance {
+export function componentDefinition(component: ComponentInstance) {
+  return componentDefinitions[isChangeoverSwitch(component) ? 'changeover-switch' : component.type];
+}
+export function createComponent(kind: ComponentKind, id: string, position: Point): ComponentInstance {
+  if (kind === 'changeover-switch') return {
+    id, type: 'switch', label: id, position, rotation: 0,
+    properties: { switchKind: 'spdt', state: 'a' },
+    terminals: [{ id: `${id}.common`, role: 'common' }, { id: `${id}.a`, role: 'throw-a' }, { id: `${id}.b`, role: 'throw-b' }],
+  };
+  const type = kind;
   const source = type === 'dc-voltage-source';
-  const operatingProfile = defaultOperatingProfileRef(type);
+  const operatingProfile = type === 'diode' ? diodeProfileRef('signal') : defaultOperatingProfileRef(type);
   return {
     id, type, label: type === 'resistive-load' ? id.replace(/^VR(\d+)$/, 'VR_$1') : id, position, rotation: source ? 90 : 0,
     properties: source ? { voltageV: q.store(9) } : type === 'resistive-load' ? { resistanceOhm: q.store(10), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(100) } : type === 'resistor' ? { resistanceOhm: q.store(10) } : type === 'switch' ? { state: 'open' } : {},
@@ -31,7 +42,9 @@ export function createComponent(type: ComponentType, id: string, position: Point
 export function terminalPosition(component: ComponentInstance, index: number): Point {
   const terminal = component.terminals[index];
   const first = component.type === 'diode' ? terminal?.role === 'anode' : component.type === 'dc-voltage-source' && component.terminals.some(t => t.role === 'positive') ? terminal?.role === 'positive' : index === 0;
-  const p = terminal?.localPosition ?? { x: first ? -44 : 44, y: 0 };
+  const p = terminal?.localPosition ?? (isChangeoverSwitch(component)
+    ? { x: terminal?.role === 'common' ? -44 : 44, y: terminal?.role === 'throw-a' ? -24 : terminal?.role === 'throw-b' ? 24 : 0 }
+    : { x: first ? -44 : 44, y: 0 });
   const angle = component.rotation * Math.PI / 180;
   return { x: component.position.x + Math.round(p.x * Math.cos(angle) - p.y * Math.sin(angle)), y: component.position.y + Math.round(p.x * Math.sin(angle) + p.y * Math.cos(angle)) };
 }
@@ -47,6 +60,14 @@ export function wirePoints(document: CircuitDocument, wire: Wire): Point[] {
   return [start, ...(wire.waypoints.length ? wire.waypoints : start.x === end.x || start.y === end.y ? [] : [{ x: start.x, y: end.y }]), end];
 }
 export const pointsAttribute = (points: Point[]) => points.map(p => `${p.x},${p.y}`).join(' ');
+/** Selected SPDT lead/contact geometry, shared by potential and current overlays. */
+export function switchContactPath(component: ComponentInstance): Point[] {
+  const [common, selected] = switchTerminals(component);
+  if (!common || !selected) return [];
+  const angle = component.rotation * Math.PI / 180;
+  const rotate = (x: number, y: number) => ({ x: component.position.x + Math.round(x*Math.cos(angle)-y*Math.sin(angle)), y: component.position.y + Math.round(x*Math.sin(angle)+y*Math.cos(angle)) });
+  return [terminalPosition(component, component.terminals.indexOf(common)), rotate(-24, 0), rotate(24, component.properties.state === 'b' ? 24 : -24), terminalPosition(component, component.terminals.indexOf(selected))];
+}
 export interface WireCrossing { point: Point; horizontalId: string; verticalId: string; horizontalSegment: number; verticalSegment: number }
 /** Geometry is only a hit target / drawing aid; electrical connections still use IDs. */
 export function wireCrossings(document: CircuitDocument): WireCrossing[] {
@@ -103,7 +124,7 @@ function terminalName(document: CircuitDocument, id: string): string | undefined
     const i=c.terminals.findIndex(t=>t.id===id);
     if(i<0)continue;
     const t=c.terminals[i], p=terminalPosition(c,i), other=terminalPosition(c,i===0?1:0);
-    return `${c.label} · ${t.role==='positive'?'＋극':t.role==='negative'?'−극':t.role==='anode'?'A':t.role==='cathode'?'K':Math.abs(p.x-other.x)>=Math.abs(p.y-other.y)?(p.x<other.x?'왼쪽':'오른쪽'):(p.y<other.y?'위쪽':'아래쪽')} 단자`;
+    return `${c.label} · ${t.role==='common'?'공통':t.role==='throw-a'?'A':t.role==='throw-b'?'B':t.role==='positive'?'＋극':t.role==='negative'?'−극':t.role==='anode'?'A':t.role==='cathode'?'K':Math.abs(p.x-other.x)>=Math.abs(p.y-other.y)?(p.x<other.x?'왼쪽':'오른쪽'):(p.y<other.y?'위쪽':'아래쪽')} 단자`;
   }
   return undefined;
 }
@@ -170,14 +191,16 @@ export const escapeXml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&
 export function componentValue(component: ComponentInstance, options?: QuantityFormatOptions): string {
   options=quantityFormatFor(component.properties,options);
   const def = componentDefinitions[component.type];
-  if (component.type === 'diode') return formatQuantity(q.rational(7n, 10n), 'V', options);
+  if (isChangeoverSwitch(component)) return component.properties.state === 'b' ? 'B 연결' : 'A 연결';
+  if (component.type === 'diode') return diodeKindFor(component) === 'power' ? '대전류용' : '신호용';
   if (component.type === 'switch') return component.properties.state === 'closed' ? '닫힘' : '열림';
   const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
   return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(isStoredScalar(component.properties[def.property]) ? component.properties[def.property] as q.StoredScalar : undefined, def.unit, options) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
 export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean } = {}): string {
-  if (component.type === 'diode') return '<path d="M-44 0H-16 M16 0H44 M-16 -18L16 0 -16 18Z M16 -18V18" fill="none"/><text x="-30" y="-10" stroke="none" fill="currentColor" font-size="11" text-anchor="middle">A</text><text x="30" y="-10" stroke="none" fill="currentColor" font-size="11" text-anchor="middle">K</text>';
+  if (isChangeoverSwitch(component)) return `<path d="M-44 0H-24 M24 -24H44 M24 24H44 M-24 0L24 ${component.properties.state === 'b' ? 24 : -24}" fill="none"/><circle cx="-24" cy="0" r="3"/><circle cx="24" cy="-24" r="3"/><circle cx="24" cy="24" r="3"/><g stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central"><text x="32" y="-36" transform="rotate(${-component.rotation} 32 -36)">A</text><text x="32" y="36" transform="rotate(${-component.rotation} 32 36)">B</text></g>`;
+  if (component.type === 'diode') return '<path d="M-44 0H-16 M16 0H44 M-16 -18L16 0 -16 18Z M16 -18V18" fill="none"/>';
   if (component.type === 'resistor' || component.type === 'resistive-load') {
     const resistor='<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
     return resistor+(component.type==='resistive-load'?'<path data-symbol="adjustment-arrow" d="M-18 20L18 -20 M8 -18L18 -20 17 -10" fill="none"/>':'');
@@ -203,7 +226,7 @@ export function componentPresentation(component: ComponentInstance, result?: Sim
   options=quantityFormatFor(component.properties,options);
   const value = componentValue(component, options);
   const resultOptions={...options,modelApproximation:result?.provenance?.physicalModel==='component'};
-  const rule=(actual:string,prefix:string)=>component.properties[prefix+'Visible']===false ? null : component.properties[prefix+'Blank']===true ? '□' : actual;
+  const rule=(actual:string,prefix:string)=>(component.properties[prefix+'Visible'] ?? !(prefix==='answer' && component.type==='diode'))===false ? null : component.properties[prefix+'Blank']===true ? '□' : actual;
   return {
     label: rule(component.label, 'label'), value: rule(value, 'answer'),
     voltage: component.properties.showVoltage === true ? rule(formatQuantity(result?.componentVoltages[component.id], 'V', resultOptions), 'voltage') : null,
@@ -277,10 +300,10 @@ export function notationMetrics(text:string|null,fontSize:number) {
 /** Font-aware default positions shared by live circuit labels and independent output. */
 export function componentNotationLayout(component:ComponentInstance,label:string|null,value:string|null,fontSize:number) {
   const vertical=component.rotation%180!==0,gap=Math.max(9,fontSize*.45);
-  const name=notationMetrics(label,fontSize),quantity=notationMetrics(value,fontSize);
-  const x=component.position.x+(vertical?28+gap:0),anchor=vertical?'start' as const:'middle' as const;
+  const name=notationMetrics(label,fontSize),quantity=notationMetrics(value,componentValueFontSize([],component,value??'',fontSize));
+  const x=component.position.x+(vertical?(isChangeoverSwitch(component)?44:28)+gap:0),anchor=vertical?'start' as const:'middle' as const;
   const total=name.ascent+name.descent+gap+quantity.ascent+quantity.descent;
-  const horizontalGap=Math.max(6,fontSize*.3),symbolHeight=component.type==='resistor'?14:24;
+  const horizontalGap=Math.max(6,fontSize*.3),symbolHeight=isChangeoverSwitch(component)?40:component.type==='resistor'?14:24;
   const labelY=vertical?component.position.y-total/2+name.ascent:component.position.y-symbolHeight-horizontalGap-name.descent;
   const valueY=vertical?labelY+name.descent+gap+quantity.ascent:component.position.y+symbolHeight+horizontalGap+quantity.ascent;
   const voltageY=valueY+quantity.descent+gap+fontSize;
@@ -289,6 +312,7 @@ export function componentNotationLayout(component:ComponentInstance,label:string
 
 /** Keep long value labels inside their horizontal component slot while zoomed out. */
 export function componentValueFontSize(components:readonly ComponentInstance[],component:ComponentInstance,value:string,fontSize:number):number {
+  if(component.type==='diode')fontSize*=1/2;
   if(component.rotation%180!==0)return fontSize;
   const neighbours=components.filter(c=>c.id!==component.id&&c.rotation%180===0&&Math.abs(c.position.y-component.position.y)<fontSize*2&&c.position.x!==component.position.x);
   const slot=neighbours.reduce((width,c)=>Math.min(width,Math.abs(c.position.x-component.position.x)),Infinity);

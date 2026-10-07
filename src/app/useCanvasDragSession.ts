@@ -1,6 +1,7 @@
+import type { ComponentKind } from '../component-library';
 import { snapGridPoint, snapGridValue } from '../wire-geometry';
 import { useMemo, useRef, useState, type RefObject } from 'react';
-import type { CircuitDocument, ComponentType, Point } from '../domain';
+import type { CircuitDocument, Point } from '../domain';
 import { previewCommand, type Command } from '../editor';
 
 type View = { x: number; y: number; width: number; height: number };
@@ -52,7 +53,7 @@ export function wireDragCommand(
 export function useCanvasDragSession(
   document: CircuitDocument,
   tool: string,
-  placement: ComponentType | null,
+  placement: ComponentKind | null,
   readOnly: boolean | undefined,
   svg: RefObject<SVGSVGElement | null>,
 ) {

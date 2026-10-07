@@ -1,5 +1,6 @@
 import * as q from '../rational';
 import type { CircuitDocument } from '../domain';
+import { isChangeoverSwitch, switchTerminals } from '../domain';
 import { documentBounds, endpointPosition, terminalPosition } from '../component-library';
 import { potentialAxisCoordinate, type PotentialModel, type PotentialRange } from '../visualization';
 import { Box3, Matrix4, Vector3 } from 'three';
@@ -86,7 +87,8 @@ export function sceneExtent(document: CircuitDocument, potential: PotentialModel
 export function selectedVoltage(document: CircuitDocument, potential: PotentialModel, id?: string) {
   const component = document.components.find(c => c.id === id);
   if (!component || component.terminals.length < 2) return null;
-  const ends = component.terminals.slice(0, 2).map(t => {
+  const ends = (isChangeoverSwitch(component) ? switchTerminals(component) : component.terminals.slice(0, 2)).map(t => {
+    if (!t) return null;
     const net = potential.endpoints[t.id];
     return net?.exactVoltage === undefined || net.height === undefined ? null : {
       ...endpointPosition(document, { kind: 'terminal', id: t.id }), z: net.height, voltage: net.exactVoltage,

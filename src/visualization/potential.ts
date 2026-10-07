@@ -1,6 +1,7 @@
 import * as q from '../rational';
 import type { CircuitDocument, CompiledCircuit, SimulationResult } from '../domain';
-import { endpointPosition, wirePoints } from '../component-library';
+import { isChangeoverSwitch, switchTerminals } from '../domain';
+import { endpointPosition, wirePoints, switchContactPath } from '../component-library';
 import { potentialColor, type PotentialPaletteId } from './palettes';
 
 export interface PotentialValue {
@@ -121,7 +122,8 @@ export function buildPotentialModel(
   for (const c of document.components) {
     if (c.type === 'switch' && c.properties.state === 'open') continue;
     if (c.type === 'voltmeter') continue;
-    const points = c.terminals.slice(0, 2).map((t) => {
+    const points = (isChangeoverSwitch(c) ? switchTerminals(c) : c.terminals.slice(0, 2)).map((t) => {
+      if (!t) return null;
       const v = endpoints[t.id];
       return v?.height === undefined
         ? null
@@ -132,7 +134,7 @@ export function buildPotentialModel(
         id: c.id,
         kind: 'component',
         color: '#586879',
-        points: [points[0], points[1]],
+        points: isChangeoverSwitch(c) ? switchContactPath(c).map(p => ({ ...p, z: points[0]!.z })) : [points[0], points[1]],
       });
   }
   return {

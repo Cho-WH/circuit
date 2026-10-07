@@ -20,8 +20,8 @@ describe('diode document and component contracts', () => {
     expect(terminalPosition(diode, 0)).toEqual({ x: 200, y: 164 });
     expect(endpointName(document, 'D1.a')).toBe('D1 · A 단자');
     expect(endpointName(document, 'D1.b')).toBe('D1 · K 단자');
-    expect(symbolMarkup(diode)).toContain('>A</text>');
-    expect(symbolMarkup(diode)).toContain('>K</text>');
+    expect(symbolMarkup(diode)).not.toContain('>A</text>');
+    expect(symbolMarkup(diode)).not.toContain('>K</text>');
   });
 
   it('round-trips profile references and fixed exact component differences without computed state', () => {
@@ -33,7 +33,7 @@ describe('diode document and component contracts', () => {
     const serialized = serializeDocument(document);
     expect(parseDocument(serialized)).toEqual({ ok: true, document });
     expect(compileCircuit(document).circuit.elements[0].operatingProfile).toMatchObject({
-      id: 'edu-diode', revision: 1, diodeThresholdV: q.rational(13n, 20n), diodeOnResistanceOhm: q.rational(5n, 2n),
+      id: 'edu-diode-signal', revision: 1, diodeThresholdV: q.rational(13n, 20n), diodeOnResistanceOhm: q.rational(5n, 2n),
     });
     expect(compileCircuit(document).circuit.elements[0].explicitCharacteristics).toBe(true);
     expect(serialized).not.toMatch(/branchCurrents|assessment|damaged/);
@@ -66,7 +66,10 @@ describe('diode document and component contracts', () => {
       const component = createComponent(type, 'C1', { x: 0, y: 0 });
       const profile = operatingProfileFor(component)!;
       const implicit = { ...component }; delete implicit.operatingProfile;
-      expect(operatingProfileFor(implicit)).toEqual(profile);
+      if (type === 'diode') {
+        expect(operatingProfileFor(implicit)?.id).toBe('edu-diode');
+        expect(operatingProfileFor(implicit)?.boundaries.reverseVoltage?.continuousMax).toEqual(q.from(30));
+      } else expect(operatingProfileFor(implicit)).toEqual(profile);
       for (const bounds of Object.values(profile.boundaries)) {
         expect(q.compare(bounds.continuousMax, 0)).toBeGreaterThanOrEqual(0);
         expect(q.compare(bounds.damageAt, bounds.continuousMax)).toBeGreaterThan(0);

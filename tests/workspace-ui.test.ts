@@ -275,7 +275,7 @@ describe('workspace transitions and file actions', () => {
     const toggle=[...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(input=>input.parentElement?.textContent?.trim()==='전류 흐름')!;
     await act(async()=>toggle.click());
     expect(host.querySelector('.potential-workspace > .current-pause')).not.toBeNull();
-    expect([...host.querySelectorAll('.wire-ink')].every(el=>el.getAttribute('visibility')==='hidden')).toBe(true);
+    expect([...host.querySelectorAll('.wire-ink')].every(el=>el.getAttribute('visibility')!=='hidden' && el.getAttribute('stroke-opacity')==='0.14' && el.getAttribute('stroke')==='#334155')).toBe(true);
     await click('상세 설정');
     expect(host.querySelector('[aria-label="전류 두께 배율"]')).not.toBeNull();
     for(const [id,value,key] of [['W1','3 A',false],['W2','1 A',true],['W3','2 A',true]] as const) {
@@ -288,6 +288,8 @@ describe('workspace transitions and file actions', () => {
     await act(async()=>host.querySelector('[data-endpoint-id="JT"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
     expect(host.querySelector('.current-readout')?.textContent).toContain('도선이나 부품을 선택');
     await click('흐름 일시 정지');expect(button('흐름 재생')).toBeDefined();
+    await act(async()=>toggle.click());
+    expect([...host.querySelectorAll('.wire-ink')].every(el=>!el.hasAttribute('stroke-opacity'))).toBe(true);
   });
   it('selects renamed examples through the shared menu and supports undo',async()=>{
     const original=layoutExample(examples[1].document);saveLocal(original);

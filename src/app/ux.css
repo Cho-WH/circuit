@@ -52,6 +52,7 @@
 .circuit-canvas [role=button]:focus{outline:none}
 .component:focus-visible .component-ink{stroke:#245ebc;color:#245ebc;stroke-width:3.5;filter:drop-shadow(0 0 3px #245ebc70)}
 .wire-element:has(>.wire-hit:focus-visible) .wire-ink{stroke-width:4.5;filter:drop-shadow(0 0 3px #245ebc70)}
+.canvas-shell .wire-element .wire-ink[data-current-base=true]{stroke-width:1.25;filter:none}
 .terminal:focus-visible circle:last-of-type{r:7px;stroke:#245ebc;stroke-width:2.5;filter:drop-shadow(0 0 3px #245ebc70)}
 .editable-value:focus-visible{fill:#245ebc;text-decoration:underline;text-underline-offset:4px}
 .circuit-canvas [role=button]:focus-visible>circle{filter:drop-shadow(0 0 3px #245ebc70)}
@@ -324,4 +325,11 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
  .analysis-console-host .current-tool>svg{flex:none}
  .analysis-console-host .current-tool>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  .analysis-console-host .measure-diagnostics{flex-basis:auto}
+}
+
+.diode-kind-select{min-height:44px}
+.inline-value-editor .diode-kind-note{color:var(--muted);margin:0;font-size:11px;line-height:16px}
+@media(max-width:640px){
+ .canvas-shell.is-editing:has(.diode-kind-select){margin-bottom:196px}
+ .canvas-shell.is-editing .inline-value-editor:has(.diode-kind-select){max-height:192px}
 }

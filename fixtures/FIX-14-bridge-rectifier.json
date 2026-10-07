@@ -1,0 +1,53 @@
+{
+  "$schema": "../schemas/fixture.schema.json",
+  "id": "FIX-14",
+  "title": "브릿지 정류 회로",
+  "purpose": "전환 스위치로 ±5 V 입력을 선택해도 부하 전류는 오른쪽에서 왼쪽으로 3.6 mA 유지",
+  "document": {
+    "format": "edu-circuit", "version": 6, "documentId": "fix-14", "title": "브릿지 정류 회로",
+    "components": [
+      {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":480,"y":360},"rotation":90,"properties":{"voltageV":{"numerator":"5","denominator":"1"}},"terminals":[{"id":"V1.p","role":"positive"},{"id":"V1.n","role":"negative"}]},
+      {"id":"V2","type":"dc-voltage-source","label":"V2","position":{"x":320,"y":360},"rotation":270,"properties":{"voltageV":{"numerator":"5","denominator":"1"}},"terminals":[{"id":"V2.p","role":"positive"},{"id":"V2.n","role":"negative"}]},
+      {"id":"S1","type":"switch","label":"S1","position":{"x":400,"y":204},"rotation":90,"properties":{"switchKind":"spdt","state":"a"},"terminals":[{"id":"S1.common","role":"common"},{"id":"S1.a","role":"throw-a"},{"id":"S1.b","role":"throw-b"}]},
+      {"id":"D1","type":"diode","label":"D1","position":{"x":640,"y":260},"rotation":270,"properties":{},"operatingProfile":{"id":"edu-diode-signal","revision":1},"terminals":[{"id":"D1.a","role":"anode"},{"id":"D1.b","role":"cathode"}]},
+      {"id":"D2","type":"diode","label":"D2","position":{"x":960,"y":260},"rotation":90,"properties":{},"operatingProfile":{"id":"edu-diode-signal","revision":1},"terminals":[{"id":"D2.a","role":"anode"},{"id":"D2.b","role":"cathode"}]},
+      {"id":"D3","type":"diode","label":"D3","position":{"x":640,"y":460},"rotation":90,"properties":{},"operatingProfile":{"id":"edu-diode-signal","revision":1},"terminals":[{"id":"D3.a","role":"anode"},{"id":"D3.b","role":"cathode"}]},
+      {"id":"D4","type":"diode","label":"D4","position":{"x":960,"y":460},"rotation":270,"properties":{},"operatingProfile":{"id":"edu-diode-signal","revision":1},"terminals":[{"id":"D4.a","role":"anode"},{"id":"D4.b","role":"cathode"}]},
+      {"id":"R1","type":"resistor","label":"R1","position":{"x":800,"y":360},"rotation":180,"properties":{"resistanceOhm":{"numerator":"1000","denominator":"1"}},"terminals":[{"id":"R1.a","role":"a"},{"id":"R1.b","role":"b"}]}
+    ],
+    "junctions": [
+      {"id":"J0","position":{"x":480,"y":560}},
+      {"id":"JT","position":{"x":640,"y":160}},
+      {"id":"JB","position":{"x":640,"y":560}},
+      {"id":"JL","position":{"x":640,"y":360}},
+      {"id":"JR","position":{"x":960,"y":360}}
+    ],
+    "wires": [
+      {"id":"W1","start":{"kind":"terminal","id":"V1.p"},"end":{"kind":"terminal","id":"S1.a"},"waypoints":[{"x":480,"y":248}]},
+      {"id":"W2","start":{"kind":"terminal","id":"V2.n"},"end":{"kind":"terminal","id":"S1.b"},"waypoints":[{"x":320,"y":248}]},
+      {"id":"W3","start":{"kind":"terminal","id":"V1.n"},"end":{"kind":"junction","id":"J0"},"waypoints":[]},
+      {"id":"W4","start":{"kind":"terminal","id":"V2.p"},"end":{"kind":"junction","id":"J0"},"waypoints":[{"x":320,"y":560}]},
+      {"id":"W5","start":{"kind":"terminal","id":"S1.common"},"end":{"kind":"junction","id":"JT"},"waypoints":[]},
+      {"id":"W6","start":{"kind":"junction","id":"J0"},"end":{"kind":"junction","id":"JB"},"waypoints":[]},
+      {"id":"W7","start":{"kind":"junction","id":"JT"},"end":{"kind":"terminal","id":"D1.b"},"waypoints":[{"x":640,"y":160}]},
+      {"id":"W8","start":{"kind":"junction","id":"JT"},"end":{"kind":"terminal","id":"D2.a"},"waypoints":[{"x":960,"y":160}]},
+      {"id":"W9","start":{"kind":"terminal","id":"D1.a"},"end":{"kind":"junction","id":"JL"},"waypoints":[]},
+      {"id":"W10","start":{"kind":"junction","id":"JL"},"end":{"kind":"terminal","id":"D3.a"},"waypoints":[]},
+      {"id":"W11","start":{"kind":"terminal","id":"D2.b"},"end":{"kind":"junction","id":"JR"},"waypoints":[]},
+      {"id":"W12","start":{"kind":"junction","id":"JR"},"end":{"kind":"terminal","id":"D4.b"},"waypoints":[]},
+      {"id":"W13","start":{"kind":"junction","id":"JB"},"end":{"kind":"terminal","id":"D3.b"},"waypoints":[{"x":640,"y":560}]},
+      {"id":"W14","start":{"kind":"junction","id":"JB"},"end":{"kind":"terminal","id":"D4.a"},"waypoints":[{"x":960,"y":560}]},
+      {"id":"W15","start":{"kind":"junction","id":"JR"},"end":{"kind":"terminal","id":"R1.a"},"waypoints":[]},
+      {"id":"W16","start":{"kind":"junction","id":"JL"},"end":{"kind":"terminal","id":"R1.b"},"waypoints":[]}
+    ],
+    "annotations": [], "referenceNode": {"kind":"junction","id":"J0"}, "activity": null
+  },
+  "expected": {
+    "status":"solved", "tolerance":{"absolute":1e-12,"relative":1e-12},
+    "probeVoltagesV":{"JT":5,"JB":0,"JL":0.7,"JR":4.3},
+    "branchCurrentsA":{"V1":-0.0036,"V2":0,"S1":-0.0036,"D1":0,"D2":0.0036,"D3":0.0036,"D4":0,"R1":0.0036},
+    "componentVoltagesV":{"R1":3.6,"S1":0,"D2":0.7,"D3":0.7},
+    "componentPowersW":{"R1":0.01296}, "diagnostics":[],
+    "invariants":["KCL","KVL","PASSIVE_POWER_NONNEGATIVE"]
+  }
+}

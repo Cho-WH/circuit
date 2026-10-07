@@ -40,3 +40,5 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-025](ADR-025-bounded-approximate-dc.md) | 계산 예산을 넘는 직류 회로의 명시적 근사 해석 | accepted | 당시 계산 예산·근사·품질 전달·기록 v4 구현 |
 | [ADR-026](ADR-026-diode-boundary-analysis.md) | 다이오드·작동 경계와 분석 세션의 과부하·파손 표현 | accepted | 2026-10-05 D0~D4 구현, 현재 회로 v6·기록 v5. dev 개발판 대상 |
 | [ADR-027](ADR-027-release-channels.md) | 안정판·개발판 배포와 브라우저 저장 분리 | accepted | main/dev 상시 운영 |
+| [ADR-028](ADR-028-diode-kinds.md) | 신호용·대전류용 다이오드 선택 | accepted | 두 프로필과 기존 편집 UI 재사용 |
+| [ADR-029](ADR-029-changeover-switch.md) | 전환 스위치와 브릿지 정류 예제 | accepted | 기존 스위치 변형·세 단자·극성 선택 |

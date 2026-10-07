@@ -78,7 +78,7 @@ describe('physical explanations use confirmed observations', () => {
   });
   it('explains reverse-voltage danger at zero current without forward heating', () => {
     const doc = document(1000);
-    doc.components[0].properties.voltageV = q.store(-40);
+    doc.components[0].properties.voltageV = q.store(-80);
     const items = resolveOperatingHelp(input(doc));
     expect(topics(items, 'D1')).toEqual(['diode-reverse', 'diode-reverse-current']);
     expect(helpText(items.find((i) => i.componentId === 'D1')!.questions[0]).title).toBe(
