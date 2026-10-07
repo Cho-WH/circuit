@@ -33,6 +33,7 @@ it('switches the bridge with the existing value control and inline action, inclu
     expect(target).toBeDefined(); await act(async () => target.click());
   };
   const value = () => host.querySelector('[data-value-id="S1"]')!;
+  expect(Number(value().getAttribute('font-size'))).toBe(Number(host.querySelector('[data-component-label="S1"]')!.getAttribute('font-size')) / 2);
   expect([...host.querySelectorAll('button')].some(b => b.textContent?.endsWith('전환 스위치'))).toBe(true);
   expect(host.querySelectorAll('[data-component-id="S1"] [data-endpoint-id]')).toHaveLength(3);
   await act(async () => value().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
@@ -50,6 +51,14 @@ it('switches the bridge with the existing value control and inline action, inclu
   await click('회로도 출력');
   expect(host.querySelector('[data-output-id="S1"][data-output-part="body"]')?.textContent).toContain('A');
   expect(host.querySelector('[data-output-id="D1"][data-output-part="value"]')).toBeNull();
+  const outputState = () => host.querySelector('[data-output-id="S1"][data-output-part="value"]');
+  expect(outputState()).toBeNull();
+  await act(async () => host.querySelector('[data-output-id="S1"][data-output-part="body"]')!.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true})));
+  const stateToggle = host.querySelector<HTMLInputElement>('[aria-label="상태 표시"]')!;
+  expect(stateToggle.checked).toBe(false);
+  await act(async () => stateToggle.click());
+  expect(outputState()?.textContent).toBe('A 연결');
+  await click('출력 실행 취소'); expect(outputState()).toBeNull();
 });
 
 it('keeps changeover switching behind worksheet, activity and damage command guards', () => {

@@ -136,7 +136,7 @@ describe('exact diode textbook operating sets (DIO-E)', () => {
       minimum: q.ZERO,
     });
   });
-  it('E05 applies inequalities to the affine family and exposes the actual middle-node range', () => {
+  it('E05 selects the symmetric equilibrium inside the admissible middle-node range', () => {
     const input = circuit([
       element('V', 'dc-voltage-source', 'p', 'g', 1),
       element('D1', 'diode', 'p', 'm', 0.7),
@@ -145,11 +145,10 @@ describe('exact diode textbook operating sets (DIO-E)', () => {
     const result = solveCircuit(input);
     expect(result.branchCurrents.D1).toEqual(q.ZERO);
     expect(result.branchCurrents.D2).toEqual(q.ZERO);
-    expect(result.nodeVoltages.m).toBeUndefined();
+    expect(result.nodeVoltages.m).toEqual(fraction(1, 2));
     expect(queryVoltage(result, 'm', 'g')).toEqual({
-      status: 'nonunique',
-      minimum: fraction(3, 10),
-      maximum: fraction(7, 10),
+      status: 'unique',
+      value: fraction(1, 2),
     });
     expect(queryVoltage(result, 'm', 'm')).toEqual({ status: 'unique', value: q.ZERO });
     input.elements[0].value = fraction(3, 2);
@@ -298,6 +297,101 @@ describe('exact diode textbook operating sets (DIO-E)', () => {
       status: 'finite',
       ohms: fraction(20),
     });
+  });
+});
+
+describe('zero-leakage diode equilibrium', () => {
+  it.each(['textbook','component'] as const)('resolves every series switch position and diode direction in the %s model', physicalModel => {
+    for (const position of [0,1,2]) for (const reverse of [false,true]) {
+      const input=series(1000,5,reverse);
+      const [source,resistor,diode]=input.elements;
+      const node=position===0?'p':position===1?'a':'g';
+      if(position===0)resistor.a='s';
+      else if(position===1)resistor.b='s';
+      else if(reverse)diode.a='s';
+      else diode.b='s';
+      const sw={...element('S','switch',node,'s'),closed:false};
+      const switched=circuit([...input.elements,sw]);
+      const result=solveCircuit(switched,{physicalModel});
+      expect(result.solution).toBe('unique');
+      expect(result.status).toBe('solved');
+      expect(result.branchCurrents).toEqual({V:q.ZERO,R:q.ZERO,D:q.ZERO,S:q.ZERO});
+      expect(result.componentVoltages.D).toEqual(q.ZERO);
+      expect(result.componentVoltages.R).toEqual(q.ZERO);
+      expect(result.componentVoltages.V).toEqual(fraction(5));
+      expect(q.abs(result.componentVoltages.S)).toEqual(fraction(5));
+      expect(queryVoltage(result,diode.a,diode.b)).toEqual({status:'unique',value:q.ZERO});
+      expect(queryCurrent(result,[{componentId:'D',coefficient:1}])).toEqual({status:'unique',value:q.ZERO});
+      expect(result.componentPowers.D).toEqual(q.ZERO);
+      for(const net of switched.nets)expect(checkKcl(switched,result,net.id)).toMatchObject({defined:true,passes:true,sum:q.ZERO});
+      sw.closed=true;
+      const closed=solveCircuit(switched,{physicalModel});
+      expect(closed.componentVoltages.V).toEqual(solveCircuit(series(1000,5,reverse),{physicalModel}).componentVoltages.V);
+      expect(closed.branchCurrents.D).toEqual(solveCircuit(series(1000,5,reverse),{physicalModel}).branchCurrents.D);
+      sw.closed=false;
+      expect(solveCircuit(switched,{physicalModel})).toEqual(result);
+      expect(source.value).toEqual(fraction(5));
+    }
+  });
+
+  it('honors an active diode voltage bound instead of choosing an infeasible average', () => {
+    const d1=element('D1','diode','p','m',0.7),d2=element('D2','diode','m','g',0.7);
+    d1.operatingProfile!.diodeThresholdV=fraction(1,5);
+    d2.operatingProfile!.diodeThresholdV=fraction(9,10);
+    const input=circuit([element('V','dc-voltage-source','p','g',1),d1,d2]);
+    const result=component(input);
+    expect(result.solution).toBe('unique');
+    expect(result.componentVoltages.D1).toEqual(fraction(1,5));
+    expect(result.componentVoltages.D2).toEqual(fraction(4,5));
+    expect(result.branchCurrents).toEqual({V:q.ZERO,D1:q.ZERO,D2:q.ZERO});
+    expect(component({...input,nets:[...input.nets].reverse(),elements:[...input.elements].reverse()})).toEqual(result);
+    // Renaming IDs must not select a different minimizing face.
+    const renamed=circuit(input.elements.map(e=>({...e,id:`renamed-${e.id}`})));
+    expect(component(renamed).nodeVoltages).toEqual(result.nodeVoltages);
+  });
+
+  it('shares externally forced reverse voltage across series blockers with exactly zero current', () => {
+    const input=circuit([element('V','dc-voltage-source','p','g',5),element('D1','diode','g','m',0.7),element('D2','diode','m','p',0.7)]);
+    const result=solveCircuit(input);
+    expect(result.solution).toBe('unique');
+    expect(result.componentVoltages.D1).toEqual(fraction(-5,2));
+    expect(result.componentVoltages.D2).toEqual(fraction(-5,2));
+    expect(result.branchCurrents).toEqual({V:q.ZERO,D1:q.ZERO,D2:q.ZERO});
+    input.referenceNetId='p';
+    const shifted=solveCircuit(input);
+    expect(shifted.componentVoltages).toEqual(result.componentVoltages);
+    expect(shifted.nodeVoltages.m).toEqual(fraction(-5,2));
+    input.referenceNetId=undefined;
+    const floating=solveCircuit(input);
+    expect(Object.keys(floating.nodeVoltages)).toHaveLength(0);
+    expect(queryVoltage(floating,'g','m')).toEqual({status:'unique',value:fraction(-5,2)});
+  });
+
+  it('satisfies multiple active voltage bounds and retains an independent floating island', () => {
+    const d1=element('D1','diode','p','a',0.7),d2=element('D2','diode','a','b',0.7),d3=element('D3','diode','b','g',0.7);
+    d1.operatingProfile!.diodeThresholdV=fraction(1,5);
+    d2.operatingProfile!.diodeThresholdV=fraction(3,10);
+    d3.operatingProfile!.diodeThresholdV=fraction(2);
+    const input=circuit([element('V','dc-voltage-source','p','g',fraction(8,5)),d1,d2,d3,element('floating','diode','x','y',0.7)]);
+    const result=component(input);
+    expect(result.componentVoltages.D1).toEqual(fraction(1,5));
+    expect(result.componentVoltages.D2).toEqual(fraction(3,10));
+    expect(result.componentVoltages.D3).toEqual(fraction(11,10));
+    expect(result.componentVoltages.floating).toEqual(q.ZERO);
+    expect(Object.values(result.branchCurrents).every(v=>q.sign(v)===0)).toBe(true);
+    expect(result.nodeVoltages.x).toBeUndefined();
+    expect(queryVoltage(result,'x','y')).toEqual({status:'unique',value:q.ZERO});
+    expect(queryVoltage(result,'g','x').status).toBe('nonunique');
+  });
+
+  it('preserves true small forward currents and forced subthreshold voltages', () => {
+    const tiny=solveCircuit(series(fraction(1000000000000),5));
+    expect(tiny.branchCurrents.D).toEqual(q.rational(43n,10000000000000n));
+    expect(tiny.componentVoltages.D).toEqual(fraction(7,10));
+    const held=solveCircuit(series(null,0.3));
+    expect(held.componentVoltages.D).toEqual(fraction(3,10));
+    expect(held.branchCurrents.D).toEqual(q.ZERO);
+    expect(held.provenance?.profileRevision).toContain('diode-equilibrium-1|');
   });
 });
 

@@ -68,7 +68,7 @@ export function OutputNotationFields({ properties, label, value, valueLabel = '�
               />
             )}
             {onLabelChange && prefix === 'answer' && (
-              <small>{valueLabel === '종류' ? '종류는' : '값은'} 회로 만들기에서 수정합니다.</small>
+              <small>{valueLabel}{valueLabel === '값' ? '은' : '는'} 회로 만들기에서 수정합니다.</small>
             )}
             <div className="output-field-actions">
               <label className="check-label">

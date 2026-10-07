@@ -9,6 +9,7 @@ import {
 import * as arithmetic from '../rational';
 import { BudgetExceeded } from './budget';
 import { mna, resistive, idealLink } from './mna';
+import { EquilibriumVerificationError, selectEquilibrium } from './equilibrium';
 import {
   affineSolve,
   combination,
@@ -46,7 +47,7 @@ const connects = (e: CompiledElement) =>
   resistive(e) || idealLink(e) || e.type === 'dc-voltage-source' || e.type === 'diode';
 
 export function profileRevision(circuit: CompiledCircuit): string {
-  return ordered(circuit.elements)
+  const profiles = ordered(circuit.elements)
     .filter((e) => e.operatingProfile)
     .map((e) => {
       const p = e.operatingProfile!;
@@ -63,6 +64,9 @@ export function profileRevision(circuit: CompiledCircuit): string {
       return `${e.id}:${p.id}@${p.revision}:${values}:${boundaries}`;
     })
     .join('|');
+  return circuit.elements.some((e) => e.type === 'diode')
+    ? `diode-equilibrium-1|${profiles}`
+    : profiles;
 }
 
 function split(circuit: CompiledCircuit): Island[] {
@@ -384,6 +388,11 @@ export function solvePiecewise(circuit: CompiledCircuit, options: SolveOptions):
           );
           continue;
         }
+        island.spaces = selectEquilibrium(
+          island.spaces,
+          diodes.map((e) => voltageWeights(island, e.a, e.b)),
+          work,
+        );
         island.valid = true;
         for (const id of island.nets) {
           const value = queryIsland(island, voltageWeights(island, id), work);
@@ -405,7 +414,8 @@ export function solvePiecewise(circuit: CompiledCircuit, options: SolveOptions):
             result.componentPowers[e.id] = q.mul(voltage.value, current.value);
         }
       } catch (error) {
-        if (!(error instanceof BudgetExceeded)) throw error;
+        if (!(error instanceof BudgetExceeded) && !(error instanceof EquilibriumVerificationError))
+          throw error;
         island.valid = false;
         island.spaces = [];
         unverified = true;

@@ -9,7 +9,7 @@ import { Notation } from './Notation';
 import { useDialogFocus } from './useDialogFocus';
 import type { CircuitDocument, SimulationResult } from '../domain';
 import type { Command } from '../editor';
-import { annotationPlacements, componentPresentation, componentDefinition } from '../component-library';
+import { annotationPlacements, componentPresentation, componentDefinition, componentValueDisplay } from '../component-library';
 import { exportSvg, exportPng, copyPng, type ExportOptions } from '../export';
 import type { OutputTool } from './OutputCanvas';
 import './panels.css';
@@ -62,7 +62,7 @@ export function WorksheetPanel(props: Props) {
       {props.compact && <span className="compact-output-title">그림</span>}
       <div className="output-actions">{!props.compact&&<button disabled={busy} onClick={()=>void output('preview')}>미리보기</button>}<button className="primary output-copy" disabled={busy} aria-busy={busy} onClick={()=>void output('copy')}>{busy?<LoaderCircle size={16}/>:copied?<Check size={16}/>:null}<span role={copied?'status':undefined}>{copied?'복사됨':'그림 복사'}</span></button><details className="export-menu"><summary>파일 저장</summary><button disabled={busy} onClick={()=>void output('svg')}>SVG 저장</button><button disabled={busy} onClick={()=>void output('png')}>PNG 저장</button></details></div>{props.toolbarEnd}
     </>,toolbar)}
-    {!props.compact&&component&&<OutputNotationFields key={component.id} properties={{answerVisible:component.type!=='diode',...component.properties}} label={actual?.label} value={actual?.value} valueLabel={component.type==='diode'?'종류':'값'} onChange={property} onLabelChange={label=>props.dispatch({type:'SetLabel',id:component.id,label})}/>}
+    {!props.compact&&component&&<OutputNotationFields key={component.id} properties={{answerVisible:componentValueDisplay(component).outputVisible,...component.properties}} label={actual?.label} value={actual?.value} valueLabel={componentValueDisplay(component).label} onChange={property} onLabelChange={label=>props.dispatch({type:'SetLabel',id:component.id,label})}/>}
     {annotation&&<div className="annotation-edit">{annotation.kind==='arrow'?<OutputNotationFields key={annotation.id} properties={annotation.presentation??{}} label={annotation.content} value="" onChange={values=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{presentation:{...annotation.presentation,...values}}})}/>:<input aria-label="주석 내용 편집" value={annotation.content} maxLength={240} onChange={e=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{content:e.target.value}})}/>}<button aria-label="선택한 장식 삭제" onClick={()=>props.dispatch({type:'DeleteElements',ids:[annotation.id]})}><Trash2 size={16}/>삭제</button></div>}
     {!props.compact&&doc.annotations.some(a=>a.visibility!=='hidden')&&<details className="output-decoration-list"><summary>출력 장식</summary><div className="annotation-list">{doc.annotations.filter(a=>a.visibility!=='hidden').map(a=><button key={a.id} className={annotation?.id===a.id?'active':''} onClick={()=>props.onSelect(a.id)}>{a.kind==='point'?'● ':a.kind==='arrow'?'→ ':''}<Notation symbol={a.kind==='point'||a.kind==='arrow'} text={String(a.presentation?.labelText??a.content)||'□'}/></button>)}</div></details>}
     <fieldset className="output-export-options"><legend>그림 설정</legend>

@@ -61,3 +61,5 @@
 - [구현 순서](../docs/implementation/diode-mvp.md), [수용 사례](../docs/testing/diode-cases.md), [참고 근거](../docs/research/diode-engines.md).
 
 2026-10-07: [ADR-028](ADR-028-diode-kinds.md)에 따라 두 다이오드 종류와 만들기 전용 교체 명령을 추가한다. 기존 프로필·분석 잠금·물리 원인 설명을 보존한다.
+
+2026-10-07: [ADR-030](ADR-030-diode-equilibrium.md)은 기존 허용 해 중 다이오드 전압 제곱합을 최소화하는 교육용 평형을 선택한다. OFF 전류 0 A를 유지하며 스위치 개방에 따른 전압 미정을 해소한다. 공개 질의와 표시도 선택된 해 집합을 사용한다.

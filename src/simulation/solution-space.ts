@@ -4,17 +4,23 @@ import { BudgetExceeded, createBudget } from './budget';
 
 export const diodeBudget = Object.freeze({
   candidates: 1024,
+  equilibriumCandidates: 4096,
   inequalities: 25000,
   matrixEntries: 1000000,
 });
 export function createSolveWork() {
   let candidates = 0,
+    equilibriumCandidates = 0,
     inequalities = 0,
     matrixEntries = 0;
   return {
     q: arithmetic.createArithmetic(createBudget()),
     candidate() {
       if (++candidates > diodeBudget.candidates) throw new BudgetExceeded('operation-limit');
+    },
+    equilibriumCandidate() {
+      if (++equilibriumCandidates > diodeBudget.equilibriumCandidates)
+        throw new BudgetExceeded('operation-limit');
     },
     inequality() {
       if (++inequalities > diodeBudget.inequalities) throw new BudgetExceeded('operation-limit');

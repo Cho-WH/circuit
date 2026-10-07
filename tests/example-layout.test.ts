@@ -39,7 +39,8 @@ describe('curated learning circuit layouts', () => {
       expect(a.x === b.x || a.y === b.y, wire).toBe(true);
       for (const component of doc.components) {
         const vertical = component.rotation % 180 !== 0;
-        const halfWidth = vertical ? 24 : 44, halfHeight = vertical ? 44 : 24;
+        const halfLength = component.type === 'switch' ? 24 : 44;
+        const halfWidth = vertical ? 24 : halfLength, halfHeight = vertical ? halfLength : 24;
         const left = component.position.x - halfWidth, right = component.position.x + halfWidth;
         const top = component.position.y - halfHeight, bottom = component.position.y + halfHeight;
         const throughBody = a.y === b.y

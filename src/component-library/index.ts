@@ -23,6 +23,15 @@ export const componentDefinitions: Record<ComponentKind, { name: string; short: 
 export function componentDefinition(component: ComponentInstance) {
   return componentDefinitions[isChangeoverSwitch(component) ? 'changeover-switch' : component.type];
 }
+/** Shared policy for numeric values and secondary kind/state labels. */
+export function componentValueDisplay(component: ComponentInstance) {
+  const secondary = component.type === 'diode' || component.type === 'switch';
+  return {
+    label: component.type === 'diode' ? '종류' : component.type === 'switch' ? '상태' : '값',
+    fontScale: secondary ? 1 / 2 : 1,
+    outputVisible: !secondary,
+  };
+}
 export function createComponent(kind: ComponentKind, id: string, position: Point): ComponentInstance {
   if (kind === 'changeover-switch') return {
     id, type: 'switch', label: id, position, rotation: 0,
@@ -39,12 +48,16 @@ export function createComponent(kind: ComponentKind, id: string, position: Point
     terminals: [{ id: `${id}.a`, role: source ? 'positive' : type === 'diode' ? 'anode' : 'a' }, { id: `${id}.b`, role: source ? 'negative' : type === 'diode' ? 'cathode' : 'b' }],
   };
 }
+function changeoverTerminalPosition(component: ComponentInstance, role: string): Point {
+  return component.terminals.find(t => t.role === role)?.localPosition
+    ?? { x: role === 'common' ? -24 : 24, y: role === 'throw-a' ? -24 : role === 'throw-b' ? 24 : 0 };
+}
 export function terminalPosition(component: ComponentInstance, index: number): Point {
   const terminal = component.terminals[index];
   const first = component.type === 'diode' ? terminal?.role === 'anode' : component.type === 'dc-voltage-source' && component.terminals.some(t => t.role === 'positive') ? terminal?.role === 'positive' : index === 0;
   const p = terminal?.localPosition ?? (isChangeoverSwitch(component)
-    ? { x: terminal?.role === 'common' ? -44 : 44, y: terminal?.role === 'throw-a' ? -24 : terminal?.role === 'throw-b' ? 24 : 0 }
-    : { x: first ? -44 : 44, y: 0 });
+    ? changeoverTerminalPosition(component, terminal?.role ?? '')
+    : { x: (first ? -1 : 1) * (component.type === 'switch' ? 24 : 44), y: 0 });
   const angle = component.rotation * Math.PI / 180;
   return { x: component.position.x + Math.round(p.x * Math.cos(angle) - p.y * Math.sin(angle)), y: component.position.y + Math.round(p.x * Math.sin(angle) + p.y * Math.cos(angle)) };
 }
@@ -60,13 +73,11 @@ export function wirePoints(document: CircuitDocument, wire: Wire): Point[] {
   return [start, ...(wire.waypoints.length ? wire.waypoints : start.x === end.x || start.y === end.y ? [] : [{ x: start.x, y: end.y }]), end];
 }
 export const pointsAttribute = (points: Point[]) => points.map(p => `${p.x},${p.y}`).join(' ');
-/** Selected SPDT lead/contact geometry, shared by potential and current overlays. */
+/** Selected switch contacts, shared by potential and current overlays. */
 export function switchContactPath(component: ComponentInstance): Point[] {
   const [common, selected] = switchTerminals(component);
   if (!common || !selected) return [];
-  const angle = component.rotation * Math.PI / 180;
-  const rotate = (x: number, y: number) => ({ x: component.position.x + Math.round(x*Math.cos(angle)-y*Math.sin(angle)), y: component.position.y + Math.round(x*Math.sin(angle)+y*Math.cos(angle)) });
-  return [terminalPosition(component, component.terminals.indexOf(common)), rotate(-24, 0), rotate(24, component.properties.state === 'b' ? 24 : -24), terminalPosition(component, component.terminals.indexOf(selected))];
+  return [common, selected].map(t => terminalPosition(component, component.terminals.indexOf(t)));
 }
 export interface WireCrossing { point: Point; horizontalId: string; verticalId: string; horizontalSegment: number; verticalSegment: number }
 /** Geometry is only a hit target / drawing aid; electrical connections still use IDs. */
@@ -198,15 +209,26 @@ export function componentValue(component: ComponentInstance, options?: QuantityF
   return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(isStoredScalar(component.properties[def.property]) ? component.properties[def.property] as q.StoredScalar : undefined, def.unit, options) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
-export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean } = {}): string {
-  if (isChangeoverSwitch(component)) return `<path d="M-44 0H-24 M24 -24H44 M24 24H44 M-24 0L24 ${component.properties.state === 'b' ? 24 : -24}" fill="none"/><circle cx="-24" cy="0" r="3"/><circle cx="24" cy="-24" r="3"/><circle cx="24" cy="24" r="3"/><g stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central"><text x="32" y="-36" transform="rotate(${-component.rotation} 32 -36)">A</text><text x="32" y="36" transform="rotate(${-component.rotation} 32 36)">B</text></g>`;
+export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean } = {}): string {
+  if (isChangeoverSwitch(component)) {
+    const common = changeoverTerminalPosition(component, 'common'), a = changeoverTerminalPosition(component, 'throw-a'), b = changeoverTerminalPosition(component, 'throw-b');
+    const selected = component.properties.state === 'b' ? b : a;
+    const labels = options.terminalLabels === false ? '' : [{point:a,label:'A',dy:-12},{point:b,label:'B',dy:12}].map(({point,label,dy}) => {
+      const x=point.x+8,y=point.y+dy;
+      return `<text x="${x}" y="${y}" transform="rotate(${-component.rotation} ${x} ${y})">${label}</text>`;
+    }).join('');
+    return `<path d="M${common.x} ${common.y}L${selected.x} ${selected.y}" fill="none"/>${[common,a,b].map(p=>`<circle cx="${p.x}" cy="${p.y}" r="3"/>`).join('')}${labels ? `<g stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central">${labels}</g>` : ''}`;
+  }
   if (component.type === 'diode') return '<path d="M-44 0H-16 M16 0H44 M-16 -18L16 0 -16 18Z M16 -18V18" fill="none"/>';
   if (component.type === 'resistor' || component.type === 'resistive-load') {
     const resistor='<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
     return resistor+(component.type==='resistive-load'?'<path data-symbol="adjustment-arrow" d="M-18 20L18 -20 M8 -18L18 -20 17 -10" fill="none"/>':'');
   }
   if (component.type === 'dc-voltage-source') return `<path d="M-${options.disconnectedSource?32:44} 0H-7 M7 0H${options.disconnectedSource?32:44} M-7 -22V22"/><path d="M7 -12V12" stroke-width="5" stroke-linecap="butt"/><text x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>`;
-  if (component.type === 'switch') return `<path d="M-44 0H-24 M24 0H44 M-22 0L22 ${component.properties.state === 'closed' ? 0 : -20}"/><circle cx="-24" cy="0" r="3"/><circle cx="24" cy="0" r="3"/>`;
+  if (component.type === 'switch') {
+    const a = component.terminals[0]?.localPosition ?? {x:-24,y:0}, b = component.terminals[1]?.localPosition ?? {x:24,y:0};
+    return `<path d="M${a.x} ${a.y}L${b.x} ${b.y+(component.properties.state === 'closed' ? 0 : -20)}"/><circle cx="${a.x}" cy="${a.y}" r="3"/><circle cx="${b.x}" cy="${b.y}" r="3"/>`;
+  }
   return `<path d="M-44 0H-23 M23 0H44"/><circle r="23"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>`;
 }
 export function documentBounds(document: CircuitDocument, margin = 80) {
@@ -226,7 +248,7 @@ export function componentPresentation(component: ComponentInstance, result?: Sim
   options=quantityFormatFor(component.properties,options);
   const value = componentValue(component, options);
   const resultOptions={...options,modelApproximation:result?.provenance?.physicalModel==='component'};
-  const rule=(actual:string,prefix:string)=>(component.properties[prefix+'Visible'] ?? !(prefix==='answer' && component.type==='diode'))===false ? null : component.properties[prefix+'Blank']===true ? '□' : actual;
+  const rule=(actual:string,prefix:string)=>(component.properties[prefix+'Visible'] ?? (prefix==='answer' ? componentValueDisplay(component).outputVisible : true))===false ? null : component.properties[prefix+'Blank']===true ? '□' : actual;
   return {
     label: rule(component.label, 'label'), value: rule(value, 'answer'),
     voltage: component.properties.showVoltage === true ? rule(formatQuantity(result?.componentVoltages[component.id], 'V', resultOptions), 'voltage') : null,
@@ -304,7 +326,8 @@ export function componentNotationLayout(component:ComponentInstance,label:string
   const x=component.position.x+(vertical?(isChangeoverSwitch(component)?44:28)+gap:0),anchor=vertical?'start' as const:'middle' as const;
   const total=name.ascent+name.descent+gap+quantity.ascent+quantity.descent;
   const horizontalGap=Math.max(6,fontSize*.3),symbolHeight=isChangeoverSwitch(component)?40:component.type==='resistor'?14:24;
-  const labelY=vertical?component.position.y-total/2+name.ascent:component.position.y-symbolHeight-horizontalGap-name.descent;
+  const directContacts=isChangeoverSwitch(component)&&['throw-a','throw-b'].every(role=>changeoverTerminalPosition(component,role).x===24);
+  const labelY=vertical?component.position.y+(directContacts?(component.rotation===90?-20:20):0)-total/2+name.ascent:component.position.y-symbolHeight-horizontalGap-name.descent;
   const valueY=vertical?labelY+name.descent+gap+quantity.ascent:component.position.y+symbolHeight+horizontalGap+quantity.ascent;
   const voltageY=valueY+quantity.descent+gap+fontSize;
   return {label:{x,y:labelY,anchor},value:{x,y:valueY,anchor},voltage:{x,y:voltageY,anchor},current:{x,y:voltageY+fontSize*1.35+gap,anchor}};
@@ -312,7 +335,7 @@ export function componentNotationLayout(component:ComponentInstance,label:string
 
 /** Keep long value labels inside their horizontal component slot while zoomed out. */
 export function componentValueFontSize(components:readonly ComponentInstance[],component:ComponentInstance,value:string,fontSize:number):number {
-  if(component.type==='diode')fontSize*=1/2;
+  fontSize*=componentValueDisplay(component).fontScale;
   if(component.rotation%180!==0)return fontSize;
   const neighbours=components.filter(c=>c.id!==component.id&&c.rotation%180===0&&Math.abs(c.position.y-component.position.y)<fontSize*2&&c.position.x!==component.position.x);
   const slot=neighbours.reduce((width,c)=>Math.min(width,Math.abs(c.position.x-component.position.x)),Infinity);

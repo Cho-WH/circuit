@@ -149,6 +149,8 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ## 연속 값 조절
 
+`app/ComponentControlPanel`은 선택한 가변저항·스위치 조절창의 공통 틀이다. 스위치는 기존 `SwitchStateButton`·SetProperties를 사용하며 가변저항 자동 실행 수명과 비교 축척에 섞지 않는다. `component-library.componentValueDisplay`는 다이오드 종류·스위치 상태의 글자 크기, 표시 이름, 출력 기본 숨김을 한 곳에서 정의해 공통 배치·출력·설정 UI에 제공한다.
+
 component-library.adjustableParameter는 부품의 조절 속성·범위·단위를 제공한다. app/parameters는 재사용 가능한 값 조절 UI·프레임 갱신·자동 왕복과 기존 analyze를 통한 비교 축척 계산을 맡는다. useCircuitSession.execute의 선택적 조작 토큰으로 연속 명령을 한 실행 취소 단위로 묶는다. 새 전원장치의 속성 정의가 추가되면 같은 조절 경로를 사용할 수 있다. potential-3d/primitives는 선·튜브·점 자원을 유지해 계산값 변경 시 좌표와 표시 속성을 갱신한다. 자세한 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다.
 
 
@@ -168,3 +170,5 @@ component-library.adjustableParameter는 부품의 조절 속성·범위·단위
 `rational/conversion`은 단위 없는 10진 토큰 해석과 화면용 binary64 변환을 소유하고, quantity는 이를 재사용해 분수·SI 단위 문법과 표시를 처리한다. domain에는 최소 타입과 저장 정규형 검증만 둔다. `visualization/potential`은 정확 전위와 표시 좌표·축 단위 변환을 함께 관리한다. 2D 범례와 3D 눈금은 같은 공개 변환 함수를 사용하고, 숫자 표시는 정확 전위를 사용한다. 3D 높이 맞춤과 장면 경계는 같은 눈금 계산을 재사용한다.
 
 `domain`은 다이오드 종류와 프로필 ID·특성·경계의 대응을 제공한다. `editor.SetDiodeKind`는 프로필 교체와 이전 편차 제거를 한 번에 처리한다. app의 `DiodeKindField`를 인라인 초안 편집과 상세 즉시 편집에서 공유하며 입력 수치는 quantity로 표시한다. useCircuitSession이 모드·잠금·종류를 바꾸는 이력 복원을 검사한다. [ADR-028](../../decisions/ADR-028-diode-kinds.md).
+
+`simulation/equilibrium`은 엔진 내부의 교육용 평형 선택이다. piecewise가 검증한 후보 아핀 가족과 다이오드 전압 가중치를 받아 정확 KKT와 기존 solution-space의 소거·실현 가능성 검증을 재사용한다. 최소 다이오드 전압 벡터를 만족하는 전체 가족을 보존하고 공개 결과·질의는 이를 공유한다. UI·측정은 보정하지 않는다. 다이오드 결과의 profileRevision 지문에는 diode-equilibrium-1 정책을 포함하여 기존 기록과 구별한다. [ADR-030](../../decisions/ADR-030-diode-equilibrium.md).

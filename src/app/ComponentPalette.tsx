@@ -41,6 +41,6 @@ export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},reset
     onPointerCancel={cancel} onLostPointerCapture={cancel}
     onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')suppress.current=false;}}
     onClick={e=>{if(suppress.current){e.preventDefault();return;}onChoose(type);}}>
-    <span className="tile-symbol"><svg width="62" height="32" viewBox={type === 'changeover-switch' ? '-50 -44 100 88' : '-50 -27 100 54'} aria-hidden="true" stroke="currentColor" fill="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:symbolMarkup(createComponent(type,'palette',{x:0,y:0}))}}/></span><span>{componentDefinitions[type].name}</span>
+    <span className="tile-symbol"><svg width="62" height="36" viewBox="-50 -30 100 60" aria-hidden="true" stroke="currentColor" fill="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:symbolMarkup(createComponent(type,'palette',{x:0,y:0}), {terminalLabels:false})}}/></span><span>{componentDefinitions[type].name}</span>
   </SelectionButton>)}</div>;
 }

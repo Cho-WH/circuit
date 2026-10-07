@@ -7,6 +7,9 @@ import { App } from '../src/app/App';
 import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { examples } from '../src/fixtures';
 import { layoutExample } from '../src/app/examples';
+import { createComponent } from '../src/component-library';
+import { analyze } from '../src/app/analyze';
+import { buildCurrentModel, buildPotentialModel } from '../src/visualization';
 import { saveLocal, loadLocal, loadMeasurementNotebook } from '../src/persistence';
 import type { Potential3DProps } from '../src/potential-3d';
 
@@ -72,6 +75,91 @@ async function probeResistor() {
   await enter('[data-endpoint-id="R1.a"]');
   await enter('[data-endpoint-id="R1.b"]');
 }
+
+it('switches the selected bridge beside voltage probes and preserves their positions in 2D and 3D', async () => {
+  saveLocal(layoutExample(examples.find(e => e.id === 'FIX-14')!.document));
+  await act(async () => root.render(createElement(App)));
+  await click('분석하기'); await click('전압 탐침'); await probeResistor();
+  const before = value();
+  expect(before).toBe('3.6 V');
+  await enter('[data-component-id="S1"] .component');
+  expect(host.querySelector('.parameter-panel:not([hidden])')?.getAttribute('aria-label')).toBe('전환 스위치 조절');
+  await click('측정값 기록'); await click('B로 전환');
+  expect(value()).toBe(before);
+  expect(button('전압 탐침').getAttribute('aria-pressed')).toBe('true');
+  await click('측정값 기록');
+  expect(loadMeasurementNotebook().entries.map(e => e.record.documentSnapshot.components.find(c => c.id === 'S1')!.properties.state)).toEqual(['a', 'b']);
+  await click('3D');
+  const scene = host.querySelector('[data-test-scene]');
+  await click('A로 전환');
+  expect(host.querySelector('[data-test-scene]')).toBe(scene);
+  expect(observed.measurement?.red?.endpointId).toBe('R1.a');
+  expect(observed.measurement?.black?.endpointId).toBe('R1.b');
+  expect(value()).toBe(before);
+  await act(async () => observed.onSelect!(null));
+  expect(host.querySelector('.parameter-panel:not([hidden])')).toBeNull();
+});
+
+it('reuses the same measurement panel for an ordinary switch', async () => {
+  saveLocal(layoutExample(examples.find(e => e.id === 'FIX-05')!.document));
+  await act(async () => root.render(createElement(App)));
+  await click('분석하기'); await click('전류 센서');
+  await enter('[data-component-id="S1"] .component');
+  expect(host.querySelector('.parameter-panel:not([hidden])')?.getAttribute('aria-label')).toBe('스위치 조절');
+  await click('스위치 닫기');
+  expect(button('스위치 열기')).toBeDefined();
+  expect(button('전류 센서').getAttribute('aria-pressed')).toBe('true');
+});
+
+it('measures and records zero diode voltage with an open switch, sharing exact zero current and finite 3D heights', async () => {
+  const doc=layoutExample(examples.find(e=>e.id==='FIX-13')!.document);
+  const sw=createComponent('switch','S1',{x:400,y:160});
+  sw.properties.state='closed';
+  doc.components.push(sw);
+  const wire=doc.wires.find(w=>w.id==='W1')!,originalEnd=wire.end;
+  wire.end={kind:'terminal',id:'S1.a'};
+  doc.wires.push({id:'switch-wire',start:{kind:'terminal',id:'S1.b'},end:originalEnd,waypoints:[]});
+  saveLocal(doc);
+  await act(async()=>root.render(createElement(App)));
+  await click('분석하기');await click('전압 탐침');
+  await enter('[data-endpoint-id="D1.a"]');await enter('[data-endpoint-id="D1.b"]');
+  expect(value()).toBe('700 mV');
+  await enter('[data-component-id="S1"] .component');
+  await click('스위치 열기');
+  expect(value()).toBe('0 V');
+  await click('측정값 기록');
+  const record=loadMeasurementNotebook().entries.at(-1)!.record;
+  expect(record.value).toEqual(q.store(0));
+  expect(record.provenance?.profileRevision).toContain('diode-equilibrium-1|');
+  const snapshot=record.documentSnapshot;
+  expect(snapshot.components.find(c=>c.id==='S1')!.properties.state).toBe('open');
+  const {compilation,result,assessment}=analyze(snapshot);
+  expect(assessment.status).toBe('normal');
+  expect(result.solution).toBe('unique');
+  expect(result.branchCurrents.D1).toEqual(q.ZERO);
+  const current=buildCurrentModel(snapshot,compilation,result);
+  expect(current.samples.every(sample=>sample.value.status==='known'&&q.sign(sample.value.amperes)===0)).toBe(true);
+  const potential=buildPotentialModel(snapshot,compilation.circuit,result);
+  expect(potential.undefinedCount).toBe(0);
+  expect(potential.endpoints['D1.a'].height).toBe(potential.endpoints['D1.b'].height);
+  await click('3D');
+  expect(value()).toBe('0 V');
+  expect(observed.measurement?.label).toBe('0 V');
+  await click('스위치 닫기');
+  expect(value()).toBe('700 mV');
+  expect(observed.measurement?.red?.endpointId).toBe('D1.a');
+});
+
+it.each(['activity', 'damage'] as const)('disables switch panel actions for %s restrictions', async reason => {
+  const doc = layoutExample(examples.find(e => e.id === 'FIX-14')!.document);
+  if (reason === 'activity') doc.activity = { allowedCommands: [], revealSteps: [] };
+  else doc.components.find(c => c.id === 'R1')!.properties.resistanceOhm = q.store(1);
+  saveLocal(doc);
+  await act(async () => root.render(createElement(App)));
+  await click('분석하기');
+  await enter('[data-component-id="S1"] .component');
+  expect(button('B로 전환').disabled).toBe(true);
+});
 
 it('adjusts resistance beside the probes and records exact conditions without restarting 3D', async () => {
   const doc = layoutExample(examples.find(e => e.id === 'FIX-02')!.document);

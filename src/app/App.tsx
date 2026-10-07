@@ -7,6 +7,7 @@ import { Tooltip } from './Tooltip';
 import { ExampleMenu, ExampleChoices } from './ExampleMenu';
 import { CanvasDiagnostics } from './CanvasDiagnostics';
 import { SwitchStateButton } from './SwitchStateButton';
+import { ComponentControlPanel } from './ComponentControlPanel';
 import { saveBlob } from './download';
 import { ComponentNameInput } from './ComponentNameInput';
 import { QuantityDisplaySelect } from './QuantityDisplay';
@@ -53,6 +54,7 @@ import {
 import {
   componentDefinitions,
   componentDefinition,
+  componentValue,
   type ComponentKind,
   componentValueInput,
   createComponent,
@@ -371,6 +373,8 @@ export function App() {
     () => buildCurrentModel(doc, compilation, result),
     [doc, compilation, result],
   );
+  const controlledSwitch = doc.components.find(c => selected.length === 1 && c.id === selected[0] && c.type === 'switch');
+  const controlsDisabled = locked || (!!doc.activity && !doc.activity.allowedCommands.includes('SetProperties'));
   const heldScales = useRef<{ context: string; scales: NonNullable<typeof comparisonBaseline> } | null>(null);
   let comparisonScales = comparisonBaseline;
   if (scaleContext && comparisonBaseline && doc.components.some(c => c.type === 'diode')) {
@@ -979,7 +983,7 @@ export function App() {
   );
   return (
     <div
-      className={`app-shell mode-${mode}${compact ? ' compact-layout' : ''}${compact && controlledComponent ? ' parameter-open' : ''}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
+      className={`app-shell mode-${mode}${compact ? ' compact-layout' : ''}${compact && (controlledComponent || controlledSwitch) ? ' parameter-open' : ''}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
     >
       <Tooltip />
       <header className="topbar">
@@ -1108,28 +1112,20 @@ export function App() {
             adjustableComponents.map((adjustableComponent) => {
               const parameter = adjustableParameter(adjustableComponent)!;
               return (
-                <section
+                <ComponentControlPanel
                   key={`${documentEpoch}:${doc.documentId}:${adjustableComponent.id}:${q.exactText(parameter.min)}:${q.exactText(parameter.max)}`}
-                  className="parameter-panel"
-                  aria-label="가변저항 조절"
+                  component={adjustableComponent}
+                  compact={compact}
+                  onClose={() => setSelection([])}
                   hidden={controlledComponent?.id !== adjustableComponent.id}
                 >
-                  <div className="section-heading">
-                    <h2>가변저항</h2>
-                    {compact && <button aria-label="가변저항 조절 닫기" onClick={() => setSelection([])}><X size={16} /></button>}
-                    <span className="parameter-name">
-                      <Notation symbol text={adjustableComponent.label} />
-                    </span>
-                  </div>
                   <ParameterControl
                     stopEpoch={analysisSession.stopEpoch}
                     inspectIntermediate={doc.components.some(c => c.type === 'diode')}
                     onAdjustingChange={onParameterAdjusting}
                     component={adjustableComponent}
                     parameter={parameter}
-                    disabled={
-                      locked || (!!doc.activity && !doc.activity.allowedCommands.includes('SetProperties'))
-                    }
+                    disabled={controlsDisabled}
                     onChange={(value, group, fraction) => {
                       if (
                         q.equal(value,parameter.value) &&
@@ -1154,9 +1150,15 @@ export function App() {
                       return !applied.ok ? false : automaticEpoch() !== before ? 'stop' : true;
                     }}
                   />
-                </section>
+                </ComponentControlPanel>
               );
             })}
+          {mode === 'analysis' && controlledSwitch && (
+            <ComponentControlPanel component={controlledSwitch} compact={compact} onClose={() => setSelection([])}>
+              <p>{componentValue(controlledSwitch)}</p>
+              <SwitchStateButton component={controlledSwitch} disabled={controlsDisabled} onToggle={() => toggleSwitch(controlledSwitch.id)} />
+            </ComponentControlPanel>
+          )}
         </aside>
         <main className="canvas-column">
           <div className="editor-toolbar" hidden={mode !== 'build'}>

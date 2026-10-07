@@ -143,3 +143,5 @@
 - 빨강 이후 파손 회로의 정상 상태·연쇄 고장은 이번 범위에 포함하지 않는다.
 
 시험용 프로필과 경계값 직전·동일·초과 사례는 [수용 사례](../testing/diode-cases.md), 기본값 확정과 구현 순서는 [구현 계획](../implementation/diode-mvp.md)에 둔다.
+
+2026-10-07 [ADR-030](../../decisions/ADR-030-diode-equilibrium.md): 교과서·부품 모델 모두 기존 회로식의 허용 해에서 다이오드 전압 제곱합을 최소화한 평형을 사용한다. 역전압 경계도 그 결과로 평가한다. 프로필에 유한 누설 특성을 추가하지 않고, 결과의 profileRevision 지문에 diode-equilibrium-1 정책을 포함한다.

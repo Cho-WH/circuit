@@ -42,3 +42,4 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-027](ADR-027-release-channels.md) | 안정판·개발판 배포와 브라우저 저장 분리 | accepted | main/dev 상시 운영 |
 | [ADR-028](ADR-028-diode-kinds.md) | 신호용·대전류용 다이오드 선택 | accepted | 두 프로필과 기존 편집 UI 재사용 |
 | [ADR-029](ADR-029-changeover-switch.md) | 전환 스위치와 브릿지 정류 예제 | accepted | 기존 스위치 변형·세 단자·극성 선택 |
+| [ADR-030](ADR-030-diode-equilibrium.md) | 차단 전류 0 A를 유지하는 다이오드 평형 선택 | accepted | 정확한 평형·측정·시각화 공통 결과 |

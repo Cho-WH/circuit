@@ -8,7 +8,7 @@
     "components": [
       {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":480,"y":360},"rotation":90,"properties":{"voltageV":{"numerator":"5","denominator":"1"}},"terminals":[{"id":"V1.p","role":"positive"},{"id":"V1.n","role":"negative"}]},
       {"id":"V2","type":"dc-voltage-source","label":"V2","position":{"x":320,"y":360},"rotation":270,"properties":{"voltageV":{"numerator":"5","denominator":"1"}},"terminals":[{"id":"V2.p","role":"positive"},{"id":"V2.n","role":"negative"}]},
-      {"id":"S1","type":"switch","label":"S1","position":{"x":400,"y":204},"rotation":90,"properties":{"switchKind":"spdt","state":"a"},"terminals":[{"id":"S1.common","role":"common"},{"id":"S1.a","role":"throw-a"},{"id":"S1.b","role":"throw-b"}]},
+      {"id":"S1","type":"switch","label":"S1","position":{"x":400,"y":272},"rotation":90,"properties":{"switchKind":"spdt","state":"a"},"terminals":[{"id":"S1.common","role":"common"},{"id":"S1.a","role":"throw-a"},{"id":"S1.b","role":"throw-b"}]},
       {"id":"D1","type":"diode","label":"D1","position":{"x":640,"y":260},"rotation":270,"properties":{},"operatingProfile":{"id":"edu-diode-signal","revision":1},"terminals":[{"id":"D1.a","role":"anode"},{"id":"D1.b","role":"cathode"}]},
       {"id":"D2","type":"diode","label":"D2","position":{"x":960,"y":260},"rotation":90,"properties":{},"operatingProfile":{"id":"edu-diode-signal","revision":1},"terminals":[{"id":"D2.a","role":"anode"},{"id":"D2.b","role":"cathode"}]},
       {"id":"D3","type":"diode","label":"D3","position":{"x":640,"y":460},"rotation":90,"properties":{},"operatingProfile":{"id":"edu-diode-signal","revision":1},"terminals":[{"id":"D3.a","role":"anode"},{"id":"D3.b","role":"cathode"}]},
@@ -23,11 +23,11 @@
       {"id":"JR","position":{"x":960,"y":360}}
     ],
     "wires": [
-      {"id":"W1","start":{"kind":"terminal","id":"V1.p"},"end":{"kind":"terminal","id":"S1.a"},"waypoints":[{"x":480,"y":248}]},
-      {"id":"W2","start":{"kind":"terminal","id":"V2.n"},"end":{"kind":"terminal","id":"S1.b"},"waypoints":[{"x":320,"y":248}]},
+      {"id":"W1","start":{"kind":"terminal","id":"V1.p"},"end":{"kind":"terminal","id":"S1.a"},"waypoints":[{"x":480,"y":296}]},
+      {"id":"W2","start":{"kind":"terminal","id":"V2.n"},"end":{"kind":"terminal","id":"S1.b"},"waypoints":[{"x":320,"y":296}]},
       {"id":"W3","start":{"kind":"terminal","id":"V1.n"},"end":{"kind":"junction","id":"J0"},"waypoints":[]},
       {"id":"W4","start":{"kind":"terminal","id":"V2.p"},"end":{"kind":"junction","id":"J0"},"waypoints":[{"x":320,"y":560}]},
-      {"id":"W5","start":{"kind":"terminal","id":"S1.common"},"end":{"kind":"junction","id":"JT"},"waypoints":[]},
+      {"id":"W5","start":{"kind":"terminal","id":"S1.common"},"end":{"kind":"junction","id":"JT"},"waypoints":[{"x":400,"y":160}]},
       {"id":"W6","start":{"kind":"junction","id":"J0"},"end":{"kind":"junction","id":"JB"},"waypoints":[]},
       {"id":"W7","start":{"kind":"junction","id":"JT"},"end":{"kind":"terminal","id":"D1.b"},"waypoints":[{"x":640,"y":160}]},
       {"id":"W8","start":{"kind":"junction","id":"JT"},"end":{"kind":"terminal","id":"D2.a"},"waypoints":[{"x":960,"y":160}]},
