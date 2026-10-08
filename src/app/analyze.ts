@@ -1,4 +1,5 @@
 import type { CircuitDocument } from '../domain';
+import { adjustableRangeDefinition } from '../domain';
 import { compileCircuit } from '../connectivity';
 import { analyzeOperatingCircuit, failedResult, type OperatingAssessment } from '../simulation';
 import { evaluateDiagnostics } from '../diagnostics';
@@ -11,7 +12,7 @@ export function analyze(document: CircuitDocument, componentModel = false) {
         referencePolicy: 'independent',
         ...(componentModel ? { physicalModel: 'component' as const } : {}),
         continuousAdjustment: document.components.some(c => c.type === 'diode') &&
-          document.components.some(c => c.type === 'resistive-load'),
+          document.components.some(c => adjustableRangeDefinition(c)),
       });
   const { result, assessment } = evaluated;
   const diagnostics = evaluateDiagnostics({ document, compilation, result });

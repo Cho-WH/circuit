@@ -31,7 +31,7 @@ describe('component display names independent of internal IDs', () => {
   it('uses registry prefixes for every kind, including shared switch numbering', () => {
     const allocate = createComponentLabelAllocator([]);
     expect(Object.values(componentDefinitions).map(allocate)).toEqual([
-      'V_1', 'R_1', 'S_1', 'S_2', 'A_1', 'M_1', 'VR_1', 'D_1',
+      'V_1', 'V_2', 'R_1', 'VR_1', 'S_1', 'S_2', 'A_1', 'M_1', 'D_1',
     ]);
     // A future definition needs only a prefix, with no new naming branch.
     expect(createComponentLabelAllocator(['C1'])({ short: 'C' })).toBe('C_2');

@@ -1,6 +1,6 @@
 import type { ComponentProperties } from '../domain';
 import * as q from '../rational';
-import { isStoredScalar, defaultOperatingProfileRef, diodeProfileRef, diodeKindFor, isChangeoverSwitch, switchTerminals } from '../domain';
+import { isStoredScalar, defaultOperatingProfileRef, diodeProfileRef, diodeKindFor, isChangeoverSwitch, switchTerminals, isAdjustableVoltageSource } from '../domain';
 import { quantityInput, storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
 export { parameterValueAt, adjustableParameter, type AdjustableParameter } from './parameters';
@@ -10,19 +10,20 @@ export { compactWirePoints } from '../wire-geometry';
 import { notationTokens, notationDisplayText } from '../notation';
 import type { Annotation, CircuitDocument, ComponentInstance, ComponentType, EndpointRef, Point, Wire, SimulationResult } from '../domain';
 
-export type ComponentKind = ComponentType | 'changeover-switch';
-export const componentDefinitions: Record<ComponentKind, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | ''; property?: string }> = {
-  'dc-voltage-source': { name: '직류 전원', short: 'V', unit: 'V', property: 'voltageV' },
+export type ComponentKind = ComponentType | 'changeover-switch' | 'adjustable-voltage-source';
+export const componentDefinitions: Record<ComponentKind, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | ''; property?: string; hint?: 'analysis-control' }> = {
+  'dc-voltage-source': { name: '전지', short: 'V', unit: 'V', property: 'voltageV' },
+  'adjustable-voltage-source': { name: '직류 전원', short: 'V', unit: 'V', property: 'voltageV', hint: 'analysis-control' },
   resistor: { name: '저항', short: 'R', unit: 'Ω', property: 'resistanceOhm' },
+  'resistive-load': { name: '가변저항', short: 'VR', unit: 'Ω', property: 'resistanceOhm', hint: 'analysis-control' },
   switch: { name: '스위치', short: 'S', unit: '' },
   'changeover-switch': { name: '전환 스위치', short: 'S', unit: '' },
   ammeter: { name: '전류계', short: 'A', unit: 'A' },
   voltmeter: { name: '전압계', short: 'M', unit: 'V' },
-  'resistive-load': { name: '가변저항', short: 'VR', unit: 'Ω', property: 'resistanceOhm' },
   diode: { name: '다이오드', short: 'D', unit: 'V' },
 };
 export function componentDefinition(component: ComponentInstance) {
-  return componentDefinitions[isChangeoverSwitch(component) ? 'changeover-switch' : component.type];
+  return componentDefinitions[isChangeoverSwitch(component) ? 'changeover-switch' : isAdjustableVoltageSource(component) ? 'adjustable-voltage-source' : component.type];
 }
 /** Shared policy for numeric values and secondary kind/state labels. */
 export function componentValueDisplay(component: ComponentInstance) {
@@ -40,12 +41,12 @@ export function createComponent(kind: ComponentKind, id: string, position: Point
     properties: { switchKind: 'spdt', state: 'a' },
     terminals: [{ id: `${id}.common`, role: 'common' }, { id: `${id}.a`, role: 'throw-a' }, { id: `${id}.b`, role: 'throw-b' }],
   };
-  const type = kind;
+  const type = kind === 'adjustable-voltage-source' ? 'dc-voltage-source' : kind;
   const source = type === 'dc-voltage-source';
   const operatingProfile = type === 'diode' ? diodeProfileRef('signal') : defaultOperatingProfileRef(type);
   return {
     id, type, label, position, rotation: source ? 90 : 0,
-    properties: source ? { voltageV: q.store(9) } : type === 'resistive-load' ? { resistanceOhm: q.store(10), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(100) } : type === 'resistor' ? { resistanceOhm: q.store(10) } : type === 'switch' ? { state: 'open' } : {},
+    properties: source ? { voltageV: q.store(9), ...(kind === 'adjustable-voltage-source' ? { sourceKind: 'adjustable', voltageMinV: q.store(0), voltageMaxV: q.store(12) } : {}) } : type === 'resistive-load' ? { resistanceOhm: q.store(10), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(100) } : type === 'resistor' ? { resistanceOhm: q.store(10) } : type === 'switch' ? { state: 'open' } : {},
     ...(operatingProfile ? { operatingProfile } : {}),
     terminals: [{ id: `${id}.a`, role: source ? 'positive' : type === 'diode' ? 'anode' : 'a' }, { id: `${id}.b`, role: source ? 'negative' : type === 'diode' ? 'cathode' : 'b' }],
   };
@@ -211,7 +212,12 @@ export function componentValue(component: ComponentInstance, options?: QuantityF
   return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(isStoredScalar(component.properties[def.property]) ? component.properties[def.property] as q.StoredScalar : undefined, def.unit, options) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
-export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean; showMeterPolarity?: boolean } = {}): string {
+export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean; showSymbolPolarity?: boolean } = {}): string {
+  if (isAdjustableVoltageSource(component)) {
+    const lead = options.disconnectedSource ? 32 : 44;
+    const polarity = [-10, 10].map((x, i) => `<g transform="rotate(${-component.rotation} ${x} 0)"><path d="M${x-4} 0h8${i === 0 ? ` M${x} -4v8` : ''}"/></g>`).join('');
+    return `<g data-symbol="dc-supply"><path d="M-${lead} 0H-23 M23 0H${lead}"/><circle r="23"/>${polarity}</g>`;
+  }
   if (isChangeoverSwitch(component)) {
     const common = changeoverTerminalPosition(component, 'common'), a = changeoverTerminalPosition(component, 'throw-a'), b = changeoverTerminalPosition(component, 'throw-b');
     const selected = component.properties.state === 'b' ? b : a;
@@ -226,13 +232,13 @@ export function symbolMarkup(component: ComponentInstance, options: { disconnect
     const resistor='<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
     return resistor+(component.type==='resistive-load'?'<path data-symbol="adjustment-arrow" d="M-18 20L18 -20 M8 -18L18 -20 17 -10" fill="none"/>':'');
   }
-  if (component.type === 'dc-voltage-source') return `<path d="M-${options.disconnectedSource?32:44} 0H-7 M7 0H${options.disconnectedSource?32:44} M-7 -22V22"/><path d="M7 -12V12" stroke-width="5" stroke-linecap="butt"/><text x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>`;
+  if (component.type === 'dc-voltage-source') return `<path d="M-${options.disconnectedSource?32:44} 0H-7 M7 0H${options.disconnectedSource?32:44} M-7 -22V22"/><path d="M7 -12V12" stroke-width="5" stroke-linecap="butt"/>${options.showSymbolPolarity === false ? '' : '<text data-symbol="battery-polarity" x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>'}`;
   if (component.type === 'switch') {
     const a = component.terminals[0]?.localPosition ?? {x:-24,y:0}, b = component.terminals[1]?.localPosition ?? {x:24,y:0};
     return `<path d="M${a.x} ${a.y}L${b.x} ${b.y+(component.properties.state === 'closed' ? 0 : -20)}"/><circle cx="${a.x}" cy="${a.y}" r="3"/><circle cx="${b.x}" cy="${b.y}" r="3"/>`;
   }
   // The first/second terminal is the same signed reference used by meterReading and the solver.
-  const polarity = options.showMeterPolarity === false ? '' : [-34, 34].map((x, index) =>
+  const polarity = options.showSymbolPolarity === false ? '' : [-34, 34].map((x, index) =>
     `<text x="${x}" y="-10" transform="rotate(${-component.rotation} ${x} -10)">${index === 0 ? '+' : '−'}</text>`,
   ).join('');
   return `<path d="M-44 0H-23 M23 0H44"/><circle r="23"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>${polarity ? `<g data-symbol="meter-polarity" stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central">${polarity}</g>` : ''}`;

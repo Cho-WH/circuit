@@ -6,7 +6,7 @@ import { DiodeKindField } from './DiodeKindField';
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentInstance, Point } from '../domain';
 import {
-  componentDefinitions,
+  componentDefinition,
   componentValueInput,
   componentNotationLayout,
   componentValue,
@@ -15,7 +15,7 @@ import {
 } from '../component-library';
 import { parseComponentValue } from './component-value';
 import { Notation } from './Notation';
-import { ParameterRangeInputs, parseParameterRange, type ParameterRange } from './parameters';
+import { ParameterRangeInputs, parseParameterRange, parameterRangeError, type ParameterRange } from './parameters';
 
 export interface ComponentEdit {
   label: string;
@@ -49,7 +49,7 @@ export function InlineComponentEditor({
   onToggleSwitch,
   onClose: closeEditor,
 }: Props) {
-  const editingDefinition = componentDefinitions[editingComponent.type];
+  const editingDefinition = componentDefinition(editingComponent);
   const parameter = adjustableParameter(editingComponent);
   const editingRange = editParameterRange && parameter;
   const [editing, setEditing] = useState(() => ({
@@ -110,7 +110,7 @@ export function InlineComponentEditor({
           ? parseParameterRange(editing.range, editingRange)
           : undefined;
         if (editingRange && !editedRange) {
-          setEditing({ ...editing, error: '0 < 최솟값 < 최댓값으로 입력하세요.' });
+          setEditing({ ...editing, error: parameterRangeError(editingRange) });
           return;
         }
         const parsed = editingDefinition.property

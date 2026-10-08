@@ -7,7 +7,8 @@ import { App } from '../src/app/App';
 import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { compactLayoutQuery } from '../src/app/useCompactLayout';
 import { FileMenu } from '../src/app/FileMenu';
-import { loadLocal, saveLocal } from '../src/persistence';
+import { loadLocal, saveLocal, originalBackups } from '../src/persistence';
+import { channelStorageKey } from '../src/release';
 import { layoutExample } from '../src/app/examples';
 import { examples } from '../src/fixtures';
 import { createHistory, executeCommand, undo } from '../src/editor';
@@ -21,9 +22,48 @@ beforeEach(() => {
   localStorage.setItem(QUICK_START_SEEN_KEY, 'true');
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
-afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const button = (label: string) => [...document.body.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === label || b.textContent?.trim() === label)!;
 const click = async (label: string) => { await act(async () => button(label).click()); };
+
+describe('unreadable circuit recovery', () => {
+  it('offers three choices, then only new/backup after failure, and downloads the unchanged original', async () => {
+    vi.useFakeTimers();
+    const key = channelStorageKey('edu-circuit:auto:v1'), raw = '  {broken original\n';
+    localStorage.setItem(key, raw);
+    const download = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:original');
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await act(async () => root.render(createElement(App)));
+    const labels = () => [...host.querySelectorAll('[role=dialog] button')].map(element => element.textContent);
+    expect(labels()).toEqual(['새 회로로 시작', '복원', '백업']);
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(localStorage.getItem(key)).toBe(raw);
+    await click('복원');
+    expect(labels()).toEqual(['새 회로로 시작', '백업']);
+    expect(document.activeElement).toBe(button('새 회로로 시작'));
+    expect(localStorage.getItem(key)).toBe(raw);
+    await click('백업');
+    expect(await (download.mock.calls[0][0] as Blob).text()).toBe(raw);
+    expect(host.querySelector('[role=dialog]')).not.toBeNull();
+    expect(localStorage.getItem(key)).toBe(raw);
+    await click('새 회로로 시작');
+    expect(host.querySelector('[role=dialog]')).toBeNull();
+    expect(originalBackups()).toEqual([raw]);
+    expect(loadLocal()).toMatchObject({ ok: true, document: { components: [], wires: [] } });
+    await click('파일');
+    expect(button('원본 백업 저장')).toBeDefined();
+  });
+  it('migrates v5 through the dialog before committing a current document', async () => {
+    const current = layoutExample(examples[1].document);
+    const raw = JSON.stringify({ ...current, version: 5 });
+    localStorage.setItem(channelStorageKey('edu-circuit:auto:v1'), raw);
+    await act(async () => root.render(createElement(App)));
+    await click('복원');
+    expect(host.querySelector('[role=dialog]')).toBeNull();
+    expect(loadLocal()).toEqual({ ok: true, document: current });
+    expect(originalBackups()).toEqual([raw]);
+  });
+});
 
 describe('compact workspace', () => {
   beforeEach(() => {
@@ -72,9 +112,9 @@ describe('compact workspace', () => {
     saveLocal(layoutExample(examples[1].document));
     await act(async () => root.render(createElement(App)));
     await click('분석하기'); await click('측정'); await click('전압'); await click('등가저항');
-    expect(button('전지 분리하고 측정')).toBeDefined();
+    expect(button('전원 분리하고 측정')).toBeDefined();
     expect(host.querySelector('.measurement-surface')).toBeNull();
-    await click('전지 분리하고 측정');
+    await click('전원 분리하고 측정');
     expect(host.querySelector('.measurement-surface')).not.toBeNull();
     await click('보기 도구로 돌아가기');
     expect(button('전위').getAttribute('aria-pressed')).toBe('true');
@@ -90,6 +130,13 @@ describe('compact workspace', () => {
     expect(host.querySelector('.library-panel .component-grid')).toBeNull();
     await click('부품 추가');
     expect(document.querySelector('.compact-parts-panel .component-tile')?.getAttribute('draggable')).toBe('false');
+    await click('직류 전원 조절 안내');
+    expect(document.querySelector('.compact-parts-panel')).toBeNull();
+    expect(host.querySelector('.control-hint-dialog')).not.toBeNull();
+    await click('확인');
+    expect(host.querySelector('.control-hint-dialog')).toBeNull();
+    expect(document.activeElement).toBe(button('부품 추가'));
+    await click('부품 추가');
     await click('저항');
     expect(document.querySelector('.compact-parts-panel')).toBeNull();
     await click('분석하기');

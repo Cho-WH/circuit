@@ -1,5 +1,5 @@
 import * as q from '../rational';
-import type { ComponentInstance } from '../domain';
+import { adjustableRangeDefinition, type ComponentInstance } from '../domain';
 
 /** The adjustable property belongs to the component; gestures and solving belong to the app. */
 export interface AdjustableParameter {
@@ -11,15 +11,24 @@ export interface AdjustableParameter {
   min: q.StoredScalar;
   max: q.StoredScalar;
   value: q.StoredScalar;
+  allowZero: boolean;
 }
 
 export function adjustableParameter(component: ComponentInstance): AdjustableParameter | null {
-  if (component.type !== 'resistive-load') return null;
-  const value = q.store(component.properties.resistanceOhm as q.Scalar);
+  const definition = adjustableRangeDefinition(component);
+  if (!definition) return null;
+  const value = q.store(component.properties[definition.property] as q.Scalar);
+  if (definition.property === 'voltageV')
+    return {
+      ...definition,
+      label: '전압',
+      unit: 'V',
+      value,
+      min: q.store(component.properties[definition.minimumProperty] as q.Scalar),
+      max: q.store(component.properties[definition.maximumProperty] as q.Scalar),
+    };
   return {
-    property: 'resistanceOhm',
-    minimumProperty: 'resistanceMinOhm',
-    maximumProperty: 'resistanceMaxOhm',
+    ...definition,
     label: '저항값',
     unit: 'Ω',
     value,

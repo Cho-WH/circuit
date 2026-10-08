@@ -4,6 +4,7 @@ export {
   ParameterRangeFields,
   ParameterRangeInputs,
   parseParameterRange,
+  parameterRangeError,
   parameterRangeProperties,
   type ParameterRange,
   type ParameterRangeDraft,

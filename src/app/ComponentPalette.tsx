@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { CircleHelp } from 'lucide-react';
 import type { ComponentKind } from '../component-library';
 import { componentDefinitions, createComponent, symbolMarkup } from '../component-library';
 import { SelectionButton } from './SelectionButton';
+import './control-hint.css';
 
 export interface PaletteDrag { type:ComponentKind; x:number; y:number; phase:'start'|'move'|'drop'|'cancel' }
-export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},resetKey,tapOnly=false}:{placement:ComponentKind|null;onChoose:(type:ComponentKind)=>void;onClear:()=>void;onDrag?:(event:PaletteDrag)=>void;resetKey:unknown;tapOnly?:boolean}) {
+export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},resetKey,tapOnly=false,onShowHint}:{placement:ComponentKind|null;onChoose:(type:ComponentKind)=>void;onClear:()=>void;onDrag?:(event:PaletteDrag)=>void;resetKey:unknown;tapOnly?:boolean;onShowHint?:()=>void}) {
   const session=useRef<{id:number;type:ComponentKind;x:number;y:number;lastX:number;lastY:number;held:boolean;scrolled:boolean;button:HTMLButtonElement;panel:HTMLElement|null;timer:ReturnType<typeof setTimeout>}|null>(null);
   const [held,setHeld]=useState<ComponentKind|null>(null);
   const suppress=useRef(false),lastInput=useRef('mouse'),latest=useRef(onDrag);latest.current=onDrag;
@@ -19,7 +21,7 @@ export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},reset
     window.addEventListener('pointerdown',extra,true);window.addEventListener('pointerup',release,true);window.addEventListener('pointercancel',release,true);window.addEventListener('blur',blur);window.addEventListener('resize',cancel);window.addEventListener('keydown',escape);
     return()=>{cancel();window.removeEventListener('pointerdown',extra,true);window.removeEventListener('pointerup',release,true);window.removeEventListener('pointercancel',release,true);window.removeEventListener('blur',blur);window.removeEventListener('resize',cancel);window.removeEventListener('keydown',escape);};
   },[]);
-  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentKind[]).map(type=><SelectionButton key={type} className={`component-tile${held===type?' is-held':''}`} selected={placement===type} draggable={!tapOnly}
+  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentKind[]).map(type=><div key={type} className={`component-palette-item${componentDefinitions[type].hint && onShowHint ? ' has-control-hint' : ''}`}><SelectionButton className={`component-tile${held===type?' is-held':''}`} selected={placement===type} draggable={!tapOnly}
     onDragStart={e=>{if(lastInput.current==='touch'){e.preventDefault();return;}e.dataTransfer.setData('component',type);onChoose(type);}} onDragEnd={onClear}
     onContextMenu={e=>{if(lastInput.current==='touch')e.preventDefault();}}
     onPointerDown={e=>{
@@ -41,6 +43,8 @@ export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},reset
     onPointerCancel={cancel} onLostPointerCapture={cancel}
     onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')suppress.current=false;}}
     onClick={e=>{if(suppress.current){e.preventDefault();return;}onChoose(type);}}>
-    <span className="tile-symbol"><svg width="62" height="36" viewBox="-50 -30 100 60" aria-hidden="true" stroke="currentColor" fill="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:symbolMarkup(createComponent(type,'palette',{x:0,y:0}), {terminalLabels:false})}}/></span><span>{componentDefinitions[type].name}</span>
-  </SelectionButton>)}</div>;
+    <span className="tile-symbol"><svg width="62" height="36" viewBox="-50 -30 100 60" aria-hidden="true" stroke="currentColor" fill="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:symbolMarkup({...createComponent(type,'palette',{x:0,y:0}),rotation:0}, {terminalLabels:false})}}/></span><span>{componentDefinitions[type].name}</span>
+  </SelectionButton>{componentDefinitions[type].hint && onShowHint && <button type="button" className="component-hint-button"
+    aria-label={`${componentDefinitions[type].name} 조절 안내`} aria-haspopup="dialog"
+    onClick={event=>{event.currentTarget.focus();onShowHint();}}><span className="component-lift"><CircleHelp className="component-ink" size={13} aria-hidden="true" /></span></button>}</div>)}</div>;
 }

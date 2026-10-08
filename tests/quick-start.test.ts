@@ -152,7 +152,7 @@ it.each(['도움말 닫기', '직접 해보기', 'backdrop'])(
   },
 );
 
-it('blocks editing shortcuts behind the guide while a component is selected', async () => {
+it.each(['사용 도움말', '직류 전원 조절 안내', '가변저항 조절 안내'])('blocks editing shortcuts behind %s while a component is selected', async (triggerLabel) => {
   await act(async () => root.render(createElement(App)));
   await act(async () =>
     host
@@ -161,10 +161,18 @@ it('blocks editing shortcuts behind the guide while a component is selected', as
   );
   const canvas = host.querySelector('.circuit-canvas')!;
   const before = canvas.outerHTML;
-  await act(async () => button('사용 도움말').click());
+  const trigger = button(triggerLabel);
+  await act(async () => trigger.click());
+  const closeLabel = triggerLabel === '사용 도움말' ? '도움말 닫기' : '부품 조절 안내 닫기';
+  if (triggerLabel !== '사용 도움말') {
+    expect(host.querySelector('.control-hint-dialog')?.textContent).toContain('직류 전원·가변저항·스위치');
+    expect(host.querySelector('.control-hint-dialog svg[role="img"]')).not.toBeNull();
+    expect(host.querySelector('.component-tile[aria-pressed="true"]')).toBeNull();
+    expect(trigger.closest('.component-tile')).toBeNull();
+  }
   for (const key of ['Delete', 'r', 'w', 'ArrowRight', 'z']) {
     await act(async () =>
-      button('도움말 닫기').dispatchEvent(
+      button(closeLabel).dispatchEvent(
         new KeyboardEvent('keydown', {
           key,
           ctrlKey: key === 'z',

@@ -3,6 +3,8 @@ export { validApproximation, type Approximation, isStoredScalar, physicalPropert
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../schemas/circuit-document.schema.json';
 import { isChangeoverSwitch, validSwitchState } from './switches';
+import { isAdjustableVoltageSource, adjustableRangeDefinition } from './adjustable';
+export { isAdjustableVoltageSource, adjustableRangeDefinition } from './adjustable';
 export { isChangeoverSwitch, validSwitchState, switchTerminals, switchClosed, nextSwitchState } from './switches';
 import { supportsOperatingProfile, type OperatingProfileRef, type OperatingProfile, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
 export { defaultOperatingProfileRef, operatingProfileFor, diodeProfileRef, diodeKindFor, isDiodeKind, type DiodeKind, type OperatingBoundary, type OperatingProfile, type OperatingProfileRef, type OperatingQuantity, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
@@ -89,6 +91,10 @@ export function validateDocument(input: unknown): DocumentValidation {
   const diagnostics: Diagnostic[] = [];
   const endpoints = new Map<string, EndpointRef['kind']>();
   for (const c of doc.components) {
+    if (c.properties.sourceKind !== undefined && !isAdjustableVoltageSource(c))
+      diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'sourceKind' }));
+    if (!isAdjustableVoltageSource(c) && (c.properties.voltageMinV !== undefined || c.properties.voltageMaxV !== undefined))
+      diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'voltageRange' }));
     if (c.properties.switchKind !== undefined && (c.type !== 'switch' || c.properties.switchKind !== 'spdt'))
       diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'switchKind' }));
     if (isChangeoverSwitch(c)) {
@@ -110,12 +116,14 @@ export function validateDocument(input: unknown): DocumentValidation {
       if ((key === 'sourceResistanceOhm' ? c.type !== 'dc-voltage-source' : c.type !== 'diode') || !isStoredScalar(value) || value.approximation || (key === 'diodeThresholdV' ? BigInt(value.numerator) < 0n : BigInt(value.numerator) <= 0n))
         diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: key }));
     }
-    const { resistanceMinOhm: min, resistanceMaxOhm: max, resistanceOhm: value } = c.properties;
-    if (c.type !== 'resistive-load' || (min === undefined && max === undefined)) continue;
+    const range = adjustableRangeDefinition(c);
+    if (!range) continue;
+    const min = c.properties[range.minimumProperty], max = c.properties[range.maximumProperty], value = c.properties[range.property];
+    if (!range.allowZero && min === undefined && max === undefined) continue;
     const compare = (a: import('./scalar').StoredScalar, b: import('./scalar').StoredScalar) => BigInt(a.numerator)*BigInt(b.denominator)-BigInt(b.numerator)*BigInt(a.denominator);
     if (!isStoredScalar(min) || !isStoredScalar(max) || !isStoredScalar(value) ||
-        BigInt(min.numerator) <= 0n || compare(max,min) <= 0n || compare(value,min) < 0n || compare(value,max) > 0n)
-      diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'resistanceRange' }));
+        (range.allowZero ? BigInt(min.numerator) < 0n : BigInt(min.numerator) <= 0n) || compare(max,min) <= 0n || compare(value,min) < 0n || compare(value,max) > 0n)
+      diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: range.allowZero ? 'voltageRange' : 'resistanceRange' }));
   }
   for (const item of [...doc.components, ...doc.components.flatMap(c => c.terminals), ...doc.wires, ...doc.junctions, ...doc.annotations]) {
     if (ids.has(item.id)) diagnostics.push(diagnostic('DUPLICATE_ID', [item.id]));

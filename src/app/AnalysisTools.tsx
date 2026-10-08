@@ -66,9 +66,9 @@ export function AnalysisTools({
       </div>
       {needsIsolation && !stopped && (
         <div className="isolation-prompt" role="status">
-          <p>등가저항은 전지를 분리하고 측정해요.</p>
+          <p>등가저항은 전원을 분리하고 측정해요.</p>
           <button className="primary" onClick={onIsolate}>
-            전지 분리하고 측정
+            전원 분리하고 측정
           </button>
         </div>
       )}

@@ -11,6 +11,7 @@ import {
   type OperatingCause,
 } from '../../simulation';
 import * as q from '../../rational';
+import { isAdjustableVoltageSource } from '../../domain';
 import { formatQuantity, quantityFormatFor } from '../../quantity';
 import type { HelpQuestion } from './topics';
 
@@ -158,7 +159,7 @@ export function resolveOperatingHelp(input: OperatingHelpInput): OperatingHelpIt
     if (compact.some((x) => x.topic === 'diode-reverse'))
       compact.push({ topic: 'diode-reverse-current' });
     const automatic = focused.has(e.id) || causes.length > 0 || related.has(e.id);
-    const visibleQuestions = compact.slice(0, 3);
+    const visibleQuestions = compact.slice(0, 3).map(question => isAdjustableVoltageSource(component) ? { ...question, adjustableSource: true } : question);
     items.push({
       componentId: e.id,
       label: component.label,

@@ -77,7 +77,7 @@ describe('resistance mode source disconnection',()=>{
     const host=globalThis.document.createElement('div');globalThis.document.body.append(host);const root=createRoot(host);
     try {
       act(()=>root.render(createElement(MeasurementPanel,props(example('FIX-02'),'R1.a','R1.b'))));
-      expect(host.textContent).not.toContain('전지 분리 상태');
+      expect(host.textContent).not.toContain('전원 분리 상태');
       expect(host.querySelector('[aria-label="측정 위치 지우기"]')).toBeNull();
       act(()=>host.querySelector<HTMLButtonElement>('[aria-label="측정값 기록"]')!.click());
       expect(host.querySelector('tbody')?.textContent).toContain('모든 전원 분리');

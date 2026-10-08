@@ -82,6 +82,26 @@ beforeEach(()=>{
 });
 afterEach(()=>{act(()=>root.unmount());host.remove();vi.useRealTimers();vi.unstubAllGlobals();localStorage.clear();});
 
+it('keeps the diode model during voltage adjustment and stops further commands at overload', () => {
+  const doc=circuit(10);
+  doc.components[0].properties={voltageV:q.store(0),sourceKind:'adjustable',voltageMinV:q.store(0),voltageMaxV:q.store(12)};
+  saveLocal(doc);render('build');
+  act(()=>session.changeWorkspace('analysis'));render('analysis');
+  expect(session.analysisSession.componentModel).toBe(true);
+  expect(session.analysisSession.phase).toBe('normal');
+  const voltage=(value:number)=>session.execute({type:'SetProperties',id:'V1',properties:{voltageV:q.store(value)}});
+  act(()=>expect(voltage(1).ok).toBe(true));
+  expect(session.analysisSession.componentModel).toBe(true);
+  act(()=>{
+    expect(voltage(5).ok).toBe(true);
+    expect(voltage(6).ok).toBe(false);
+    session.undo();
+  });
+  expect(session.analysisSession.phase).toBe('overload');
+  expect(session.history.present.components[0].properties.voltageV).toEqual(q.store(5));
+  expect(session.canMeasure()).toBe(true);
+});
+
 it('locks damage and the last value synchronously, including queued edits and undo, and restores only the session',()=>{
   saveLocal(circuit(1000,true));render('build');
   act(()=>session.changeWorkspace('analysis'));render('analysis');

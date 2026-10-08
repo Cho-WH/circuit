@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type RefObject } from 'react';
-import { ArrowRight, Box, FileImage, MessageCircle, Save, X } from 'lucide-react';
+import { ArrowRight, Box, FileImage, MessageCircle, Printer, Save, Zap } from 'lucide-react';
 import { createComponent, symbolMarkup } from '../component-library';
 import type { ComponentType } from '../domain';
 import { potentialColor } from '../visualization';
 import { ProbeGlyph } from './measurement-tools';
 import { useDialogFocus } from './useDialogFocus';
-import './quick-start.css';
+import { GuideDialog } from './GuideDialog';
 
 // Use the same symbols as the editor and exported circuit diagrams.
 function Symbol({
@@ -188,7 +188,12 @@ function WorksheetPreview() {
   );
 }
 
-export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
+export function QuickStartDialog({
+  onClose,
+  compact,
+  firstVisit,
+  helpButton,
+}: {
   onClose: () => void;
   compact: boolean;
   firstVisit: boolean;
@@ -215,9 +220,15 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
     }
     const from = surface.getBoundingClientRect();
     const to = target?.getBoundingClientRect();
-    const dock = firstVisit && to && to.width > 0 && to.height > 0 && from.width > 0 && from.height > 0;
+    const dock =
+      firstVisit && to && to.width > 0 && to.height > 0 && from.width > 0 && from.height > 0;
     const animations: Animation[] = [];
-    const animate = (element: Element, frames: Keyframe[], duration: number, easing = 'ease-out') => {
+    const animate = (
+      element: Element,
+      frames: Keyframe[],
+      duration: number,
+      easing = 'ease-out',
+    ) => {
       const animation = element.animate(frames, { duration, easing, fill: 'forwards' });
       // Auxiliary fades may still be running if the dialog unmounts early.
       void animation.finished.catch(() => {});
@@ -239,7 +250,7 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
       const frames = Array.from({ length: 61 }, (_, index) => {
         const t = index / 60;
         const travel = t * t * (3 - 2 * t);
-        const arrival = Math.max(0, (t - .82) / .18);
+        const arrival = Math.max(0, (t - 0.82) / 0.18);
         const diameter = (56 - 20 * t) * (1 - arrival * arrival * (3 - 2 * arrival));
         const width = diameter + (from.width - diameter) * (1 - t) ** 3;
         const height = diameter + (from.height - diameter) * (1 - t) ** 3;
@@ -247,25 +258,39 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
           offset: t,
           transform: `translate(${dx * (2 * travel - travel * travel)}px, ${dy * travel * travel}px) scale(${width / from.width}, ${height / from.height})`,
           borderRadius: t === 0 ? radius : `${Math.min(50, 3 + t * 94)}%`,
-          opacity: Math.min(1, (1 - t) / .04) * (startOpacity + (1 - startOpacity) * Math.min(1, t / .15)),
+          opacity:
+            Math.min(1, (1 - t) / 0.04) *
+            (startOpacity + (1 - startOpacity) * Math.min(1, t / 0.15)),
         };
       });
       exit = animate(surface, frames, 1000, 'linear');
     } else {
       exit = animate(surface, [{ opacity: 1 }, { opacity: 0 }], 120);
     }
-    const fadeScrim = (duration: number) => scrim.current
-      ? animate(scrim.current, [{ opacity: 1 }, { opacity: 0 }], duration, 'cubic-bezier(.2, .65, .3, 1)').finished
-      : Promise.resolve();
-    const finish = () => { if (active) onClose(); };
+    const fadeScrim = (duration: number) =>
+      scrim.current
+        ? animate(
+            scrim.current,
+            [{ opacity: 1 }, { opacity: 0 }],
+            duration,
+            'cubic-bezier(.2, .65, .3, 1)',
+          ).finished
+        : Promise.resolve();
+    const finish = () => {
+      if (active) onClose();
+    };
     const arrive = () => {
       if (!active) return;
       if (dock && target?.isConnected) {
-        animate(target, [
-          { transform: 'scale(1)' },
-          { transform: 'scale(1.16)', offset: .35 },
-          { transform: 'scale(1)' },
-        ], 360);
+        animate(
+          target,
+          [
+            { transform: 'scale(1)' },
+            { transform: 'scale(1.16)', offset: 0.35 },
+            { transform: 'scale(1)' },
+          ],
+          360,
+        );
       }
       return fadeScrim(400).then(finish, finish);
     };
@@ -273,123 +298,22 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
     else void Promise.all([exit.finished, fadeScrim(120)]).then(finish, finish);
     return () => {
       active = false;
-      animations.forEach(animation => animation.cancel());
+      animations.forEach((animation) => animation.cancel());
     };
   }, [closing, firstVisit, helpButton, onClose, dialog]);
 
   return (
-    <div className="modal-backdrop quick-start-backdrop" data-first-visit={firstVisit || undefined} data-closing={closing || undefined} onClick={requestClose}>
-      <div ref={scrim} className="quick-start-scrim" aria-hidden="true" />
-      <section
-        ref={dialog}
-        tabIndex={-1}
-        className="quick-start-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="quick-start-header">
-          <span className="quick-start-eyebrow">빠른 시작</span>
-          <h2 id={title}>회로 분석과 수업 자료까지</h2>
-          <button className="quick-start-close" onClick={requestClose} aria-label="도움말 닫기">
-            <X size={20} />
-          </button>
-        </header>
-        <div
-          className="quick-start-body"
-          role="region"
-          aria-label="빠른 시작 안내 내용"
-          tabIndex={0}
-        >
-          <p className="quick-start-build">
-            <strong>
-              {compact
-                ? '+ 부품에서 예제 회로를 열거나 부품을 골라 놓으세요.'
-                : '예제 회로를 열거나 왼쪽 목록에서 부품을 골라 놓으세요.'}
-            </strong>
-            <br />
-            단자 두 곳을 차례로 누르면 도선으로 연결돼요.
-          </p>
-          <div className="quick-start-features">
-            <section
-              className="quick-start-feature potential"
-              aria-labelledby={`${title}-potential`}
-            >
-              <div className="quick-start-feature-title">
-                <Box size={19} aria-hidden="true" />
-                <h3 id={`${title}-potential`}>3D로 회로를 분석하세요</h3>
-              </div>
-              <PotentialPreview />
-              <p>
-                <strong>전위는 높이로, 전류는 흐름으로</strong> 살펴보세요. 탐침과 센서로
-                전압·전류를 측정하고 비교해 보세요.
-              </p>
-              <small>회로를 살펴보는 시선을 한 차원 높여보세요!</small>
-              <div className="quick-start-routes">
-                <p className="quick-start-route">
-                  <b>3D 보기</b>
-                  <span>분석하기</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span>3D</span>
-                </p>
-                <p className="quick-start-route">
-                  <b>측정하기</b>
-                  <span>분석하기</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span>{compact ? '측정' : '왼쪽 측정 도구'}</span>
-                </p>
-              </div>
-            </section>
-            <section
-              className="quick-start-feature worksheet"
-              aria-labelledby={`${title}-worksheet`}
-            >
-              <div className="quick-start-feature-title">
-                <FileImage size={19} aria-hidden="true" />
-                <h3 id={`${title}-worksheet`}>문제지에 넣을 회로도를 만드세요</h3>
-              </div>
-              <WorksheetPreview />
-              <p>
-                {compact ? (
-                  <>
-                    완성한 회로를 <strong>그림으로 복사하거나 저장하세요.</strong> 시험지나 수업
-                    자료에 바로 넣을 수 있어요.
-                  </>
-                ) : (
-                  <>
-                    값을 숨기거나 <strong>빈칸·화살표·설명을 더해보세요.</strong> 그림을 복사해
-                    시험지나 수업 자료에 넣을 수 있어요.
-                  </>
-                )}
-              </p>
-              <small>
-                {compact
-                  ? '글자 배치와 주석 편집은 넓은 화면에서 할 수 있어요.'
-                  : '글자 크기와 이름·값 위치도 바꿀 수 있어요.'}
-              </small>
-              <p className="quick-start-route quick-start-output-route">
-                {compact && (
-                  <>
-                    <span>상단 ⋯</span>
-                    <ArrowRight size={12} aria-hidden="true" />
-                  </>
-                )}
-                <span>회로도 출력</span>
-                <ArrowRight size={14} aria-hidden="true" />
-                <span>그림 복사</span>
-              </p>
-            </section>
-          </div>
-          <p className="quick-start-save">
-            <Save size={17} aria-hidden="true" />
-            <span>
-              자동 저장은 이 브라우저에만 남아요. 따로 보관하려면{' '}
-              <strong>{compact ? '상단 ⋯' : '파일'} → 회로 파일 저장</strong>을 이용하세요.
-            </span>
-          </p>
-        </div>
-        <footer className="quick-start-footer">
+    <GuideDialog
+      dialogRef={dialog}
+      scrimRef={scrim}
+      titleId={title}
+      title="회로 분석과 수업 자료까지"
+      eyebrow="빠른 시작"
+      onClose={requestClose}
+      firstVisit={firstVisit}
+      closing={closing}
+      footer={
+        <>
           <span>
             후기·제안은 상단{' '}
             <strong className="quick-start-feedback-label">
@@ -402,8 +326,89 @@ export function QuickStartDialog({ onClose, compact, firstVisit, helpButton }: {
             직접 해보기
             <ArrowRight size={16} aria-hidden="true" />
           </button>
-        </footer>
-      </section>
-    </div>
+        </>
+      }
+    >
+      <p className="quick-start-build">
+        <strong>
+          {compact
+            ? '+ 부품에서 예제 회로를 열거나 부품을 골라 놓으세요.'
+            : '예제 회로를 열거나 왼쪽 목록에서 부품을 골라 놓으세요.'}
+        </strong>
+        <br />
+        단자 두 곳을 차례로 누르면 도선으로 연결돼요.
+      </p>
+      <div className="quick-start-features">
+        <section className="quick-start-feature potential" aria-labelledby={`${title}-potential`}>
+          <div className="quick-start-feature-title">
+            <Box size={19} aria-hidden="true" />
+            <h3 id={`${title}-potential`}>3D로 회로를 분석하세요</h3>
+          </div>
+          <PotentialPreview />
+          <p>
+            <strong>전위는 높이로, 전류는 흐름으로</strong> 살펴보세요. 탐침과 센서로 전압·전류를
+            측정하고 비교해 보세요.
+          </p>
+          <small>회로를 살펴보는 시선을 한 차원 높여보세요!</small>
+          <div className="quick-start-routes">
+            <p className="quick-start-route">
+              <b>3D 보기</b>
+              <Zap size={14} aria-hidden="true" /><span>분석하기</span>
+              <ArrowRight size={12} aria-hidden="true" />
+              <span>3D</span>
+            </p>
+            <p className="quick-start-route">
+              <b>측정하기</b>
+              <Zap size={14} aria-hidden="true" /><span>분석하기</span>
+              <ArrowRight size={12} aria-hidden="true" />
+              <span>{compact ? '측정' : '왼쪽 측정 도구'}</span>
+            </p>
+          </div>
+        </section>
+        <section className="quick-start-feature worksheet" aria-labelledby={`${title}-worksheet`}>
+          <div className="quick-start-feature-title">
+            <FileImage size={19} aria-hidden="true" />
+            <h3 id={`${title}-worksheet`}>문제지에 넣을 회로도를 만드세요</h3>
+          </div>
+          <WorksheetPreview />
+          <p>
+            {compact ? (
+              <>
+                완성한 회로를 <strong>그림으로 복사하거나 저장하세요.</strong> 시험지나 수업 자료에
+                바로 넣을 수 있어요.
+              </>
+            ) : (
+              <>
+                값을 숨기거나 <strong>빈칸·화살표·설명을 더해보세요.</strong> 그림을 복사해 시험지나
+                수업 자료에 넣을 수 있어요.
+              </>
+            )}
+          </p>
+          <small>
+            {compact
+              ? '글자 배치와 주석 편집은 넓은 화면에서 할 수 있어요.'
+              : '글자 크기와 이름·값 위치도 바꿀 수 있어요.'}
+          </small>
+          <p className="quick-start-route quick-start-output-route">
+            {compact && (
+              <>
+                <span>상단 ⋯</span>
+                <ArrowRight size={12} aria-hidden="true" />
+              </>
+            )}
+            <Printer size={14} aria-hidden="true" /><span>회로도 출력</span>
+            <ArrowRight size={14} aria-hidden="true" />
+            <span>그림 복사</span>
+          </p>
+        </section>
+      </div>
+      <p className="quick-start-save">
+        <Save size={17} aria-hidden="true" />
+        <span>
+          자동 저장은 이 브라우저에만 남아요. 따로 보관하려면{' '}
+          <strong>{compact ? '상단 ⋯' : '파일'} → 회로 파일 저장</strong>을 이용하세요.
+        </span>
+      </p>
+    </GuideDialog>
   );
 }

@@ -5,7 +5,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyDocument } from '../src/domain';
 import { createComponent } from '../src/component-library';
-import { loadLocal, saveLocal } from '../src/persistence';
+import { loadLocal, saveLocal, originalBackups, recoverDocument } from '../src/persistence';
+import { channelStorageKey } from '../src/release';
 import { useCircuitSession, type WorkspaceMode } from '../src/app/useCircuitSession';
 
 let host: HTMLDivElement;
@@ -38,6 +39,33 @@ afterEach(() => {
 });
 
 describe('committed circuit session', () => {
+  it('does not overwrite stored work if startup storage access fails and later becomes available', () => {
+    const key = channelStorageKey('edu-circuit:auto:v1');
+    const raw = localStorage.getItem(key);
+    const read = vi.spyOn(localStorage, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    render();
+    read.mockRestore();
+    act(() => vi.advanceTimersByTime(1000));
+    expect(session.saveStatus).toBe('failed');
+    expect(localStorage.getItem(key)).toBe(raw);
+  });
+  it.each(['{broken', JSON.stringify({ ...emptyDocument('old'), version: 5 })])('blocks autosave and editing until recovery is explicitly resolved: %s', raw => {
+    const key = channelStorageKey('edu-circuit:auto:v1');
+    localStorage.setItem(key, raw);
+    render();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(session.saveStatus).toBe('paused');
+    expect(localStorage.getItem(key)).toBe(raw);
+    expect(session.execute({ type: 'ReplaceDocument', document: emptyDocument('unexpected') }).ok).toBe(false);
+    const recovered = recoverDocument(session.recovery!);
+    const next = recovered.ok ? recovered.document : emptyDocument('new');
+    act(() => { expect(session.finishRecovery(next, session.recovery!)).toBe(true); });
+    act(() => vi.advanceTimersByTime(1000));
+    expect(session.recovery).toBeUndefined();
+    expect(session.history.past).toEqual([]);
+    expect(loadLocal()).toEqual({ ok: true, document: next });
+    expect(originalBackups()).toContain(raw);
+  });
   it('keeps automatic references out of the document and deletes manual ground atomically', () => {
     const doc = emptyDocument('automatic-reference');
     doc.components = [createComponent('dc-voltage-source', 'V2', { x: 100, y: 100 }),
