@@ -1,5 +1,7 @@
 # 개발 운영
 
+처음 실행하는 방법과 코드 구조는 [개발자 안내](../development/README.md)에서 시작한다. 이 문서는 변경·검증·배포의 운영 기준을 다룬다.
+
 ## 이슈
 
 이슈 제목에는 관련 요구사항 ID를 포함한다.
@@ -86,7 +88,7 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 | `main` | https://cho-wh.github.io/circuit/ | `VITE_RELEASE_CHANNEL=main` |
 | `dev` | https://cho-wh.github.io/circuit/dev/ | `VITE_RELEASE_CHANNEL=dev` |
 
-최초 안정판은 다이오드 추가 직전 `6c44400`의 기능에 배포·저장 분리만 더한 버전이다. 다이오드·과부하·설명 물음표는 개발판에서 이어간다. 이후 같은 소스를 main으로 승격하면 빌드 채널만 바뀌어 안정판 주소와 저장 공간을 사용한다. 기능별 브랜치 이름이나 URL 탐색 결과로 채널을 추측하지 않는다.
+같은 소스를 main으로 승격하면 빌드 채널만 바뀌어 안정판 주소와 저장 공간을 사용한다. 현재 기능 범위는 [현재 현황](../implementation/current-phase.md), 실제 게시 커밋은 각 주소의 release.json으로 확인한다. 기능별 브랜치 이름이나 URL 탐색 결과로 채널을 추측하지 않는다.
 
 어느 브랜치든 push하면 [배포 워크플로](../../.github/workflows/deploy-pages.yml)가 **main과 dev 양쪽 최신 커밋**을 각각 checkout한다. 각 빌드는 `npm run verify` → Java 21 준비 → `npm run test:firestore`를 실행한다. 검증된 main의 dist를 사이트 루트에, dev의 dist를 그 안의 dev/에 합쳐 **하나의 Pages 산출물**로 게시한다. Pages는 사이트 전체를 교체하므로 한쪽만 게시하지 않는다. 한쪽 검사라도 실패하면 기존 사이트 전체를 유지한다. 실행은 github-pages 동시성 그룹에서 직렬 처리한다.
 
