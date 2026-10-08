@@ -1,6 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="17.28" fill="#718f3f"/>
-  <path d="M46.08 17.376H26.24A9.504 10.4768 0 0 0 16.736 27.8528V36.1472A9.504 10.4768 0 0 0 26.24 46.624H46.08" fill="none" stroke="#fbfced" stroke-width="5.312"/>
-  <circle cx="45.12" cy="17.376" r="4.8" fill="#fbfced"/>
-  <circle cx="45.12" cy="46.624" r="4.8" fill="#edf5bd"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">회로봄 벚꽃 아이콘 — 작은 크기용</title>
+  <defs>
+    <path
+      id="hb-petal"
+      d="M256 250 C196 224 166 150 198 112 C218 90 244 100 256 120 C268 100 294 90 314 112 C346 150 316 224 256 250 Z"
+      fill="#FFFFFF"
+      stroke="#F77B9C"
+      stroke-width="6"
+      stroke-linejoin="round"
+    ></path>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="#F77B9C"></rect>
+  <use href="#hb-petal" transform="translate(256 256) scale(1.18) translate(-256 -256)"></use>
+  <use
+    href="#hb-petal"
+    transform="translate(256 256) scale(1.18) translate(-256 -256) rotate(72 256 256)"
+  ></use>
+  <use
+    href="#hb-petal"
+    transform="translate(256 256) scale(1.18) translate(-256 -256) rotate(144 256 256)"
+  ></use>
+  <use
+    href="#hb-petal"
+    transform="translate(256 256) scale(1.18) translate(-256 -256) rotate(216 256 256)"
+  ></use>
+  <use
+    href="#hb-petal"
+    transform="translate(256 256) scale(1.18) translate(-256 -256) rotate(288 256 256)"
+  ></use>
+  <circle cx="256" cy="256" r="46" fill="#FFB62E"></circle>
 </svg>

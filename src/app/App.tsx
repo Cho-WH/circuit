@@ -1013,11 +1013,14 @@ export function App() {
     >
       <Tooltip />
       <header className="topbar">
-        <a className="brand" aria-label="회로 실험실" href="#" onClick={(e) => e.preventDefault()}>
+        <a className="brand" aria-label="회로봄 — 눈으로 이해하는 전기회로" href="#" onClick={(e) => e.preventDefault()}>
           <span className="brand-mark">
-            <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={26} height={26} alt="" />
+            <img src={`${import.meta.env.BASE_URL}brand-icon.svg`} width={40} height={40} alt="" />
           </span>
-          <span>회로 실험실</span>
+          <span className="brand-copy">
+            <strong className="brand-name">회로봄</strong>
+            <small className="brand-subtitle">눈으로 이해하는 전기회로</small>
+          </span>
         </a>
         <div className="document-heading">
           <input

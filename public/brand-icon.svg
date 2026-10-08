@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">회로봄 벚꽃 아이콘</title>
+  <defs>
+    <path
+      id="hb-petal"
+      d="M256 250 C196 224 166 150 198 112 C218 90 244 100 256 120 C268 100 294 90 314 112 C346 150 316 224 256 250 Z"
+      fill="#FFFFFF"
+      stroke="#F77B9C"
+      stroke-width="6"
+      stroke-linejoin="round"
+    ></path>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="#F77B9C"></rect>
+  <g transform="translate(256 256) scale(1.25) translate(-256 -256)">
+    <use href="#hb-petal"></use>
+    <use href="#hb-petal" transform="rotate(72 256 256)"></use>
+    <use href="#hb-petal" transform="rotate(144 256 256)"></use>
+    <use href="#hb-petal" transform="rotate(216 256 256)"></use>
+    <use href="#hb-petal" transform="rotate(288 256 256)"></use>
+    <g stroke="#E0527A" stroke-width="7" stroke-linecap="round">
+      <line x1="256" y1="256" x2="256" y2="188"></line>
+      <line x1="256" y1="256" x2="256" y2="188" transform="rotate(72 256 256)"></line>
+      <line x1="256" y1="256" x2="256" y2="188" transform="rotate(144 256 256)"></line>
+      <line x1="256" y1="256" x2="256" y2="188" transform="rotate(216 256 256)"></line>
+      <line x1="256" y1="256" x2="256" y2="188" transform="rotate(288 256 256)"></line>
+    </g>
+    <g fill="#E0527A">
+      <circle cx="256" cy="182" r="11"></circle>
+      <circle cx="256" cy="182" r="11" transform="rotate(72 256 256)"></circle>
+      <circle cx="256" cy="182" r="11" transform="rotate(144 256 256)"></circle>
+      <circle cx="256" cy="182" r="11" transform="rotate(216 256 256)"></circle>
+      <circle cx="256" cy="182" r="11" transform="rotate(288 256 256)"></circle>
+    </g>
+    <circle cx="256" cy="256" r="28" fill="#FFB62E" stroke="#E0527A" stroke-width="6"></circle>
+  </g>
+</svg>

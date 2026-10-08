@@ -149,8 +149,11 @@
 
 /* Shared workspace surfaces, hierarchy and motion. Circuit ink keeps its own semantic colors. */
 .topbar{height:52px;min-height:52px;padding:0 20px;gap:24px;background:var(--surface)}
-.brand{min-width:156px;font-size:16px;letter-spacing:-.5px;gap:9px}
-.brand-mark{width:28px;height:28px;background:transparent;color:var(--accent);border-radius:0}
+.brand{min-width:174px;flex-shrink:0;letter-spacing:-.5px;gap:9px}
+.brand-mark{width:40px;height:40px;flex-shrink:0;background:transparent;color:var(--accent);border-radius:0}
+.brand-copy{display:flex;flex-direction:column;gap:2px;white-space:nowrap}
+.brand-name{font-size:19px;font-weight:800;line-height:1.15;letter-spacing:-.7px}
+.brand .brand-subtitle{margin:0;font-size:11px;font-weight:500;line-height:1.35;letter-spacing:-.2px;color:var(--muted)}
 .document-heading{flex-direction:row;align-items:center;gap:8px;min-width:0}
 .document-heading input{width:260px;max-width:100%;font-weight:600;padding:6px 0;font-size:14px;color:var(--ink)}
 .save-state{flex-shrink:0;color:var(--accent)}
@@ -219,7 +222,7 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
 }
 @media(max-width:640px){
  .app-shell{height:100dvh;min-height:480px;overflow:hidden}.topbar{height:52px;min-height:52px;flex-wrap:nowrap;padding:0 8px;gap:8px}
- .brand>span:last-child{display:none}.brand-mark{width:26px}.document-heading{flex:1;min-width:0}.document-heading input{width:100%;font-size:13px}.document-heading>.save-state{font-size:12px}
+ .brand>span:last-child{display:none}.document-heading{flex:1;min-width:0}.document-heading input{width:100%;font-size:13px}.document-heading>.save-state{font-size:12px}
  .top-actions{gap:0}.top-actions>button,.file-menu>button{min-width:40px;min-height:44px;padding:6px;font-size:0}.file-menu>button{font-size:13px;gap:2px}.file-menu>button svg{width:12px}
 
  .modebar{height:44px;min-height:44px;padding:0 10px;overflow-x:auto;gap:16px}.mode-tabs{gap:16px}.mode-tabs button{min-height:44px;font-size:12px;padding:0}.presentation-toggle{font-size:12px;min-height:44px}
