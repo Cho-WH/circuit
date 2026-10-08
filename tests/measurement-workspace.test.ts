@@ -192,16 +192,43 @@ describe('measurement workspace',()=>{
       expect(host.querySelector<HTMLInputElement>('[aria-label="기록 1 메모"]')?.value).toBe('전압 비교');
       act(()=>host.querySelector<HTMLButtonElement>('[aria-label="기록 1 삭제"]')!.click());
       expect(host.querySelector('.measurement-record')).toBeNull();
-      const reset = () => [...host.querySelectorAll<HTMLButtonElement>('.record-actions button')].find(b => b.textContent === '기록 초기화')!;
+      const reset = () => host.querySelector<HTMLButtonElement>('[aria-label="기록 전체 삭제"]')!;
+      const restore = () => host.querySelector<HTMLButtonElement>('[aria-label="기록 삭제 되돌리기"]')!;
+      const confirm = (label: string) => [...globalThis.document.querySelectorAll<HTMLButtonElement>('.record-delete-confirm button')].find(b => b.textContent === label)!;
       expect(reset().disabled).toBe(true);
+      act(()=>restore().click());
+      expect(host.querySelector<HTMLInputElement>('[aria-label="기록 1 메모"]')?.value).toBe('전압 비교');
+      act(()=>host.querySelector<HTMLButtonElement>('[aria-label="기록 1 삭제"]')!.click());
       act(()=>host.querySelector<HTMLButtonElement>('[aria-label="측정값 기록"]')!.click());
       act(()=>host.querySelector<HTMLButtonElement>('[aria-label="측정값 기록"]')!.click());
       expect(host.querySelectorAll('.measurement-record')).toHaveLength(2);
+      const beforeClear = loadMeasurementNotebook().entries;
       act(()=>reset().click());
+      expect(loadMeasurementNotebook().entries).toEqual(beforeClear);
+      act(()=>confirm('취소').click());
+      expect(host.querySelectorAll('.measurement-record')).toHaveLength(2);
+      act(()=>reset().click());
+      act(()=>confirm('삭제').click());
       expect(host.querySelectorAll('.measurement-record')).toHaveLength(0);
       expect(reset().disabled).toBe(true);
       expect(host.querySelector('output[aria-label="측정값"]')?.textContent).toBe('3 V');
       expect(loadMeasurementNotebook().entries).toEqual([]);
+      act(()=>host.querySelector<HTMLButtonElement>('[aria-label="측정값 기록"]')!.click());
+      const added = loadMeasurementNotebook().entries[0];
+      act(()=>restore().click());
+      expect(loadMeasurementNotebook().entries).toEqual([...beforeClear, added]);
+      expect(host.querySelector('[aria-label="기록 삭제 되돌리기"]')).toBeNull();
+      // Removing a middle row uses the same recovery and preserves order and later memo edits.
+      act(()=>host.querySelector<HTMLButtonElement>('[aria-label="기록 2 삭제"]')!.click());
+      const retainedNote=host.querySelector<HTMLInputElement>('[aria-label="기록 2 메모"]')!;
+      act(()=>{
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(retainedNote,'삭제 후 메모');
+        retainedNote.dispatchEvent(new Event('input',{bubbles:true}));
+      });
+      act(()=>restore().click());
+      expect(loadMeasurementNotebook().entries).toEqual([...beforeClear, {...added,note:'삭제 후 메모'}]);
+      act(()=>reset().click());
+      act(()=>confirm('삭제').click());
       act(()=>root.unmount()); root=createRoot(host); act(()=>render(true));
       expect(host.querySelector('.measurement-record')).toBeNull();
     } finally {act(()=>root.unmount());host.remove();vi.unstubAllGlobals();}

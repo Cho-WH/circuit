@@ -63,7 +63,7 @@ export function conditionValues(entry: MeasurementEntry): { label: string; value
           ),
         },
       ];
-    return c.type === 'switch'
+    return c.type === 'switch' || c.type === 'diode'
       ? [{ label: c.label, value: componentValue(c) }]
       : [];
   });

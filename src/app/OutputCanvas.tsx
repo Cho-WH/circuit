@@ -173,7 +173,7 @@ export function OutputCanvas(props: Props) {
   const partNames:Record<string,string>={body:'기호',label:'이름',value:'값',annotation:'장식',start:'시작점',end:'끝점',voltage:'전압',current:'전류'};
   const targetName=(t:Target)=>`${props.document.components.find(c=>c.id===t.id)?.label??props.document.annotations.find(a=>a.id===t.id)?.content??t.id} · ${partNames[t.part]??t.part}`;
   function nudge(delta:Point){if(!target)return;const command=outputMoveCommand(props.document,target,delta);if(command)props.dispatch(command);}
-  return <div className="output-canvas-wrap" data-touch={touchInput||undefined} data-gesture={gesture.current?.moved?'dragging':touchNavigation.state}>
+  return <div className="output-canvas-wrap" data-readonly={props.readOnly||undefined} data-touch={touchInput||undefined} data-gesture={gesture.current?.moved?'dragging':touchNavigation.state}>
     <svg ref={svg} className="output-canvas" aria-label={props.readOnly?'회로도 출력 보기':'회로도 출력 편집'} tabIndex={0} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
       onContextMenu={e=>{if(touchInput)e.preventDefault();}}
       onPointerDownCapture={e=>{
@@ -241,5 +241,6 @@ export function OutputCanvas(props: Props) {
     {choices.length>0&&<div className="touch-choice-list" aria-label="겹친 출력 대상 선택"><span>옮길 대상을 선택하세요</span>{choices.map(t=><button key={t.id+':'+t.part} onClick={()=>choose(t)}>{targetName(t)}</button>)}<button onClick={()=>setChoices([])}>취소</button></div>}
     {target&&target.part!=='body'&&props.selected.includes(target.id)&&<div className="output-position-tools" aria-label="선택 표기 위치 조절"><span>{targetName(target)}</span><button aria-label="표기 왼쪽으로" onClick={()=>nudge({x:-2,y:0})}>←</button><button aria-label="표기 위로" onClick={()=>nudge({x:0,y:-2})}>↑</button><button aria-label="표기 아래로" onClick={()=>nudge({x:0,y:2})}>↓</button><button aria-label="표기 오른쪽으로" onClick={()=>nudge({x:2,y:0})}>→</button></div>}
     <div className="output-zoom"><button aria-label="출력 확대" onClick={()=>zoom(.8)}><Plus size={16}/></button><button aria-label="출력 축소" onClick={()=>zoom(1.25)}><Minus size={16}/></button><button aria-label="출력 전체 맞춤" onClick={()=>setView(scene.bounds)}><Maximize size={16}/></button></div>
+    {props.readOnly && <p className="output-edit-hint">배치·표기 편집은 넓은 화면에서 할 수 있어요.</p>}
   </div>;
 }

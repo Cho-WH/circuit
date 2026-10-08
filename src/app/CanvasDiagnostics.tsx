@@ -104,10 +104,11 @@ export function CanvasDiagnostics({ document, diagnostics, onLocate, assessment,
               </section>
             );
           })}
+          {onReset && <p>저항값이나 배선을 수정한 뒤 다시 분석하세요.</p>}
         </>
       )}
     </FloatingPanel>
-    {onReset && <button type="button" className="analysis-reset" onClick={onReset}>회로 초기화</button>}
+    {onReset && <button type="button" className="analysis-reset" onClick={onReset}>회로 수정하기</button>}
     </div>
   );
 }
