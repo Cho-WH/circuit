@@ -134,9 +134,9 @@ it('routes every registered native drop through the same naming policy and ignor
     act(() => svg.dispatchEvent(event));
   };
   Object.keys(componentDefinitions).forEach((kind, i) => drop(kind, 100 + i * 160));
-  expect(saved().components.map(c => c.label)).toEqual(['V_1', 'R_1', 'S_1', 'S_2', 'A_1', 'M_1', 'VR_1', 'D_1']);
+  expect(saved().components.map(c => c.label)).toEqual(['V_1', 'V_2', 'R_1', 'VR_1', 'S_1', 'S_2', 'A_1', 'M_1', 'D_1']);
   drop('toString', 1400); drop('unsupported', 1600);
-  expect(saved().components).toHaveLength(8);
+  expect(saved().components).toHaveLength(9);
 });
 
 it('keeps one conditional copy button in the compact top toolbar and inserts a touch copy atomically', () => {
