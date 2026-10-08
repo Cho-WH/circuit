@@ -75,7 +75,92 @@ function setup(overrides: Partial<CanvasProps> = {}) {
   return { svg, component, paths, pointer, onMove, commit, original, history: () => history, render: (changes: Partial<CanvasProps>) => act(() => render(changes)) };
 }
 
+describe('reference editing gestures', () => {
+  function referenceDocument() {
+    const doc = emptyDocument('reference-drag');
+    doc.junctions = [
+      { id: 'L', position: { x: 100, y: 400 } }, { id: 'R', position: { x: 900, y: 400 } },
+      { id: 'T', position: { x: 500, y: 100 } }, { id: 'B', position: { x: 500, y: 700 } },
+    ];
+    doc.wires = [['H', 'L', 'R'], ['V', 'T', 'B']].map(([id, start, end]) => ({ id, start: { kind: 'junction', id: start }, end: { kind: 'junction', id: end }, waypoints: [] }));
+    doc.referenceNode = { kind: 'junction', id: 'L' };
+    return doc;
+  }
+  it.each(['mouse', 'touch'])('moves only the reference, splitting a wire in one undo step (%s)', input => {
+    const doc = referenceDocument(), c = setup({ document: doc });
+    c.render({ onWiringCommit: c.commit });
+    const ground = host.querySelector('[data-reference-handle]')!;
+    c.pointer(ground, 'pointerdown', 100, 420, 1, input);
+    c.pointer(c.svg, 'pointermove', 300, 400, 1, input);
+    expect(c.history().present).toEqual(doc);
+    expect(c.onMove).not.toHaveBeenCalled();
+    c.pointer(c.svg, 'pointerup', 300, 400, 1, input);
+    const result = c.history().present;
+    expect(c.history().past).toHaveLength(1);
+    expect(result.wires).toHaveLength(3);
+    expect(result.junctions.find(j => j.id === result.referenceNode?.id)?.position).toEqual({ x: 300, y: 400 });
+    expect(result.junctions.filter(j => doc.junctions.some(old => old.id === j.id))).toEqual(doc.junctions);
+    expect(result.wires.find(w => w.id === 'V')).toEqual(doc.wires[1]);
+  });
+  it('selects the glyph without editing and provides a delete action', () => {
+    const c = setup({ document: referenceDocument() }); c.render({ onWiringCommit: c.commit });
+    const ground = host.querySelector('[data-reference-handle]')!;
+    c.pointer(ground, 'pointerdown', 100, 420);
+    c.pointer(c.svg, 'pointerup', 100, 420);
+    act(() => c.svg.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 100, clientY: 420 })));
+    expect(c.commit).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="배선 취소"]')).toBeNull();
+    const menu = host.querySelector('[aria-label="선택 접지 도구"]')!;
+    expect(menu).not.toBeNull();
+    act(() => (menu.querySelector('button') as HTMLButtonElement).click());
+    expect(c.history().present.referenceNode).toBeNull();
+    expect(host.querySelector('[data-reference-handle]')).toBeNull();
+    expect(host.textContent).not.toContain('자동');
+    expect(c.history().present.wires).toEqual(referenceDocument().wires);
+  });
+  it('asks which crossing wire to use and never joins the crossing', () => {
+    const c = setup({ document: referenceDocument() }); c.render({ onWiringCommit: c.commit });
+    c.pointer(host.querySelector('[data-reference-handle]')!, 'pointerdown', 100, 420);
+    c.pointer(c.svg, 'pointerup', 500, 400);
+    expect(c.commit).not.toHaveBeenCalled();
+    const choices = host.querySelector('[aria-label="접지 연결 위치 선택"]')!;
+    expect(choices.querySelectorAll('button')).toHaveLength(3);
+    act(() => (choices.querySelector('button') as HTMLButtonElement).click());
+    expect(c.history().present.wires.find(w => w.id === 'V')).toEqual(referenceDocument().wires[1]);
+    expect(c.history().present.wires.filter(w => w.start.id === c.history().present.referenceNode?.id || w.end.id === c.history().present.referenceNode?.id)).toHaveLength(2);
+  });
+  it.each(['empty', 'escape', 'cancel', 'pinch', 'readonly'])('does not edit on %s', reason => {
+    const c = setup({ document: referenceDocument(), readOnly: reason === 'readonly' });
+    c.render({ onWiringCommit: c.commit });
+    c.pointer(host.querySelector('[data-reference-handle]')!, 'pointerdown', 100, 420, 1, 'touch');
+    if (reason === 'escape') act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    if (reason === 'cancel') c.pointer(c.svg, 'pointercancel', 300, 400, 1, 'touch');
+    if (reason === 'pinch') c.pointer(c.svg, 'pointerdown', 600, 600, 2, 'touch');
+    c.pointer(c.svg, 'pointerup', reason === 'empty' ? 300 : 500, reason === 'empty' ? 250 : 700, 1, 'touch');
+    expect(c.commit).not.toHaveBeenCalled();
+    expect(c.history().present).toEqual(referenceDocument());
+  });
+
+});
+
 describe('junction editing feedback', () => {
+  it.each(['mouse','touch'])('starts and finishes a free wire through canvas events (%s)',pointerType=>{
+    const c=setup({document:emptyDocument('free-wire'),tool:'wire'});
+    c.render({onWiringCommit:c.commit});
+    const tap=(x:number,y:number)=>{
+      c.pointer(c.svg,'pointerdown',x,y,1,pointerType);
+      c.pointer(c.svg,'pointerup',x,y,1,pointerType);
+      act(()=>c.svg.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:x,clientY:y})));
+    };
+    tap(100,100);tap(300,200);
+    expect(c.history().present.wires).toHaveLength(0);
+    expect(host.textContent).not.toContain('첫 번째 회로를 그려볼까요?');
+    tap(300,200);
+    expect(c.history().present.wires).toHaveLength(1);
+    expect(c.history().present.junctions.map(j=>j.position)).toEqual([{x:100,y:100},{x:300,y:200}]);
+    expect(c.history().past).toHaveLength(1);
+    expect(host.textContent).not.toContain('첫 번째 회로를 그려볼까요?');
+  });
   function junctionDocument(branch = true) {
     const doc = emptyDocument('junction-ui');
     doc.junctions = [
@@ -109,6 +194,19 @@ describe('junction editing feedback', () => {
     expect(host.querySelector('[data-endpoint-id="M"]')).toBeNull();
     c.pointer(c.svg, 'pointerdown', 500, 400);
     expect(onPlace).toHaveBeenCalledWith('resistor', { x: 500, y: 400 }, { wireId: 'left', segment: 0 });
+  });
+  it.each(['mouse','touch'])('previews and inserts a voltmeter on a wire (%s)',pointerType=>{
+    const onPlace=vi.fn(),c=setup({document:junctionDocument(false),placement:'voltmeter',onPlace});
+    c.pointer(c.svg,'pointermove',300,400,1,pointerType);
+    c.pointer(c.svg,'pointerdown',300,400,1,pointerType);
+    c.pointer(c.svg,'pointerup',300,400,1,pointerType);
+    if(pointerType==='touch'){
+      act(()=>c.svg.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:300,clientY:400})));
+      expect(onPlace).not.toHaveBeenCalled();
+      const insert=[...host.querySelectorAll('button')].find(b=>b.textContent==='삽입')!;
+      act(()=>insert.click());
+    }
+    expect(onPlace).toHaveBeenCalledWith('voltmeter',{x:300,y:400},{wireId:'left',segment:0});
   });
   it.each(['mouse','touch','keyboard'])('starts wiring directly at a branch without a node menu or deletion (%s)', input => {
     const onAction = vi.fn(), c = setup({ document: junctionDocument(), onAction });

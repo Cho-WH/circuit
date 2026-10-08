@@ -21,10 +21,12 @@ import type { CurrentReading, MeasurementResult, ProbeVoltage } from '../measure
 import { ArrowLeftRight, Plus, NotebookPen, Power } from 'lucide-react';
 import './measurement.css';
 import { diagnosticText } from './diagnostic-text';
+import { referenceGroupLabel } from '../visualization';
 import { useMeasurementRecords } from './useMeasurementRecords';
 import { MeasurementTable } from './MeasurementTable';
 import { SelectionButton } from './SelectionButton';
 import { CompactMeasurementBar } from './CompactMeasurementBar';
+import { MeasurementDisplay } from './MeasurementDisplay';
 
 interface Props {
   kind: MeasurementKind | null;
@@ -37,6 +39,9 @@ interface Props {
   document: CircuitDocument;
   compilation: CompileResult;
   result: SimulationResult;
+  canRecord?: () => boolean;
+  stopped?: boolean;
+  resistanceDisabled?: boolean;
   voltageReading: MeasurementResult<ProbeVoltage>;
   voltageLabel: string;
   active: boolean;
@@ -73,6 +78,7 @@ function Diagnostics({ items }: { items: Diagnostic[] }) {
 export function MeasurementPanel(props: Props) {
   const { document: doc, compilation, red, black } = props;
   const { kind, panel, onPanel, enabled, isolated } = props;
+  const modelApproximation = props.result.provenance?.physicalModel === 'component';
   const showNotebook = panel === 'records';
   const compactBar = useRef<HTMLDivElement>(null);
   const previousMeasuring = useRef(props.mobile?.measuring);
@@ -100,20 +106,21 @@ export function MeasurementPanel(props: Props) {
   const voltage = props.voltageReading;
   const redNet = compilation.circuit.endpointToNet[red],
     blackNet = compilation.circuit.endpointToNet[black];
-  const potentialsAvailable =
-    props.result.status !== 'error' &&
-      ![...compilation.diagnostics, ...props.result.diagnostics].some(d => d.severity === 'error');
+  const potentialsAvailable = !compilation.diagnostics.some(d => d.severity === 'error');
   const probePotentials = (color: 'red' | 'black') => {
     const net = color === 'red' ? redNet : blackNet;
     const value = potentialsAvailable && ref(color === 'red' ? red : black)
       ? props.result.nodeVoltages[net] : undefined;
-    return value === undefined ? '—' : formatQuantity(value, 'V');
+    const groups = props.result.referenceGroups ?? [];
+    const index = groups.findIndex(group => group.netIds.includes(net));
+    const suffix = groups.length > 1 && index >= 0 ? ` · ${referenceGroupLabel(index)}` : '';
+    return value === undefined ? '—' : formatQuantity(value, 'V', { modelApproximation }) + suffix;
   };
   const excluded = compilation.circuit.elements
     .filter((e) => e.type === 'dc-voltage-source')
     .map((e) => e.id);
   const resistance =
-    enabled &&
+    enabled && !props.stopped && !props.resistanceDisabled &&
     isolated &&
     kind === 'resistance' &&
     redNet &&
@@ -136,6 +143,7 @@ export function MeasurementPanel(props: Props) {
         : resistance?.ohms;
   const unit = kind === 'voltage' ? 'V' : kind === 'current' ? 'A' : 'Ω';
   function record() {
+    if (props.canRecord?.() === false) return;
     if (!enabled || !kind || reading === undefined || !q.isRational(reading)) {
       setMessage('측정 위치를 먼저 골라 주세요.');
       return;
@@ -151,6 +159,7 @@ export function MeasurementPanel(props: Props) {
       unit,
       targetIds: kind === 'current' ? [measuredTarget!.id] : [red, black],
       recordedAt: new Date().toISOString(),
+      ...(kind !== 'resistance' ? { provenance: props.result.provenance } : {}),
     });
     if (saved.ok) {
       setEntries((previous) => [
@@ -179,8 +188,8 @@ export function MeasurementPanel(props: Props) {
     } else setMessage('기록 형식을 확인하세요.');
   }
   const connected = kind === 'current' ? reading !== undefined : Boolean(ref(red) && ref(black));
-  const ready = enabled && reading !== undefined && q.isRational(reading);
-  const diagnostics =
+  const ready = enabled && props.canRecord?.() !== false && reading !== undefined && q.isRational(reading);
+  const diagnostics = props.stopped ? [] :
     kind === 'voltage'
       ? connected && !voltage.ok
         ? voltage.diagnostics
@@ -198,15 +207,11 @@ export function MeasurementPanel(props: Props) {
         : formatQuantity(
             reading,
             unit,
-            quantityFormatForTargets(
+            { ...quantityFormatForTargets(
               doc,
               kind === 'current' ? [measuredTarget?.id ?? ''] : [red, black],
-            ),
+            ), modelApproximation: kind !== 'resistance' && modelApproximation },
           );
-  // Keep the shared formatter's value and SI prefix intact; only separate typography.
-  const unitStart = formattedReading.lastIndexOf(' ');
-  const displayValue = formattedReading.slice(0, unitStart);
-  const displayUnit = formattedReading.slice(unitStart + 1);
   const recordsToggle = (
     <button
       className={`notebook-toggle${enabled ? '' : ' standalone'}`}
@@ -276,7 +281,7 @@ export function MeasurementPanel(props: Props) {
         )}
       </div>
       <div className="measure-readout">
-        <div className="measure-lcd">
+        <MeasurementDisplay reading={formattedReading}>
           <div className="measure-lcd-header">
             <span className="measure-lcd-caption">
               {kind === 'voltage' ? '전압' : kind === 'current' ? '전류' : '저항'}
@@ -299,18 +304,7 @@ export function MeasurementPanel(props: Props) {
               </div>
             )}
           </div>
-          <output aria-label="측정값" aria-live="polite" aria-atomic="true">
-            <span
-              className="measure-lcd-value"
-              style={{
-                fontSize: `clamp(18px, calc((100cqi - 34px) / ${Math.max(1, displayValue.length * 0.62)}), 46px)`,
-              }}
-            >
-              {displayValue}
-            </span>{' '}
-            <span className="measure-lcd-unit">{displayUnit}</span>
-          </output>
-        </div>
+        </MeasurementDisplay>
         <div className="measure-record-row" role="group" aria-label="측정 기록과 도구 종료">
           <span className="measure-record-label">기록</span>
           <button
@@ -362,6 +356,8 @@ export function MeasurementPanel(props: Props) {
       {props.mobile ? <>
         <div ref={compactBar} className="compact-analysis-bar tool-group" aria-label={props.mobile.measuring ? '측정 도구' : '회로 시각화'}>
           {props.mobile.measuring && kind ? <CompactMeasurementBar
+            stopped={props.stopped}
+            resistanceDisabled={props.resistanceDisabled}
             kind={kind} onChoose={props.mobile.onChoose} onBack={props.mobile.onBack}
             reading={formattedReading} ready={ready} potentials={{red: probePotentials('red'), black: probePotentials('black')}}
             activeProbe={props.activeProbe} onActiveProbe={props.onActiveProbe} targetName={targetName}

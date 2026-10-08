@@ -4,6 +4,7 @@ import {
   arrowGeometry,
   circuitTextScale,
   componentNotationLayout,
+  componentValueFontSize,
   svgNotation,
   notationWidth,
   notationMetrics,
@@ -21,6 +22,7 @@ import { mathFontFace, mathFontFamily } from '../typography';
 import { notationTokens } from '../notation';
 import {
   DocumentError,
+  isChangeoverSwitch,
   validateDocument,
   type CircuitDocument,
   type ComponentInstance,
@@ -38,6 +40,7 @@ export interface ExportOptions {
   margin?: number;
   highResolution?: boolean;
   showGround?: boolean;
+  showMeterPolarity?: boolean;
 }
 
 interface NormalizedExportOptions {
@@ -48,6 +51,7 @@ interface NormalizedExportOptions {
   margin: number;
   pngScale: number;
   showGround: boolean;
+  showMeterPolarity: boolean;
 }
 
 interface Bounds {
@@ -64,6 +68,7 @@ interface TextPlacement {
   anchor: 'start' | 'middle';
   blank?: boolean;
   tone: 'label' | 'value' | 'voltage' | 'current';
+  fontSize?: number;
 }
 
 const MAX_LOGICAL_DIMENSION = 1_000_000;
@@ -81,7 +86,7 @@ function normalizeOptions(options: ExportOptions = {}): NormalizedExportOptions 
   if (background !== 'transparent' && background !== 'white') throw new TypeError('background must be transparent or white');
   if (typeof monochrome !== 'boolean') throw new TypeError('monochrome must be a boolean');
   if (!Number.isFinite(margin) || margin < 0) throw new RangeError('margin must be a finite non-negative number');
-  return { quantityFormat:options.quantityFormat??defaultQuantityFormat, circuitOnly, monochrome, background, margin, pngScale, showGround: circuitOnly || (options.showGround ?? false) };
+  return { quantityFormat:options.quantityFormat??defaultQuantityFormat, circuitOnly, monochrome, background, margin, pngScale, showGround: circuitOnly || (options.showGround ?? false), showMeterPolarity: circuitOnly || (options.showMeterPolarity ?? false) };
 }
 
 function xmlText(value: string): string {
@@ -121,14 +126,14 @@ function componentTextPlacements(
   scale: number,
   quantityFormat: QuantityFormatOptions,
 ): TextPlacement[] {
-  const presentation = componentPresentation(circuitOnly ? {...component, properties: Object.fromEntries(Object.entries(component.properties).filter(([key]) => !/^(?:(?:label|answer|voltage|current)(?:Visible|Blank|OffsetX|OffsetY)|showVoltage|showCurrent)$/.test(key)))} : component, result, quantityFormat);
+  const presentation = componentPresentation(circuitOnly ? {...component, properties: {...Object.fromEntries(Object.entries(component.properties).filter(([key]) => !/^(?:(?:label|answer|voltage|current)(?:Visible|Blank|OffsetX|OffsetY)|showVoltage|showCurrent)$/.test(key))), answerVisible: true}} : component, result, quantityFormat);
   const layout=componentNotationLayout(component,presentation.label,presentation.value,15*scale);
   const placements: TextPlacement[] = [];
   const add = (text: string | null, tone: TextPlacement['tone']) => {
     const prefix = tone === 'value' ? 'answer' : tone;
     const dx = circuitOnly ? 0 : Number(component.properties[prefix+'OffsetX'] ?? 0);
     const dy = circuitOnly ? 0 : Number(component.properties[prefix+'OffsetY'] ?? 0);
-    if (text !== null) placements.push({ text, x: layout[tone].x + dx, y: layout[tone].y + dy, anchor:layout[tone].anchor, tone, blank: text.includes('□') });
+    if (text !== null) placements.push({ text, x: layout[tone].x + dx, y: layout[tone].y + dy, anchor:layout[tone].anchor, tone, blank: text.includes('□'), fontSize: tone==='value' ? componentValueFontSize([],component,text,15*scale) : 15*scale });
   };
 
   add(presentation.label,'label');
@@ -182,8 +187,9 @@ function calculateBounds(
   };
   const scale = circuitTextScale*(options.circuitOnly ? 1 : document.output?.fontScale ?? 1);
   const addText = (placement: TextPlacement) => {
-    const width = (placement.blank ? 56 : estimatedTextWidth(placement.text)) * scale;
-    addRect(placement.anchor === 'middle' ? placement.x - width / 2 : placement.x - 2, placement.y - 28*scale, width + 4, 46*scale);
+    const textScale = placement.blank ? scale : (placement.fontSize ?? 15*scale)/15;
+    const width = (placement.blank ? 56 : estimatedTextWidth(placement.text)) * textScale;
+    addRect(placement.anchor === 'middle' ? placement.x - width / 2 : placement.x - 2, placement.y - 28*textScale, width + 4, 46*textScale);
   };
 
   for (const wire of document.wires) {
@@ -191,7 +197,9 @@ function calculateBounds(
   }
   for (const component of document.components) {
     const vertical = component.rotation % 180 !== 0;
-    addRect(component.position.x - (vertical ? 28 : 48), component.position.y - (vertical ? 48 : 28), vertical ? 56 : 96, vertical ? 96 : 56);
+    const halfWidth = isChangeoverSwitch(component) ? 48 : vertical ? 28 : 48;
+    const halfHeight = isChangeoverSwitch(component) ? 48 : vertical ? 48 : 28;
+    addRect(component.position.x - halfWidth, component.position.y - halfHeight, halfWidth*2, halfHeight*2);
     for (let index = 0; index < component.terminals.length; index += 1) {
       const terminal = terminalPosition(component, index);
       addRect(terminal.x - 5, terminal.y - 5, 10, 10);
@@ -241,7 +249,7 @@ function ensureLogicalBounds(bounds: Bounds): void {
 function renderText(placement: TextPlacement, colors: ReturnType<typeof exportColors>, scale: number): string {
   const color = colors[placement.tone];
   if (placement.blank) return blankMarkup(placement.x, placement.y, placement.anchor, scale, color);
-  return svgNotation(placement.text,{x:placement.x,y:placement.y,anchor:placement.anchor,fontSize:15*scale,weight:placement.tone==='label'?'650':'400',fill:color,symbol:placement.tone==='label'});
+  return svgNotation(placement.text,{x:placement.x,y:placement.y,anchor:placement.anchor,fontSize:placement.fontSize??15*scale,weight:placement.tone==='label'?'650':'400',fill:color,symbol:placement.tone==='label'});
 }
 function blankMarkup(x: number, y: number, anchor: string, scale: number, color: string): string {
   return `<rect x="${numberAttribute(x-(anchor==='middle'?28*scale:0))}" y="${numberAttribute(y-18*scale)}" width="${56*scale}" height="${24*scale}" fill="none" stroke="${color}" stroke-width="1.5"/>`;
@@ -281,7 +289,7 @@ export function createSvgExport(
   }
 
   for (const component of document.components) {
-    chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="body" transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component)}</g>`);
+    chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="body" transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component, { showMeterPolarity: options.showMeterPolarity })}</g>`);
     for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale, options.quantityFormat)) {
       chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="${placement.tone}">${renderText(placement, colors, scale)}</g>`);
     }

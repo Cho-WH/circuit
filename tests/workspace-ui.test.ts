@@ -177,16 +177,16 @@ describe('workspace transitions and file actions', () => {
     expect(button('조립 안내').getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('keeps error diagnostics collapsed and reachable in every workspace', async () => {
+  it('keeps a shorted source operating warning collapsed and reachable in every workspace', async () => {
     saveLocal(layoutExample(requireDocument(shortCircuit.document)));
     await act(async () => root.render(createElement(App)));
     for (const mode of ['회로 만들기', '분석하기', '회로도 출력']) {
       await click(mode);
-      const trigger = button('회로 연결 확인');
-      expect(trigger.closest('.is-warning')).not.toBeNull();
+      const trigger = button('파손 주의');
+      expect(trigger.closest('.is-damage')).not.toBeNull();
       expect(trigger.getAttribute('aria-expanded')).toBe('false');
-      await click('회로 연결 확인');
-      expect(document.querySelector('[role="dialog"]')?.textContent).toContain('전원이 단락되어 있어요');
+      await click('파손 주의');
+      expect(document.querySelector('[role="dialog"]')?.textContent?.normalize('NFKC')).toContain(mode==='분석하기'?'전력이 너무 커서 손상됐어요':'분석하면 V1이 손상돼요');
       await click('안내 닫기');
       expect(document.activeElement).toBe(trigger);
       expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -275,7 +275,7 @@ describe('workspace transitions and file actions', () => {
     const toggle=[...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(input=>input.parentElement?.textContent?.trim()==='전류 흐름')!;
     await act(async()=>toggle.click());
     expect(host.querySelector('.potential-workspace > .current-pause')).not.toBeNull();
-    expect([...host.querySelectorAll('.wire-ink')].every(el=>el.getAttribute('visibility')==='hidden')).toBe(true);
+    expect([...host.querySelectorAll('.wire-ink')].every(el=>el.getAttribute('visibility')!=='hidden' && el.getAttribute('stroke-opacity')==='0.14' && el.getAttribute('stroke')==='#334155')).toBe(true);
     await click('상세 설정');
     expect(host.querySelector('[aria-label="전류 두께 배율"]')).not.toBeNull();
     for(const [id,value,key] of [['W1','3 A',false],['W2','1 A',true],['W3','2 A',true]] as const) {
@@ -288,6 +288,8 @@ describe('workspace transitions and file actions', () => {
     await act(async()=>host.querySelector('[data-endpoint-id="JT"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));
     expect(host.querySelector('.current-readout')?.textContent).toContain('도선이나 부품을 선택');
     await click('흐름 일시 정지');expect(button('흐름 재생')).toBeDefined();
+    await act(async()=>toggle.click());
+    expect([...host.querySelectorAll('.wire-ink')].every(el=>!el.hasAttribute('stroke-opacity'))).toBe(true);
   });
   it('selects renamed examples through the shared menu and supports undo',async()=>{
     const original=layoutExample(examples[1].document);saveLocal(original);

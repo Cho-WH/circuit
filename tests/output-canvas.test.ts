@@ -104,13 +104,17 @@ describe('contextual output settings',()=>{
   it('keeps independent arrow notation controls and groups picture options under the selected target',()=>{
     const doc=layoutExample(examples[1].document);
     doc.annotations=[{id:'arrow',kind:'arrow',anchor:null,position:{x:100,y:100},content:'I_1',visibility:'always',presentation:{answerText:'3/4 A',labelOffsetX:25,answerOffsetX:40}}];
-    const dispatch=vi.fn(()=>true);
+    const dispatch=vi.fn(()=>true), onOptions=vi.fn();
     const toolbar=document.createElement('div');toolbar.id='worksheet-actions';document.body.append(toolbar);
     try {
-      act(()=>root.render(createElement(WorksheetPanel,{active:true,document:doc,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},selected:['arrow'],tool:'select',onTool:()=>{},options:{monochrome:true},onOptions:()=>{},onFontPreview:()=>{},onSelect:()=>{},dispatch,onNotice:()=>{},undo:()=>{},redo:()=>{},canUndo:false,canRedo:false,toolbarEnd:createElement('button',null,'상세 설정')})));
+      act(()=>root.render(createElement(WorksheetPanel,{active:true,document:doc,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},selected:['arrow'],tool:'select',onTool:()=>{},options:{monochrome:true},onOptions,onFontPreview:()=>{},onSelect:()=>{},dispatch,onNotice:()=>{},undo:()=>{},redo:()=>{},canUndo:false,canRedo:false,toolbarEnd:createElement('button',null,'상세 설정')})));
       expect(host.querySelector('h3')?.textContent).toBe('화살표');
       expect(host.querySelector('h4')).toBeNull();
       expect(host.querySelector('fieldset legend')?.textContent).toBe('그림 설정');
+      const polarity = [...host.querySelectorAll<HTMLInputElement>('input[role="switch"]')].find(input => input.parentElement?.textContent === '계기 +/− 표시')!;
+      expect(polarity.checked).toBe(false);
+      act(() => polarity.click());
+      expect(onOptions).toHaveBeenLastCalledWith({ monochrome: true, showMeterPolarity: true });
       expect(host.querySelector<HTMLInputElement>('[aria-label="값 출력 문자"]')?.value).toBe('3/4 A');
       act(()=>host.querySelector<HTMLInputElement>('[aria-label="기호·이름 표시"]')!.click());
       expect(dispatch).toHaveBeenLastCalledWith({type:'UpdateAnnotation',id:'arrow',changes:{presentation:{...doc.annotations[0].presentation,labelVisible:false}}});

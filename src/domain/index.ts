@@ -2,15 +2,20 @@ import { isStoredScalar, physicalProperties, type Rational, type ComponentProper
 export { validApproximation, type Approximation, isStoredScalar, physicalProperties, type Rational, type StoredScalar, type ComponentProperties } from './scalar';
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../schemas/circuit-document.schema.json';
+import { isChangeoverSwitch, validSwitchState } from './switches';
+export { isChangeoverSwitch, validSwitchState, switchTerminals, switchClosed, nextSwitchState } from './switches';
+import { supportsOperatingProfile, type OperatingProfileRef, type OperatingProfile, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
+export { defaultOperatingProfileRef, operatingProfileFor, diodeProfileRef, diodeKindFor, isDiodeKind, type DiodeKind, type OperatingBoundary, type OperatingProfile, type OperatingProfileRef, type OperatingQuantity, type PhysicalModel, type SimulationProvenance } from './operating-profiles';
 
 export type Point = { x: number; y: number };
 export type EndpointRef = { kind: 'terminal' | 'junction'; id: string };
-export type ComponentType = 'dc-voltage-source' | 'resistor' | 'switch' | 'ammeter' | 'voltmeter' | 'resistive-load';
+export type ComponentType = 'dc-voltage-source' | 'resistor' | 'switch' | 'ammeter' | 'voltmeter' | 'resistive-load' | 'diode';
 export interface Terminal { id: string; role: string; localPosition?: Point }
 export interface ComponentInstance {
   id: string; type: ComponentType; label: string; position: Point;
   rotation: 0 | 90 | 180 | 270;
   properties: ComponentProperties;
+  operatingProfile?: OperatingProfileRef;
   terminals: Terminal[];
 }
 export interface Wire { id: string; start: EndpointRef; end: EndpointRef; waypoints: Point[] }
@@ -25,7 +30,7 @@ export interface ActivityDefinition {
   resetSnapshotId?: string | null; [key: string]: unknown;
 }
 export interface CircuitDocument {
-  $schema?: string; format: 'edu-circuit'; version: 5; output?: { fontScale?: number }; documentId: string; title: string;
+  $schema?: string; format: 'edu-circuit'; version: 6; output?: { fontScale?: number }; documentId: string; title: string;
   components: ComponentInstance[]; wires: Wire[]; junctions: Junction[];
   annotations: Annotation[]; referenceNode: EndpointRef | null; activity: ActivityDefinition | null;
 }
@@ -51,15 +56,20 @@ export interface Diagnostic {
 export const diagnostic = (code: string, affectedIds: string[] = [], severity: Diagnostic['severity'] = 'error', parameters: Diagnostic['parameters'] = {}): Diagnostic =>
   ({ code, severity, affectedIds: [...new Set(affectedIds)], parameters, suggestedActions: ['INSPECT_CONNECTIONS'] });
 export interface Net { id: string; endpointIds: string[]; wireIds: string[] }
-export interface CompiledElement { id: string; type: ComponentType; a: string; b: string; value: Rational; closed: boolean }
+export interface CompiledElement { id: string; type: ComponentType; a: string; b: string; value: Rational; closed: boolean; operatingProfile?: OperatingProfile; explicitCharacteristics?: boolean }
 export interface CompiledCircuit {
   nets: Net[]; elements: CompiledElement[]; endpointToNet: Record<string, string>;
   referenceNetId?: string;
 }
 export interface CompileResult { circuit: CompiledCircuit; diagnostics: Diagnostic[] }
 export interface CircuitCompiler { compile(document: CircuitDocument): CompileResult }
-export type SolveOptions = Record<string, never>;
+export interface SolveOptions { physicalModel?: PhysicalModel; referencePolicy?: 'explicit' | 'independent' }
+/** Voltages in different groups have independent zeros and cannot be subtracted. */
+export interface VoltageReferenceGroup { id: string; referenceNetId: string; netIds: string[] }
 export interface SimulationResult {
+  referenceGroups?: VoltageReferenceGroup[];
+  provenance?: SimulationProvenance;
+  solution?: 'unique' | 'nonunique' | 'infeasible' | 'unverified';
   quality?: { mode: 'exact' } | { mode: 'approximate'; reason: 'integer-limit' | 'operation-limit'; policy: 'dc-budget-1'; backwardError: number; condition: number; refinements: number };
   status: 'solved' | 'warning' | 'error'; nodeVoltages: Record<string, Rational>;
   branchCurrents: Record<string, Rational>; componentVoltages: Record<string, Rational>;
@@ -79,9 +89,26 @@ export function validateDocument(input: unknown): DocumentValidation {
   const diagnostics: Diagnostic[] = [];
   const endpoints = new Map<string, EndpointRef['kind']>();
   for (const c of doc.components) {
+    if (c.properties.switchKind !== undefined && (c.type !== 'switch' || c.properties.switchKind !== 'spdt'))
+      diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'switchKind' }));
+    if (isChangeoverSwitch(c)) {
+      if (c.terminals.length !== 3 || ['common', 'throw-a', 'throw-b'].some(role => c.terminals.filter(t => t.role === role).length !== 1))
+        diagnostics.push(diagnostic('UNSUPPORTED_TERMINALS', [c.id], 'error', { reason: 'AMBIGUOUS_SWITCH_CONTACTS' }));
+      if (!validSwitchState(c)) diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'state' }));
+    }
+    if (c.operatingProfile && !supportsOperatingProfile(c.type, c.operatingProfile))
+      diagnostics.push(diagnostic('INVALID_COMPONENT_PROFILE', [c.id]));
+    if (c.type === 'diode' && (c.terminals.length !== 2 || c.terminals.filter(t => t.role === 'anode').length !== 1 || c.terminals.filter(t => t.role === 'cathode').length !== 1))
+      diagnostics.push(diagnostic('UNSUPPORTED_TERMINALS', [c.id], 'error', { reason: 'AMBIGUOUS_DIODE_POLARITY' }));
     for (const key of physicalProperties) {
       const v = c.properties[key];
       if (v !== undefined && !isStoredScalar(v)) diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: key }));
+    }
+    for (const key of ['sourceResistanceOhm', 'diodeThresholdV', 'diodeOnResistanceOhm'] as const) {
+      const value = c.properties[key];
+      if (value === undefined) continue;
+      if ((key === 'sourceResistanceOhm' ? c.type !== 'dc-voltage-source' : c.type !== 'diode') || !isStoredScalar(value) || value.approximation || (key === 'diodeThresholdV' ? BigInt(value.numerator) < 0n : BigInt(value.numerator) <= 0n))
+        diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: key }));
     }
     const { resistanceMinOhm: min, resistanceMaxOhm: max, resistanceOhm: value } = c.properties;
     if (c.type !== 'resistive-load' || (min === undefined && max === undefined)) continue;
@@ -112,7 +139,7 @@ export function requireDocument(input: unknown): CircuitDocument {
   return cloneDocument(checked.document);
 }
 export function emptyDocument(id = 'untitled'): CircuitDocument {
-  return { format: 'edu-circuit', version: 5, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
+  return { format: 'edu-circuit', version: 6, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
 }
 
 export function normalizeComponentLabel(input:string):string|null {

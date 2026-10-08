@@ -2,6 +2,7 @@ import * as arithmetic from '../rational';
 import { createBudget, BudgetExceeded } from './budget';
 import { approximateSolve, ApproximateFailure } from './approximate';
 import { mna, resistive, idealLink } from './mna';
+import { solvePiecewise, profileRevision } from './piecewise';
 const q = arithmetic;
 import type { Rational } from '../domain';
 import {
@@ -74,7 +75,7 @@ function solveLinear(
   return x;
 }
 
-export function solveCircuit(
+function solveLinearCircuit(
   circuit: CompiledCircuit,
   options: SolveOptions = {},
 ): SimulationResult {
@@ -292,5 +293,34 @@ export function solveCircuit(
       ]);
     }
   }
+}
+export function solveCircuit(
+  circuit: CompiledCircuit,
+  options: SolveOptions = {},
+): SimulationResult {
+  if (
+    Object.keys(options).some((key) => key !== 'physicalModel' && key !== 'referencePolicy') ||
+    (options.referencePolicy !== undefined && options.referencePolicy !== 'explicit' && options.referencePolicy !== 'independent') ||
+    (options.physicalModel !== undefined &&
+      options.physicalModel !== 'textbook' &&
+      options.physicalModel !== 'component')
+  )
+    return failedResult([diagnostic('INVALID_SOLVE_OPTIONS')]);
+  if (options.physicalModel === 'component' || circuit.elements.some((e) => e.type === 'diode'))
+    return solvePiecewise(circuit, options);
+  const result = solveLinearCircuit(circuit);
+  if (
+    result.diagnostics.some((d) => d.code === 'SINGULAR_SYSTEM' || d.code === 'FLOATING_SUBCIRCUIT')
+  )
+    return solvePiecewise(circuit, options);
+  if (result.quality)
+    result.provenance = {
+      physicalModel: 'textbook',
+      profileRevision: profileRevision(circuit, options),
+      arithmeticQuality: result.quality.mode,
+    };
+  if (result.status !== 'error' && options.referencePolicy === 'independent' && circuit.referenceNetId)
+    result.referenceGroups = [{ id: circuit.nets.map(n => n.id).sort()[0], referenceNetId: circuit.referenceNetId, netIds: circuit.nets.map(n => n.id).sort() }];
+  return result;
 }
 export const dcEngine: SimulationEngine = { solve: solveCircuit };

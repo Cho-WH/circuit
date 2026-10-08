@@ -18,6 +18,7 @@ export interface CurrentSample {
   value: CurrentValue;
 }
 export interface CurrentModel {
+  modelApproximation?: boolean;
   samples: CurrentSample[];
   maxMagnitude: q.Scalar;
 }
@@ -55,6 +56,7 @@ export function buildCurrentModel(
   });
   return {
     samples,
+    ...(result.provenance?.physicalModel === 'component' ? { modelApproximation: true } : {}),
     maxMagnitude: samples.reduce<q.Scalar>(
       (max, { value }) =>
         value.status === 'known'

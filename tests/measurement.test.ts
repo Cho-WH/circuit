@@ -360,7 +360,7 @@ describe("voltage probes", () => {
     expect((second.ok ? q.toNumber(second.value.voltageV) : NaN)).toBeCloseTo(9, 12);
   });
 
-  it("withholds numbers for incomplete, invalid, and floating probes", () => {
+  it("withholds invalid probes and resolves a fixed difference without an absolute reference", () => {
     const solved = compiledFixture("FIX-02-series.json");
     expect(
       probeVoltage(
@@ -386,8 +386,9 @@ describe("voltage probes", () => {
       { kind: "terminal", id: "R1.a" },
       { kind: "terminal", id: "R1.b" },
     );
-    expect(unavailable.ok).toBe(false);
-    if (!unavailable.ok) expect(unavailable.diagnostics.length).toBeGreaterThan(0);
+    expect(unavailable.ok).toBe(true);
+    if (unavailable.ok) expect(unavailable.value.voltageV).toEqual(q.ZERO);
+    expect(floating.result.nodeVoltages).toEqual({});
   });
 });
 
@@ -662,7 +663,7 @@ describe("measurement records and CSV", () => {
     if (!exported.ok) return;
     const [header, ...bodyLines] = exported.value.split("\r\n");
     expect(header).toBe(
-      "condition,documentId,source,quantity,value,unit,targetIds,recordedAt,documentSnapshot,quality,approximation",
+      "condition,documentId,source,quantity,value,unit,targetIds,recordedAt,documentSnapshot,quality,approximation,physicalModel,profileRevision,arithmeticQuality",
     );
     const body = bodyLines.join("\r\n");
     expect(body).toContain('"\'=HYPERLINK(""https://example.invalid""),');

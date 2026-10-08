@@ -31,3 +31,7 @@
 - 측정 기록은 모드 간 유지되고, 원시 CSV API에는 당시 회로·대상·부호 기준이 남는다. 화면 측정표·복사/CSV·로컬 저장은 [ADR-022](ADR-022-measurement-notebook.md)을 따른다.
 
 검증은 `non-contact-measurement`, `measurement-workspace`, `measurement`, `simulation` 테스트와 대표 화면 확인으로 제한한다.
+
+## 다이오드 확장 계약 (2026-10-05)
+
+[ADR-026](ADR-026-diode-boundary-analysis.md)이 이 절과 겹치는 이전 범위를 확장한다. 다이오드 부품 전류는 A→K를 기준으로 한다. 전압차와 도선 전류의 KCL 합을 허용 해 전체에서 직접 질의하여 개별 항이 비유일해도 결합량이 확정되는 경우를 보존한다. 파손 사건 후 현재 측정과 새 기록은 중단하며 과거 기록은 유지한다.

@@ -5,7 +5,7 @@
   "purpose": "서로 다른 요소 종류 사이의 ID 중복을 거부하는지 검증",
   "document": {
     "format": "edu-circuit",
-    "version": 5,
+    "version": 6,
     "documentId": "duplicate-document-id",
     "title": "문서 요소 ID 중복",
     "components": [

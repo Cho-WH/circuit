@@ -1,111 +1,21 @@
-# 구현 검증 범위와 한계
+# 검증 범위와 실행 위치
 
-기준일: 2026-09-24. 아래 표는 구현 중 확인한 요구사항과 회귀 근거의 대응표이며, 오늘 전체 검사를 새로 실행했다는 뜻은 아니다. 현재 테스트 소스와 CI가 실행 가능한 기준이다. 테스트 횟수는 실행 시점별이며 합산하지 않는다.
+현재 테스트 소스가 실행 가능한 기준이다. 과거 통과 횟수·브라우저 캡처는 현재 버전의 검증을 대신하지 않는다. 변경과 관련된 검사부터 실행하며 전체 verify는 광범위한 변경이나 명시적 요청에 사용한다.
 
-## 확인된 실행 근거
-
-| 대상 | 결과 |
-|---|---|
-| 구조 정리·화면 책임 분리 로컬 | 일반 29개 파일 540개, 타입·경계(69개 소스)·프로덕션 빌드·명세 통과. 같은 이벤트의 연속 명령·모드 제한·묶음 실패·전원 배치 undo·자동 저장·내부 순환 검사 추가. 최종 브라우저에서 편집/이동/undo·전위/3D·측정·출력·작은 화면 입력 초안·새로고침 복구 확인. Firestore 전용 24개 제외 |
-| 터치 개선 `a26c193` CI | 일반 25개 파일 466개, 별도 Firestore 에뮬레이터 24개 통과. 명세·경계·타입·Pages 빌드·배포 성공. [실행 로그](https://github.com/Cho-WH/circuit/actions/runs/35967493539) |
-| 팔레트 선택 `ab1f54a` 로컬 | visualization/potential-palette-picker/potential-3d/potential-3d-lifecycle/potential-workspace/simulation 6개 파일 84개, specifications/workspace-ui 2개 파일 78개 통과. 타입·경계(61개 소스)·Vite 빌드 통과 |
-| 목록 이름 제거 후 | 메뉴 테스트 5개·타입 검사·실제 3D 메뉴 배치 확인. 커밋 전 명세 검증 통과 |
-| 도선 편집·삭제 보존 ADR-016/017 로컬 | 최종 28개 파일 530개 통과, Firestore 전용 24개 제외. 타입·경계(64개 소스)·Vite 빌드 통과. 경로·앵커·폐곡선 보존, 세/네 단자 net 분리, 직렬 구간 노드 제거를 검증. 브라우저 배선·이동·삭제/복원·SVG/PNG·단락 진단과 390×844 도구·키보드 확인 |
-
-Vite의 큰 청크 안내는 남아 있다. Firestore 검사는 일반 실행과 별도로 Java 21 에뮬레이터에서 수행한다. 재실행 방법은 [개발 운영](../operations/development-workflow.md)을 따른다.
-
-## 요구사항별 근거
-
-
-### 단계 0–1: 문서 계약과 직류 계산
-
-| 요구사항 | 상태 | 검증 근거 |
+| 범위 | 주요 테스트 | 보호하는 동작 |
 |---|---|---|
-| DAT-003 | 자동 검증 | 현재 형식만 지원하는 버전 검사, 원본 불변, 잘못된 입력의 구조화 진단, JSON 왕복을 `specifications.test.ts`에서 확인했다. |
-| SIM-001 | 자동 검증 | 명시적 단자·도선·분기점 net, 화면 좌표 교차 비연결, 입력 순서 독립성, 특수 ID를 `simulation.test.ts`에서 확인했다. |
-| SIM-002 | 자동 검증 | FIX-01~10 상태와 수치, KCL·전력 보존, 기준점 이동, 극단 저항, 0 Ω·닫힌 스위치·전류계를 확인했다. |
-| SIM-003 | 자동 검증 | 부품 전압·전류·전력, 전원과 수동 부호 규약, 음전압 전원, 비유한 결과 거부를 확인했다. |
-| QLT-003 | 자동 검증 | 반복 입력의 바이트 동등 결과, 배열 재배열 독립성, 외부 시간·네트워크 없이 동작하는 핵심과 모듈 경계를 확인했다. |
+| 계약·저장 | specifications, editor-persistence, circuit-session, release-storage | 현재 형식 왕복·지원 밖 입력 거부, 참조 무결성, 백업·저장 실패·채널 분리 |
+| 계산 | simulation, exact-dc, rational, bounded-dc | 물리 fixture, 정확한 0·KCL/KVL·전력, 결정론, 계산 예산·근사 오차·실패 |
+| 다이오드·독립 회로 | diode-engine, diode-domain, diode-kinds, diode-session, independent-references | 평형·차단 전류, 작동 경계, 프로필·분석 잠금, 다른 기준 사이의 측정 차단 |
+| 연결·편집 | wire-editing, wire-routing, junction-editing, component-deletion, changeover-switch | ID 기반 연결, 국소 경로 보존, 원자적 명령·권한·Undo/Redo |
+| 입력·복사·접지 | context-wiring, canvas-drag, touch-interactions, copy-placement, selection-copy-ui, reference-editing, component-names | 실제 포인터/키 입력, 취소·후속 클릭 억제, 복사 ID/이름, 수동 접지와 열린 배선 끝 |
+| 측정·조절 | measurement, non-contact-measurement, resistance-mode, measurement-notebook, meter-readouts, live-value, adjustable-parameter | 부호·미정·전원 분리, 조건별 기록·CSV, 계기 동시 표시·실시간 갱신 |
+| 화면·수명 | analysis-workspace, workspace-ui, potential-3d-lifecycle, potential-workspace, current-overlay | 모드 전환·선택·측정 상태, 비동기 준비·GPU/DOM 정리·카메라 유지 |
+| 시각화·출력 | visualization, potential-3d, current-visualization, quantity-graphs, worksheet-export, output-canvas, example-layout | 같은 net의 동일 표시, 작은 값·정확한 0, 문서 기반 출력·배선/표기 충돌 |
+| 입력 형식·접근성 | quantity, notation, quick-start, potential-palette-picker | 입력/표시 분리, 잘못된 값 거부, 키보드·초점·모달 조작 |
+| 후기 | feedback, feedback-ui, feedback-admin-auth, feedback-firestore | 권한·작성/수정/삭제·검증·보안 규칙. Firestore는 에뮬레이터에서 별도 실행 |
+| 문서·모듈 | document-links, boundaries, specifications | 로컬 링크, import 경계, 요구사항/fixture 참조 |
 
+검사 파일은 tests/ 아래에 있다. 명령은 package.json과 [개발 운영](../operations/development-workflow.md)을 따른다. npm run verify는 모듈 경계·Vitest·타입/빌드를 묶는다. Firestore 검사는 npm run test:firestore로 분리한다.
 
-### 단계 2: 편집과 로컬 저장
-
-| 요구사항 | 상태 | 검증 근거 |
-|---|---|---|
-| EDT-001 | 자동+기능 브라우저 검증 | 불변 명령, 100회 이상 실행 취소·다시 실행, 추가·이동·회전·삭제의 편집 흐름을 확인했다. `component-deletion`·`workspace-ui`에서 삭제 시 경로·분기·기준점·주석 보존, 혼합/동시 삭제, ID 충돌, 버튼/키보드 동일 결과와 원자적 복원을 확인했다. |
-| EDT-002 | 자동+기능 브라우저 검증 | `wire-routing`·`context-wiring`·`canvas-drag`에서 직각성·국소 보존·입력 불변·역방향 대칭·같은 변위의 평행 이동·미리보기/확정 일치·경유점 되돌리기·선분 이동·취소·ID/net 보존을 확인했다. 실기기 터치 검증은 남아 있다. |
-| EDT-003 | 자동 검증 | 좌표상 교차만으로 net을 합치지 않으며 명시적 분기점만 연결함을 확인했다. |
-| EDT-004 | 자동+기능 브라우저 검증 | `1k`와 `1000 Ω` 동등 파싱, 단위 검사, 잘못된 입력 시 문서 불변을 확인했다. |
-| EDT-005 | 자동+기능 브라우저 검증 | 복수 선택 복사의 새 ID, 포함된 도선·분기점·주석만 복사, 삭제 시 참조 정리를 확인했다. |
-| DAT-001 | 자동+기능 브라우저 검증 | 자동·수동 저장 키 분리, 이전 자동 저장 백업 복구, quota 실패 시 기존 저장본 보존, 새로고침 복구를 확인했다. |
-| DAT-002 | 자동 검증 | 문서 직렬화·파싱, 잘못된 JSON·버전·의미 참조 거부, 실패 시 저장소 불변을 확인했다. |
-
-### 단계 3: 전위 시각화
-
-| 요구사항 | 상태 | 검증 근거 |
-|---|---|---|
-| VIS-001 | 자동+기능 브라우저 검증 | 같은 net의 endpoint가 같은 `PotentialValue`를 공유하고 net당 한 숫자 callout을 표시함을 확인했다. |
-| VIS-002 | 자동+기능 브라우저 검증 | 동일 전위의 동일 색, 범위 고정 시 회로 간 색 일치, 미정 전위의 회색 표현을 확인했다. |
-| VIS-003 | 기능 브라우저 검증 | 단자·도선 선택 시 같은 net의 도선·단자·분기점을 함께 강조함을 확인했다. |
-| VIS-004 | 자동+기능 브라우저 검증 | 2D x-y 보존, `z=scale×(V-reference)`, 열린 스위치 간격, 미정 전위 높이 제외, 3D 재맞춤을 확인했다. |
-| VIS-005 | 자동+기능 브라우저 검증 | 제안 경로, 연속 사용자 경로, 비연속 경로 거부, 부품별 전위 변화와 양방향 hover를 확인했다. |
-| VIS-006 | 기능 브라우저 검증 | 전류 화살표 방향·크기 분리와 표시 토글을 확인했다. |
-| VIS-007 | 자동+기능 브라우저 검증 | 자동 범위와 고정 min/max, 기준점 이동에 따른 높이 이동과 전압차 불변을 확인했다. |
-
-### 단계 4: 측정과 진단
-
-| 요구사항 | 상태 | 검증 근거 |
-|---|---|---|
-| SIM-004 | 자동+기능 브라우저 검증 | SOURCE_SHORT, FLOATING_SUBCIRCUIT, CONFLICTING_SOURCES 등 안정 코드, 관련 ID, 수치 미제공과 한국어 수정 안내를 확인했다. |
-| SIM-005 | 자동+기능 브라우저 검증 | 공개 API의 1 V 시험 전원·독립원 비활성화·FIX 부하값과 별도로, 저항 UI의 모든 전원 개방·직렬 3/6/9 Ω·병렬 2 Ω·다중/0 V 전원·개방/단락·원본 보존을 확인했다. `resistance-mode` 6개와 `measurement` 41개 통과. |
-| SIM-006 | 자동+기능 브라우저 검증 | KCL/KVL 항·부호·정확한 합, 열린 경로와 비연속 경로 거부를 확인했다. |
-| MEA-001 | 자동+기능 브라우저 검증 | 빨강−검정 부호, 탐침 반전, 같은 net의 0 V, 기준점 불변, 오류 회로의 수치 숨김을 확인했다. |
-| MEA-002 | 자동+기능 브라우저 검증 | 비접촉 센서의 부품·도선 전류, 병렬 분기 전후 3 A·1 A·2 A, 기준 방향 반전, 미정 도선 고리와 원본 배치 불변을 확인했다. 브리지 R₃의 50 mA와 배선 유지, 드래그·터치 이벤트를 검증했다. |
-| MEA-003 | 자동+기능 브라우저 검증 | 문서 snapshot·조건·예측·시간·단위를 고정한 기록, RFC CSV quoting과 수식 주입 방어를 확인했다. |
-| MEA-004 | 자동+기능 브라우저 검증 | 최대 100개 표본 제한, 원시 x/y·단위, 실패 표본 null, UI 21개 표본 그래프와 수치 범위를 확인했다. |
-
-### 단계 5: 회로도 출력
-
-| 요구사항 | 상태 | 검증 근거 |
-|---|---|---|
-| TCH-001 | 자동+브라우저 | 실제 부품 이름 수정·값 읽기 전용, 표시 토글, 사각 빈칸, 독립 위치와 글자 배율을 공통 SVG에 적용한다. 변경 전후 연결망·계산 결과가 동등하다. |
-| TCH-002 | 자동+브라우저 | 자유 점·화살표·글자, 화살표 끝점 이동, 마우스·터치 드래그의 단일 undo 기록 및 취소를 검증했다. 현재 주석의 저장 왕복을 확인했다. 현재 형식은 v5만 지원하며 `specifications.test.ts`에서 지원 밖 버전을 거부한다. |
-| TCH-003 | 자동+브라우저 | 독립 SVG·PNG, 고정 검은색·좁은 여백·소수점 최대 두 자리, 투명 배경·1/2배 PNG, XML escape, 출력 경계 및 복사 실패 대체. 노드 점 없이 비연결 아치를 유지한다. |
-
-
-
-## 후속 기능의 회귀 근거
-
-| 대상 | 자동 검사와 실제 확인 |
-|---|---|
-| 이름·분수·출력 화살표·v5 | `notation`, `specifications`, `worksheet-export`, `arrow-geometry`, `output-canvas`: 현재 형식 왕복·공통 표기·끝점/본문/라벨 편집·undo. 브라우저에서 분수·첨자·직각 화살표·독립 드래그와 PNG 디코딩 확인 |
-| 터치 EDT-001/004/005, VIS-004, TCH-001 | `touch-interactions`, `canvas-drag`, `context-wiring`, `wire-editing`, `potential-3d-lifecycle`: 길게 누르기·후속 클릭 억제·다중 터치·OS 취소 이벤트·밀집 후보·초안/시야·undo/redo. 좌표와 캡처는 모킹 |
-| 측정 MEA-001/002, SIM-005 | `measurement`, `non-contact-measurement`, `measurement-workspace`, `resistance-mode`: 탐침 부호, 도선 센서, 두 번째 손가락 취소, 모든 전원 개방·다중/0 V 전원·개방/단락·원본 보존 |
-| 3D VIS-004 | `potential-3d`, `potential-3d-lifecycle`, `potential-workspace`: 음수/미소 전압·미정 전위·준비/실패/재진입·자원 정리·높이 변경 라벨 재사용·카메라 드래그/탭 분리 |
-| 팔레트 VIS-001/002/004 | `visualization`, `potential-palette-picker`: 3종 끝점/보간·범위 고정·부유 처리·동일 net 참조·높이 불변, 기본 스펙트럼·키보드/초점·닫기·단일 전위·2D/3D 반영 |
-| 후기 DAT-005 | `feedback`, `feedback-ui`, `feedback-admin-auth`, `feedback-firestore`: 작성 정책·권한·익명/관리자 인증·실패 안내·보안 규칙. 운영 비공개 글 작성/수정/삭제와 관리자 보관함도 확인 |
-
-브라우저에서는 데스크톱 2D/3D 및 390×844·390×500·844×390 크기에서 메뉴 경계, 입력 초안·회전·실행 취소·출력 PNG를 확인했다. 3D 라벨 드래그의 선택 유지, 높이 변경 후 중복 라벨 제거, 팔레트 변경 전후 표지 좌표 동일성도 확인했다. 작은 브라우저 창이나 모킹 이벤트는 실제 모바일 하드웨어 검증이 아니다.
-
-## 남은 검증
-
-실제 교사·학생, 모바일·OS 키보드·보조기술·프린터·외부 문서·파일 왕복·클립보드 거부·성능은 [남은 작업](../implementation/follow-up.md)에 모았다. 브라우저 PNG 미리보기 디코딩은 내려받은 파일의 재열기 검사를 대체하지 않는다. 구체적인 과제와 수용 기준은 [사용성 검증](usability.md)을 따른다.
-
-## 공통 수치 표시 (ADR-019)
-
-quantity.test는 p/n 입력·정확한 분수 결합·정확값 저장과 표시 반올림·반복 편집·수치 범위 경계·세 표시 모드·공통 출력·이름 검증·수식 기울임을 검사한다. quantity-graphs.test는 작은 전위와 실제 이름을, workspace-ui.test는 표시 전환의 물리값 불변성과 이름 확정/실행 취소를 검사한다. Chrome 1280×900/390×900에서 입력·PNG·3D·실험 표와 그래프를 추가 확인했다.
-
-부품별 표시 개정은 workspace-ui/quantity 테스트에서 개별·전체 적용, 한 번의 실행 취소, 저장 왕복, 잘못된 모드 거부, 권한 제한 및 값의 blur/Enter 확정·Escape 취소를 검증한다. Chrome 데스크톱/모바일 너비에서도 메뉴 키보드 탐색·선택·출력·재로드를 확인했다.
-
-## 정확 직류 연산 (2026-10-02)
-
-**근사 경로 검증:** tests/bounded-dc.test.ts에서 예산 경계·결정론, 일반 회로 정확 경로, 큰 분모/연산량의 근사 전환, 알려진 해와 오차 추정, 스케일링·불안정/범위/검증 미완료의 거부, 측정·기록 v4·축·공통 전류 모델의 품질 보존을 확인한다. 기존 정확 연산 및 측정·양쪽 렌더러 검증도 유지한다. 비용은 [최신 부하 보고서](exact-dc-performance.md)를 따른다.
-
-SIM-008의 `exact-dc.test.ts`·`rational.test.ts`는 브리지 중앙 저항·양쪽 도선의 정확한 0, 작은 실제 불균형 전류, 분수 입력→저장→측정→기록, 전원 제약의 정확한 합·충돌, KCL/KVL/전력·기준점 불변성, binary64 범위 밖 계산·표시와 슬라이더의 정확한 끝점을 확인한다. 기존 물리 fixture의 소수 기대값은 표시 변환의 비교 근거로 유지한다. 전체 746개 테스트와 30,030회 반복 갱신, 데스크톱 2D·3D 자동 조절의 [비용 검증](exact-dc-performance.md)을 완료했다. 큰 연결망·분모에서의 동기 지연과 저사양 기기 검증은 남아 있다.
-
-
-## 공통 검증 실행 경로 (2026-10-02)
-
-`npm run verify`는 모듈 경계 → 전체 Vitest(명세·Markdown 링크 포함) → 타입 검사/빌드를 수행하며 로컬과 두 GitHub 워크플로가 같은 명령을 호출한다. specifications 테스트가 요구사항 스키마·ID/참조·fixture 계약을 소유하고 회로 무결성은 domain 공개 검증기를 재사용한다. document-links 테스트가 Python에만 있던 로컬 문서 링크 검사를 담당한다. 별도 Python 구현/의존성은 제거했다. 삭제된 링크와 저장소 밖 경로의 거부도 확인한다.
-
-배포 브랜치 push의 공통 검증은 Pages 워크플로가 담당하고, Verify는 다른 브랜치 push와 PR을 담당한다. 저장 왕복은 실제 serializeDocument/parseDocument 경로로 검증하고, 복제는 대표 회로의 중첩 값·연결을 수정해 원본 독립성을 확인한다. JSON 자체 왕복·fixture 개수 고정·내부 ID 철자·입력 파서와 무관한 이력 검사는 제거했다. fixture의 스키마·ID 중복·참조 무결성 검사는 유지한다.
+성능 수치는 CI 합격 조건으로 고정하지 않는다. [부하 보고서](exact-dc-performance.md)는 계산 예산의 근거와 재현 방법을 남긴다. 실제 사용자·기기·인쇄·장시간 검증은 [남은 작업](../implementation/follow-up.md)과 [사용성 기준](usability.md)에서 관리한다.

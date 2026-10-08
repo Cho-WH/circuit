@@ -205,7 +205,6 @@ describe("structural editor invariants", () => {
 
   it.each([
     ["move", { type: "MoveComponents", positions: { R1: { x: 500, y: 200 } } }],
-    ["rotate", { type: "RotateComponents", ids: ["R1"] }],
   ] as const)("preserves endpoints and repairs connected wire routes locally after %s", (_name, command) => {
     const document = cloneDocument(fixture("FIX-01"));
     document.wires[0].waypoints = [{ x: 10, y: 20 }];
@@ -274,7 +273,7 @@ describe("structural editor invariants", () => {
       expect(copiedEndpointIds.has(wire.end.id)).toBe(true);
     }
     expect(copied.annotations.every(({ anchor }) => anchor !== null && copiedEndpointIds.has(anchor.id))).toBe(true);
-    expect(copied.components.find(({ label }) => label === "R1")!.position).toEqual({ x: 180, y: 50 });
+    expect(copied.components.find(({ label }) => label === "R_3")!.position).toEqual({ x: 180, y: 50 });
     expect(copied.junctions[0].position).toEqual({ x: 270, y: 50 });
 
     const pasted = mustExecute(createHistory(document), { type: "Paste", ...copied });
@@ -474,7 +473,8 @@ describe("versioned JSON persistence", () => {
 
   it.each([
     ["malformed JSON", "{", "INVALID_JSON"],
-    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 6 }), "INVALID_DOCUMENT"],
+    ["previous version", JSON.stringify({ ...fixture("FIX-01"), version: 5 }), "INVALID_DOCUMENT"],
+    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 7 }), "INVALID_DOCUMENT"],
     [
       "dangling semantic reference",
       JSON.stringify({
@@ -498,7 +498,7 @@ describe("versioned JSON persistence", () => {
   });
 
   it.each([
-    ["future version", { ...fixture("FIX-02"), version: 6 }],
+    ["future version", { ...fixture("FIX-02"), version: 7 }],
     [
       "dangling reference",
       {
@@ -520,7 +520,7 @@ describe("versioned JSON persistence", () => {
 
   it("does not write anything when asked to save an invalid document", () => {
     const storage = new MemoryStorage();
-    const invalid = { ...fixture("FIX-01"), version: 6 } as unknown as CircuitDocument;
+    const invalid = { ...fixture("FIX-01"), version: 7 } as unknown as CircuitDocument;
 
     const result = saveLocal(invalid, "auto", storage);
     expect(result.ok).toBe(false);

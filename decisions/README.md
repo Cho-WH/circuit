@@ -36,6 +36,17 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-021](ADR-021-analysis-workspace.md) | 시각화와 측정의 분석 화면 통합 | accepted | 분석 UX 1차 통합 |
 | [ADR-022](ADR-022-measurement-notebook.md) | 비교를 위한 측정표와 별도 로컬 기록 | accepted | 측정 기록 UX 개선 |
 | [ADR-023](ADR-023-live-parameters.md) | 가변저항 조절과 연속 갱신 | accepted | 가변저항 학습 조작 |
-| [ADR-024](ADR-024-exact-dc-arithmetic.md) | 선형 직류 회로의 정확 유리수 연산 | accepted | 정확 연산·회로 v5·비용 검증 완료, 예산 초과 정책은 ADR-025 |
-| [ADR-025](ADR-025-bounded-approximate-dc.md) | 계산 예산을 넘는 직류 회로의 명시적 근사 해석 | accepted | 계산 예산·근사·품질 전달·기록 v4 구현 |
+| [ADR-024](ADR-024-exact-dc-arithmetic.md) | 선형 직류 회로의 정확 유리수 연산 | accepted | 당시 정확 연산·회로 v5·비용 검증 완료, 예산 초과 정책은 ADR-025 |
+| [ADR-025](ADR-025-bounded-approximate-dc.md) | 계산 예산을 넘는 직류 회로의 명시적 근사 해석 | accepted | 당시 계산 예산·근사·품질 전달·기록 v4 구현 |
+| [ADR-026](ADR-026-diode-boundary-analysis.md) | 다이오드·작동 경계와 분석 세션의 과부하·파손 표현 | accepted | 2026-10-05 D0~D4 구현, 현재 회로 v6·기록 v5. dev 개발판 대상 |
 | [ADR-027](ADR-027-release-channels.md) | 안정판·개발판 배포와 브라우저 저장 분리 | accepted | main/dev 상시 운영 |
+| [ADR-028](ADR-028-diode-kinds.md) | 신호용·대전류용 다이오드 선택 | accepted | 두 프로필과 기존 편집 UI 재사용 |
+| [ADR-029](ADR-029-changeover-switch.md) | 전환 스위치와 브릿지 정류 예제 | accepted | 기존 스위치 변형·세 단자·극성 선택 |
+| [ADR-030](ADR-030-diode-equilibrium.md) | 차단 전류 0 A를 유지하는 다이오드 평형 선택 | accepted | 정확한 평형·측정·시각화 공통 결과 |
+| [ADR-031](ADR-031-reference-editing.md) | 자동 0 V 기준과 접지 기호 편집 | accepted | 기준 유지·삭제 시 자동 복귀·배선을 움직이지 않는 드래그 |
+| [ADR-032](ADR-032-selection-copy.md) | 영역 선택과 위치 지정 복사 | accepted | 상단 복사·터치 고정 미리보기·공통 삽입·묶음 겹침 거부 |
+| [ADR-033](ADR-033-independent-references.md) | 독립 회로별 전위 기준 | accepted | 회로별 0 V·기준 간 전압 비교 차단·연결/분리 재계산 |
+| [ADR-034](ADR-034-component-names.md) | 부품 이름의 공통 자동 생성 | accepted | ID와 이름 분리·접두어별 빈 번호·새 배치와 복사 공통 규칙 |
+| [ADR-035](ADR-035-inline-meter-readouts.md) | 회로 위 계기값의 독립적인 펼침·축소 | accepted | 기존 LCD 공유·여러 계기 실시간 표시·2D/3D 위치 추적 |
+| [ADR-036](ADR-036-free-wire-ends.md) | 빈 공간 배선 시작·열린 끝 확정과 전압계 삽입 | accepted | 기존 노드·배선 명령의 원자적 재사용·측정 모델 유지 |
+| [ADR-037](ADR-037-manual-ground-display.md) | 수동 접지만 표시 | accepted | 자동 기호·하단 설명·삭제 안내 제거, 계산 규칙 유지 |

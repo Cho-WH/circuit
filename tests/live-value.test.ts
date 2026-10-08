@@ -98,6 +98,33 @@ it('stops and restores the displayed value when the command is denied', () => {
   expect(frames.size).toBe(0);
 });
 
+it('inspects skipped logical positions and stops at the first risk without undoing that value', () => {
+  const seen:number[]=[];
+  function BoundaryHarness(){
+    const [value,setValue]=useState(0);
+    live=useLiveValue(value,0,1000,(next)=>{seen.push(next);setValue(next);return next===5?'stop':true;},{inspectIntermediate:true,orderKey:'R1'});
+    return null;
+  }
+  act(()=>root.render(createElement(BoundaryHarness)));
+  act(()=>live.start());step(100);step(200);
+  expect(seen).toEqual([1,2,3,4,5]);expect(live.displayed).toBe(5);
+  expect(live.running).toBe(false);expect(live.failed).toBe(false);expect(frames.size).toBe(0);
+});
+
+it('orders simultaneous automatic controllers by component identity',()=>{
+  const calls:string[]=[];
+  let first:ReturnType<typeof useLiveValue>,second:ReturnType<typeof useLiveValue>;
+  function OrderedHarness(){
+    first=useLiveValue(0,0,1000,()=>{calls.push('A');return true;},{inspectIntermediate:true,orderKey:'A'});
+    second=useLiveValue(0,0,1000,()=>{calls.push('B');return true;},{inspectIntermediate:true,orderKey:'B'});
+    return null;
+  }
+  act(()=>root.render(createElement(OrderedHarness)));
+  act(()=>{second.start();first.start();});step(100);step(200);
+  expect(calls).toHaveLength(26);expect(calls.slice(0,13)).toEqual(Array(13).fill('A'));
+  expect(calls.slice(13)).toEqual(Array(13).fill('B'));
+});
+
 it('publishes automatic values in the same frame without treating its own prior result as an external edit', () => {
   function IntegratedHarness() {
     const [value, setValue] = useState(10);

@@ -2,6 +2,7 @@ import * as q from '../rational';
 import type { MeasurementEntry } from '../persistence';
 import {
   componentDefinitions,
+  componentValue,
   endpointName,
   wireName,
   quantityFormatForTargets,
@@ -18,9 +19,12 @@ export function measurementConditionKey(entry: MeasurementEntry): string {
   return JSON.stringify({
     documentId: doc.documentId,
     isolated: entry.sourcesDisconnected,
+    provenance: entry.record.provenance,
     components: sorted(doc.components).map((c) => ({
       id: c.id,
       type: c.type,
+      operatingProfile: c.operatingProfile,
+      characteristics: [c.properties.diodeThresholdV,c.properties.diodeOnResistanceOhm,c.properties.sourceResistanceOhm],
       terminals: c.terminals.map((t) => [t.id, t.role]),
       value: componentDefinitions[c.type].property
         ? c.properties[componentDefinitions[c.type].property!]
@@ -60,7 +64,7 @@ export function conditionValues(entry: MeasurementEntry): { label: string; value
         },
       ];
     return c.type === 'switch'
-      ? [{ label: c.label, value: c.properties.state === 'closed' ? '닫힘' : '열림' }]
+      ? [{ label: c.label, value: componentValue(c) }]
       : [];
   });
 }
@@ -70,6 +74,7 @@ export function conditionDescription(entry: MeasurementEntry): string {
     entry.record.documentSnapshot.title,
     ...conditionValues(entry).map(({ label, value }) => `${label} ${value}`),
     ...(entry.sourcesDisconnected ? ['모든 전원 분리'] : []),
+    ...(entry.record.provenance?.physicalModel === 'component' ? ['부품 특성'] : []),
   ].join(' · ');
 }
 
@@ -114,7 +119,7 @@ export function measurementValue(entry: MeasurementEntry): string {
   return formatQuantity(
     r.quantity === 'current' && r.value !== null ? q.abs(r.value) : (r.value ?? undefined),
     r.unit,
-    quantityFormatForTargets(r.documentSnapshot, r.targetIds),
+    { ...quantityFormatForTargets(r.documentSnapshot, r.targetIds), modelApproximation: r.provenance?.physicalModel === 'component' },
   );
 }
 

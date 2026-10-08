@@ -15,6 +15,11 @@
 .inline-value-editor button{flex-shrink:0;padding:8px;font-size:12px;min-height:36px}
 .inline-value-editor p{font-size:12px;line-height:1.6;color:#a0292c;margin-top:8px}
 .canvas-selection-tools{position:absolute;top:12px;right:16px;display:flex;flex-wrap:wrap;gap:3px;border:1px solid #d3deeb;background:white;border-radius:8px;box-shadow:0 3px 10px #172e4810;padding:3px}
+.selection-marquee{fill:#74866518;stroke:var(--accent);stroke-width:1;vector-effect:non-scaling-stroke}
+.copy-preview{color:var(--accent)}
+.placement-status.copy-status{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.copy-confirm-bubble{position:absolute;z-index:8;display:flex;flex-direction:column;gap:4px;padding:5px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);overflow:auto;background:white;border:1px solid var(--line);border-radius:9px;box-shadow:0 4px 16px #30382f20}
+.copy-confirm-bubble button{min-height:44px;font-size:13px}
 .canvas-selection-tools button{font-size:12px;min-height:34px;color:#324d71}
 .placement-status{position:absolute;top:12px;left:12px;right:12px;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border:1px solid #aac5ef;border-radius:8px;background:#f3f7ff;color:#254e8d;font-size:12px}
 .placement-status button{background:white;border:1px solid #c5d5eb;padding:6px 10px}
@@ -52,6 +57,7 @@
 .circuit-canvas [role=button]:focus{outline:none}
 .component:focus-visible .component-ink{stroke:#245ebc;color:#245ebc;stroke-width:3.5;filter:drop-shadow(0 0 3px #245ebc70)}
 .wire-element:has(>.wire-hit:focus-visible) .wire-ink{stroke-width:4.5;filter:drop-shadow(0 0 3px #245ebc70)}
+.canvas-shell .wire-element .wire-ink[data-current-base=true]{stroke-width:1.25;filter:none}
 .terminal:focus-visible circle:last-of-type{r:7px;stroke:#245ebc;stroke-width:2.5;filter:drop-shadow(0 0 3px #245ebc70)}
 .editable-value:focus-visible{fill:#245ebc;text-decoration:underline;text-underline-offset:4px}
 .circuit-canvas [role=button]:focus-visible>circle{filter:drop-shadow(0 0 3px #245ebc70)}
@@ -159,6 +165,9 @@
 .component-grid{gap:4px;margin-top:4px}.component-tile{height:76px;gap:5px;border:0;background:transparent;border-radius:5px;color:var(--ink)}
 .component-tile:hover{background:#e9eee3;color:var(--accent);border:0}
 .tile-symbol{color:var(--ink)}
+.component-grid .tile-symbol{height:36px;display:flex;align-items:center;justify-content:center}
+.component-grid .tile-symbol svg{width:62px;height:36px}
+@media(max-width:640px){.component-grid .tile-symbol{height:32px}.component-grid .tile-symbol svg{width:54px;height:32px}}
 .library-divider{margin:18px 0}.wide-button{font-size:13px;border-radius:5px}.library-panel>.wide-button{border:0;background:transparent;justify-content:flex-start;padding-left:4px}
 .field-label{font-size:12px;color:var(--muted)}.field-label input,.field-label select{font-size:13px}
 button,input,select,textarea{border-radius:5px}input,select,textarea{color:var(--ink);border-color:var(--line)}
@@ -324,4 +333,11 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
  .analysis-console-host .current-tool>svg{flex:none}
  .analysis-console-host .current-tool>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  .analysis-console-host .measure-diagnostics{flex-basis:auto}
+}
+
+.diode-kind-select{min-height:44px}
+.inline-value-editor .diode-kind-note{color:var(--muted);margin:0;font-size:11px;line-height:16px}
+@media(max-width:640px){
+ .canvas-shell.is-editing:has(.diode-kind-select){margin-bottom:196px}
+ .canvas-shell.is-editing .inline-value-editor:has(.diode-kind-select){max-height:192px}
 }

@@ -19,17 +19,21 @@ export function ParameterControl({
   onChange,
   disabled,
   onAdjustingChange,
+  stopEpoch,
+  inspectIntermediate,
 }: {
   component: ComponentInstance;
   parameter: AdjustableParameter;
   disabled: boolean;
-  onChange: (value: q.StoredScalar, group?: object, fraction?: string) => boolean;
+  onChange: (value: q.StoredScalar, group?: object, fraction?: string) => boolean | 'stop';
   onAdjustingChange?: (id: string, adjusting: boolean) => void;
+  stopEpoch?: number;
+  inspectIntermediate?: boolean;
 }) {
   const { min, max, value, unit, label } = parameter;
   const position = q.toNumber(q.mul(q.div(q.sub(value, min), q.sub(max, min)), 1000));
   const live = useLiveValue(position, 0, 1000, (step, group) =>
-    onChange(parameterValueAt(parameter, step), group),
+    onChange(parameterValueAt(parameter, step), group), { stopEpoch, inspectIntermediate, disabled, orderKey: component.id },
   );
   const displayed = live.adjusting ? parameterValueAt(parameter, live.displayed) : value;
   useEffect(() => {
@@ -42,7 +46,14 @@ export function ParameterControl({
   useEffect(() => {
     if (!editing) setDraft(componentValueInput(component));
   }, [component, editing]);
+  useEffect(() => {
+    if (!disabled) return;
+    setDraft(componentValueInput(component));
+    setEditing(false);
+    setError('');
+  }, [disabled, component]);
   function commit() {
+    if (disabled) return;
     const parsed = parseComponentValue(component, draft);
     if (!parsed.ok) {
       setError(parsed.error);

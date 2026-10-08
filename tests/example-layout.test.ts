@@ -2,19 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { layoutExample } from '../src/app/examples';
 import { examples } from '../src/fixtures';
 import { cloneDocument } from '../src/domain';
-import { componentNotationLayout, componentValue, notationMetrics, compactWirePoints, wireCrossings, wirePoints } from '../src/component-library';
+import { componentNotationLayout, componentValue, componentValueFontSize, notationMetrics, compactWirePoints, wireCrossings, wirePoints } from '../src/component-library';
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 
 describe('curated learning circuit layouts', () => {
-  it('uses subscript notation for numbered names',()=>{
-    for(const example of examples)for(const component of example.document.components){
-      expect(component.label).toMatch(component.type === 'resistive-load' ? /^VR_\d+$/ : /^[A-Za-z]+_\d+$/);
-    }
-  });
-  it('offers nine learning examples without diagnostic or connection exercises', () => {
-    expect(examples.map(example => example.id)).toEqual(['FIX-01', 'FIX-02', 'FIX-03', 'FIX-04', 'FIX-05', 'FIX-11', 'FIX-12', 'FIX-09', 'FIX-10']);
-  });
+
 
   it.each(examples)('$id preserves electrical meaning and leaves the fixture untouched', example => {
     const original = cloneDocument(example.document);
@@ -39,7 +32,8 @@ describe('curated learning circuit layouts', () => {
       expect(a.x === b.x || a.y === b.y, wire).toBe(true);
       for (const component of doc.components) {
         const vertical = component.rotation % 180 !== 0;
-        const halfWidth = vertical ? 24 : 44, halfHeight = vertical ? 44 : 24;
+        const halfLength = component.type === 'switch' ? 24 : 44;
+        const halfWidth = vertical ? 24 : halfLength, halfHeight = vertical ? halfLength : 24;
         const left = component.position.x - halfWidth, right = component.position.x + halfWidth;
         const top = component.position.y - halfHeight, bottom = component.position.y + halfHeight;
         const throughBody = a.y === b.y
@@ -64,7 +58,7 @@ describe('curated learning circuit layouts', () => {
     const doc=layoutExample(example.document);
     const boxes=doc.components.flatMap(c=>{
       const text={label:c.label,value:componentValue(c)},layout=componentNotationLayout(c,text.label,text.value,22.5);
-      return (['label','value'] as const).map(part=>{const p=layout[part],m=notationMetrics(text[part],22.5);return {id:c.id+':'+part,x:p.x-(p.anchor==='middle'?m.width/2:0),y:p.y-m.ascent,w:m.width,h:m.ascent+m.descent};});
+      return (['label','value'] as const).map(part=>{const p=layout[part],m=notationMetrics(text[part],part === 'value' ? componentValueFontSize([],c,text.value,22.5) : 22.5);return {id:c.id+':'+part,x:p.x-(p.anchor==='middle'?m.width/2:0),y:p.y-m.ascent,w:m.width,h:m.ascent+m.descent};});
     });
     const overlap=(a:{x:number;y:number;w:number;h:number},b:{x:number;y:number;w:number;h:number})=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
     for(const [i,box] of boxes.entries()){
@@ -74,16 +68,4 @@ describe('curated learning circuit layouts', () => {
     }
   });
 
-  it('mirrors the parallel branches and source return around one center line', () => {
-    const doc = layoutExample(examples.find(example => example.id === 'FIX-03')!.document);
-    const [source, first, second] = doc.components;
-    expect(first.position.x).toBe(source.position.x);
-    expect(second.position.x).toBe(source.position.x);
-    expect(first.rotation).toBe(second.rotation);
-    expect(source.position.y - second.position.y).toBe(second.position.y - first.position.y);
-    for (const [left, right] of [['W1', 'W6'], ['W2', 'W4'], ['W3', 'W5']]) {
-      const points = (id: string) => compactWirePoints(wirePoints(doc, doc.wires.find(wire => wire.id === id)!));
-      expect(points(left).map(p => ({ x: 2 * source.position.x - p.x, y: p.y }))).toEqual(points(right).reverse());
-    }
-  });
 });

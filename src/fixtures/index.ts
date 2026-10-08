@@ -8,9 +8,11 @@ import bridge from '../../fixtures/FIX-09-balanced-bridge.json';
 import referenceShift from '../../fixtures/FIX-10-reference-shift.json';
 import variableDivider from '../../fixtures/FIX-11-variable-divider.json';
 import variableParallel from '../../fixtures/FIX-12-variable-parallel.json';
+import forwardDiode from '../../fixtures/FIX-13-forward-diode.json';
+import bridgeRectifier from '../../fixtures/FIX-14-bridge-rectifier.json';
 
 // The learning menu is curated separately from diagnostic and editing test fixtures.
-export const examples = [single, series, parallel, mixed, openSwitch, variableDivider, variableParallel, bridge, referenceShift]
+export const examples = [single, series, parallel, mixed, openSwitch, variableDivider, variableParallel, bridge, referenceShift, forwardDiode, bridgeRectifier]
   .map(({ id, title, document }) => {
     const example=requireDocument(document);
     for(const component of example.components)component.label=component.label.replace(/^([A-Za-z]+)(\d+)$/, '$1_$2');

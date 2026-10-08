@@ -27,7 +27,7 @@ describe('exact DC contract', () => {
       ],
     };
     // Matching voltage constraints leave source currents undetermined.
-    expect(solveCircuit(circuit).diagnostics.map((d) => d.code)).toEqual(['SINGULAR_SYSTEM']);
+    expect(solveCircuit(circuit).diagnostics.map((d) => d.code)).toEqual(['NONUNIQUE_OPERATING_POINT']);
     circuit.elements[2].value = q.add(0.3, q.power10(-100));
     expect(solveCircuit(circuit).diagnostics.map((d) => d.code)).toEqual(['CONFLICTING_SOURCES']);
     circuit.elements[2] = {

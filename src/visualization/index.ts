@@ -1,11 +1,13 @@
 import type { CompiledCircuit, SimulationResult } from '../domain';
+export type { ComponentLabelLayout, ScreenRectangle } from './component-labels';
+export { operatingMarkSvg, type ComponentOperatingMark } from './operating';
 export { buildCurrentModel, currentBand, currentFullWidth, type CurrentModel, type CurrentSample, type CurrentValue, type CurrentDisplay } from './current';
 export { buildCurrentPaths, hasCurrentBridge, type CurrentPath, type CurrentPoint } from './current-paths';
 export { flowMarks, flowSpeed, flowSpacing, flowLength, currentSpacing, flowJunctionOpacity, flowJunctionRadius, type FlowMark, type FlowViewport } from './flow-geometry';
 export { buildCurrentTracks, type CurrentTrack, type ProjectedCurrentPath } from './current-tracks';
 export { defaultPotentialPalette, potentialPalettes, potentialPalette, potentialColorStops, potentialColor, potentialGradient, type PotentialPaletteId } from './palettes';
 
-export { buildPotentialModel, potentialAxisValue, potentialAxisCoordinate, type PotentialValue, type PotentialSegment, type PotentialRange, type PotentialOptions, type PotentialModel } from './potential';
+export { buildPotentialModel, potentialAxisValue, potentialAxisCoordinate, referenceGroupLabel, type PotentialValue, type PotentialSegment, type PotentialRange, type PotentialOptions, type PotentialModel, type PotentialReference } from './potential';
 
 export interface PathStep { elementId: string; from: string; to: string }
 export interface CircuitPath { id: string; label: string; steps: PathStep[] }
@@ -42,5 +44,10 @@ export function makePath(circuit: CompiledCircuit, ids: string[]): CircuitPath |
   return null;
 }
 export function pathVoltages(path: CircuitPath, result: SimulationResult) {
-  return path.steps.map(step => ({ ...step, fromVoltage: result.nodeVoltages[step.from], toVoltage: result.nodeVoltages[step.to] }));
+  return path.steps.map(step => {
+    const a = result.referenceGroups?.find(group => group.netIds.includes(step.from));
+    const b = result.referenceGroups?.find(group => group.netIds.includes(step.to));
+    const independent = a && b && a.id !== b.id;
+    return { ...step, fromVoltage: independent ? undefined : result.nodeVoltages[step.from], toVoltage: independent ? undefined : result.nodeVoltages[step.to] };
+  });
 }

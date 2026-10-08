@@ -123,7 +123,11 @@ describe("potential model invariants", () => {
     const document = fixture("FIX-07-floating-network.json");
     const { circuit } = compileCircuit(document);
     const result = solveCircuit(circuit);
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("warning");
+    expect(result.solution).toBe("nonunique");
+    expect(result.nodeVoltages).toEqual({});
+    expect(result.branchCurrents.R1).toEqual(q.ZERO);
+    expect(result.componentVoltages.R1).toEqual(q.ZERO);
 
     const model = buildPotentialModel(document, circuit, result);
     expect(model.undefinedCount).toBe(circuit.nets.length);

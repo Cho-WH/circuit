@@ -1,7 +1,7 @@
 import * as q from '../src/rational';
 import { describe, expect, it } from 'vitest';
 import { cloneDocument, validateDocument } from '../src/domain';
-import { adjustableParameter, createComponent } from '../src/component-library';
+import { adjustableParameter } from '../src/component-library';
 import { parseDocument, serializeDocument } from '../src/persistence';
 import { executeCommand, createHistory } from '../src/editor';
 import { examples } from '../src/fixtures';
@@ -19,12 +19,6 @@ function circuit() {
   return doc;
 }
 describe('adjustable resistance contract', () => {
-  it('gives new variable resistors explicit subscript labels while retaining electrical IDs', () => {
-    const component = createComponent('resistive-load', 'VR12', { x: 0, y: 0 });
-    expect(component.label).toBe('VR_12');
-    expect(component.id).toBe('VR12');
-    expect(component.terminals.map(t => t.id)).toEqual(['VR12.a', 'VR12.b']);
-  });
   it('preserves bounded values on save/load and rejects invalid ranges and out-of-range commands', () => {
     const doc = circuit();
     expect(parseDocument(serializeDocument(doc))).toEqual({ ok: true, document: doc });

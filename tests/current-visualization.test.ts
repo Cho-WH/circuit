@@ -75,10 +75,11 @@ describe('current display physical invariants (VIS-006)', () => {
     loop.wires.push({ ...structuredClone(loop.wires[0]), id: 'duplicate' });
     expect(solve(loop).model.samples.find((s) => s.id === 'W1')?.value.status).toBe('undefined');
     expect(
-      solve(fixture('FIX-07-floating-network')).model.samples.every(
+      solve(fixture('FIX-08-conflicting-sources')).model.samples.every(
         (s) => s.value.status === 'unavailable',
       ),
     ).toBe(true);
+    expect(solve(fixture('FIX-07-floating-network')).model.samples.every(s => s.value.status === 'known' && q.sign(s.value.amperes) === 0)).toBe(true);
     const open = fixture('FIX-05-open-switch'),
       a = solve(open);
     expect(a.model.samples.every((s) => s.value.status === 'known' && q.sign(s.value.amperes) === 0)).toBe(
@@ -100,7 +101,8 @@ describe('current display physical invariants (VIS-006)', () => {
   it('requires an explicit bridge policy for every new device and never bridges voltmeters', () => {
     const component = fixture('FIX-02-series').components[1];
     expect(hasCurrentBridge({ ...component, type: 'voltmeter' })).toBe(false);
-    for (const type of ['capacitor', 'diode'])
+    expect(hasCurrentBridge({ ...component, type: 'diode' })).toBe(true);
+    for (const type of ['capacitor'])
       expect(hasCurrentBridge({ ...component, type } as ComponentInstance)).toBe(false);
     expect(hasCurrentBridge({ ...component, type: 'switch', properties: { state: 'open' } })).toBe(
       false,

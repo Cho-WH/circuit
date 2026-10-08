@@ -1,0 +1,111 @@
+.operating-help-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+}
+.operating-help-overlay > [data-help-component] {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  pointer-events: auto;
+}
+.operating-help-overlay > [hidden] {
+  display: none;
+}
+.operating-help-trigger > .floating-panel-trigger {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.operating-help-trigger > .floating-panel-trigger > span {
+  position: absolute;
+  left: var(--help-icon-x, 12px);
+  top: var(--help-icon-y, 12px);
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #aab39e;
+  border-radius: 50%;
+  background: var(--surface, #fcfbf8);
+  color: #53694b;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 1px 4px #30382f0b;
+}
+.operating-help-trigger > .floating-panel-trigger:hover > span,
+.operating-help-trigger > .floating-panel-trigger[aria-expanded='true'] > span {
+  background: #eaf0e3;
+  border-color: #788d69;
+}
+.floating-panel-content.operating-help-content {
+  padding: 14px 16px;
+  line-height: 1.75;
+  font-size: 13px;
+  color: var(--ink);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.operating-help-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.operating-help-heading button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin: -8px -8px 0 0;
+}
+.operating-help-content h3 {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 9px;
+  font-weight: 650;
+}
+.operating-help-content p {
+  margin: 0 0 10px;
+}
+.operating-help-content p:last-child {
+  margin-bottom: 0;
+}
+.operating-help-related {
+  border-top: 1px solid var(--line);
+  margin-top: 13px;
+  padding-top: 10px;
+}
+.operating-help-related > span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.operating-help-related button {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  min-height: 44px;
+  padding: 6px 0;
+  color: var(--accent);
+}
+.operating-help-back {
+  font-size: 12px;
+  min-height: 44px;
+  padding: 6px 0;
+  color: var(--muted);
+}
+.operating-help-fallback {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}

@@ -33,3 +33,7 @@
 한도 경계·결정론, 일반 fixture의 정확 경로 유지, 근사값의 해석적 기대값·잔차·민감도, 모순/미정 회로와 수치 실패, 측정·기록·양쪽 렌더러의 품질 보존을 구현과 함께 검증한다. 조건수/오차 추정과 수용 기준은 계산 명세 §7.6에 확정했다. bounded-dc 테스트와 최신 부하 보고서에서 구현·비용을 확인한다.
 
 알고리즘 참고: [LAPACK DGESVX](https://netlib.org/lapack/explore-html/d5/dbe/group__gesvx_ga82173a93234afc15d70b64233b3e5bc8.html)의 equilibration, partial-pivot LU, iterative refinement 및 error/condition estimates. 해당 라이브러리 도입을 요구하는 결정은 아니다.
+
+## 다이오드 확장 계약 (2026-10-05)
+
+[ADR-026](ADR-026-diode-boundary-analysis.md)이 이 절과 겹치는 이전 범위를 확장한다. 다이오드의 상태 후보·부등식 생성·정확 연산을 한 요청 예산에 포함한다. 탐색 미완료·수치 검증 실패·경계를 가로지르는 오차를 이상 해 부재나 확정된 파손으로 치환하지 않는다. 회로 v6·측정 기록 v5의 출처는 물리 모델과 연산 품질을 별도 필드로 보존한다.

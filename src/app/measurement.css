@@ -20,6 +20,10 @@
 .measure-lcd output{display:flex;align-items:baseline;justify-content:flex-end;min-height:60px;gap:8px;font-variant-numeric:tabular-nums;line-height:1.3}
 .measure-lcd-value{min-width:0;overflow-wrap:anywhere;text-align:right;font-family:'Cascadia Mono','SFMono-Regular',Consolas,monospace;font-size:46px;font-weight:500;letter-spacing:-1.5px}
 .measure-lcd-unit{flex:none;min-width:15px;font-size:21px;font-weight:500;line-height:1;white-space:nowrap}
+.measure-lcd--compact{flex:none;padding:5px 8px;border-radius:4px;max-width:calc(100vw - 64px)}
+.measure-lcd--compact output{min-height:26px;gap:4px}
+.measure-lcd--compact .measure-lcd-value{font-size:22px;letter-spacing:-.6px}
+.measure-lcd--compact .measure-lcd-unit{font-size:13px;min-width:0}
 .measure-record-row{display:flex;align-items:center;gap:4px;margin-top:8px;white-space:nowrap}
 .measure-record-label{font-size:12px;font-weight:600;margin-right:3px}
 .measure-record-row button{min-height:32px;padding:6px;gap:3px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--accent);font-size:12px;white-space:nowrap}

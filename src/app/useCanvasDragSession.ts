@@ -1,6 +1,7 @@
+import type { ComponentKind } from '../component-library';
 import { snapGridPoint, snapGridValue } from '../wire-geometry';
 import { useMemo, useRef, useState, type RefObject } from 'react';
-import type { CircuitDocument, ComponentType, Point } from '../domain';
+import type { CircuitDocument, Point } from '../domain';
 import { previewCommand, type Command } from '../editor';
 
 type View = { x: number; y: number; width: number; height: number };
@@ -52,20 +53,21 @@ export function wireDragCommand(
 export function useCanvasDragSession(
   document: CircuitDocument,
   tool: string,
-  placement: ComponentType | null,
+  placement: ComponentKind | null,
   readOnly: boolean | undefined,
   svg: RefObject<SVGSVGElement | null>,
 ) {
   const [drag, setDrag] = useState<ComponentDrag | null>(null);
   const [wireDrag, setWireDrag] = useState<WireDrag | null>(null);
+  const [referenceDrag, setReferenceDrag] = useState<DragBase | null>(null);
   const [pan, setPan] = useState<{ x: number; y: number; view: View } | null>(null);
   const capturedPointer = useRef<number | null>(null);
   const enabled = tool === 'select' && !placement && !readOnly;
   const activeDrag = enabled && drag?.document === document ? drag : null;
   const activeWireDrag = enabled && wireDrag?.document === document ? wireDrag : null;
+  const activeReferenceDrag = enabled && referenceDrag?.document === document ? referenceDrag : null;
 
   function capture(pointerId: number) {
-    if (pointerId < 0) return; // Tap-to-move has no captured pointer.
     capturedPointer.current = pointerId;
     svg.current?.setPointerCapture(pointerId);
   }
@@ -73,6 +75,7 @@ export function useCanvasDragSession(
   function cancel() {
     setDrag(null);
     setWireDrag(null);
+    setReferenceDrag(null);
     setPan(null);
     const pointerId = capturedPointer.current;
     capturedPointer.current = null;
@@ -96,19 +99,23 @@ export function useCanvasDragSession(
   }, [document, activeDrag, activeWireDrag]);
 
   return {
-    drag,
     activeDrag,
     activeWireDrag,
+    activeReferenceDrag,
     pan,
     capturedPointer,
     movedDocument,
     cancel,
+    beginReference(start: Point, pointerId: number) {
+      setReferenceDrag({ start, current: start, pointerId, document });
+      capture(pointerId);
+    },
     beginComponents(ids: string[], start: Point, pointerId: number) {
       setDrag({
         start,
         current: start,
         positions: Object.fromEntries(
-          document.components
+          [...document.components, ...document.junctions]
             .filter((component) => ids.includes(component.id))
             .map((component) => [component.id, component.position]),
         ),
@@ -134,9 +141,7 @@ export function useCanvasDragSession(
     move(pointerId: number, current: Point) {
       if (activeDrag?.pointerId === pointerId) setDrag({ ...activeDrag, current });
       if (activeWireDrag?.pointerId === pointerId) setWireDrag({ ...activeWireDrag, current });
-    },
-    moveTo(current: Point) {
-      if (drag) setDrag({ ...drag, current });
+      if (activeReferenceDrag?.pointerId === pointerId) setReferenceDrag({ ...activeReferenceDrag, current });
     },
   };
 }

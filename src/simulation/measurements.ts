@@ -7,6 +7,7 @@ import {
   type SimulationResult,
 } from '../domain';
 import { solveCircuit } from './solver';
+import { queryCurrent } from './piecewise';
 
 export interface ResistanceResult {
   status: 'finite' | 'open' | 'short' | 'error';
@@ -31,6 +32,34 @@ export function equivalentResistance(
   )
     return { status: 'error', diagnostics: [diagnostic('INVALID_RESISTANCE_PORT', [aNet, bNet])] };
   const elements = circuit.elements.filter((e) => !excluded.has(e.id));
+  // Reject a nonlinear measurement island before source deactivation or resistor filtering.
+  const related = new Set([aNet, bNet]);
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const e of elements) {
+      if (e.type === 'voltmeter' || (e.type === 'switch' && !e.closed)) continue;
+      if (related.has(e.a) !== related.has(e.b)) {
+        related.add(e.a);
+        related.add(e.b);
+        expanded = true;
+      }
+    }
+  }
+  const diodes = elements.filter(
+    (e) => e.type === 'diode' && (related.has(e.a) || related.has(e.b)),
+  );
+  if (diodes.length)
+    return {
+      status: 'error',
+      diagnostics: [
+        diagnostic(
+          'NONLINEAR_RESISTANCE_UNSUPPORTED',
+          diodes.map((e) => e.id),
+          'warning',
+        ),
+      ],
+    };
   if (
     elements.some(
       (e) =>
@@ -146,11 +175,25 @@ export function checkKcl(
   netId: string,
 ): ConservationResult {
   if (!circuit.nets.some((n) => n.id === netId)) return unavailable('INVALID_REFERENCE', [netId]);
-  if (result.status === 'error' || !q.isRational(result.nodeVoltages[netId]))
-    return unavailable('MEASUREMENT_UNAVAILABLE', [netId]);
   const elements = circuit.elements.filter((e) => e.a === netId || e.b === netId);
-  if (elements.some((e) => !q.isRational(result.branchCurrents[e.id])))
-    return unavailable('MEASUREMENT_UNAVAILABLE', [netId]);
+  if (elements.some((e) => !q.isRational(result.branchCurrents[e.id]))) {
+    const queried = queryCurrent(
+      result,
+      elements.map((e) => ({
+        componentId: e.id,
+        coefficient: (e.a === netId ? 1 : 0) - (e.b === netId ? 1 : 0),
+      })),
+    );
+    if (queried.status !== 'unique') return unavailable('MEASUREMENT_UNAVAILABLE', [netId]);
+    return {
+      defined: true,
+      terms: [],
+      sum: queried.value,
+      tolerance: 0,
+      passes: q.sign(queried.value) === 0,
+      diagnostics: [],
+    };
+  }
   return total(
     elements.map((e) => ({
       elementId: e.id,

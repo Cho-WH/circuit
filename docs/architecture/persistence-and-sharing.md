@@ -17,14 +17,18 @@
 
 ## 파일 열기와 버전
 
-현재 파일 형식은 `edu-circuit` v5다. 현재 스키마·정규형 물리값·ID 참조 무결성을 검사한 결과만 적용한다. 사용자 지시에 따라 이전 버전 변환·호환을 제공하지 않는다. 잘못된 JSON·지원하지 않는 버전·깨진 참조는 구조화된 진단으로 거부하며 현재 문서와 저장 원본을 바꾸지 않는다. 정확값 저장 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md), 출력 표기는 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)를 따른다.
+현재 파일 형식은 `edu-circuit` v6다. 현재 스키마·정규형 물리값·ID 참조 무결성을 검사한 결과만 적용한다. 사용자 지시에 따라 이전 버전 변환·호환을 제공하지 않는다. 잘못된 JSON·지원하지 않는 버전·깨진 참조는 구조화된 진단으로 거부하며 현재 문서와 저장 원본을 바꾸지 않는다. 정확값 저장 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md), 출력 표기는 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)를 따른다.
 
 ## 측정표
 
-측정표는 회로 파일과 별도의 브라우저 기록이다. `<channel>:edu-circuit:measurement-notebook:v4`에 버전 4 목록을 저장하고 유효한 이전 사본을 백업한다. 문서 스냅샷·측정값·방향·전원 분리 조건·메모와 정확한 탐침/센서 위치를 검증해 복원한다. 값은 정규형 정수 문자열 쌍이며 record.quality와 근사값의 approximation(reason/policy/absoluteError)을 함께 검증한다. 누락·불일치는 거부하며 스냅샷은 회로 v5다. 이전 기록 키를 읽거나 변환하지 않으며 현재 형식의 새 기록부터 저장한다. 읽기 실패 시 빈 목록 자동 저장을 피하고, 쓰기 실패 시 메모리 기록과 표 복사/CSV 저장을 유지한다. 다중 탭 병합은 지원하지 않는다. [ADR-022](../../decisions/ADR-022-measurement-notebook.md)
+측정표는 회로 파일과 별도의 브라우저 기록이다. `<channel>:edu-circuit:measurement-notebook:v5`에 버전 5 목록을 저장하고 유효한 이전 사본을 백업한다. 문서 스냅샷·측정값·방향·전원 분리 조건·메모와 정확한 탐침/센서 위치를 검증해 복원한다. 값은 정규형 정수 문자열 쌍이며 record.quality와 근사값의 approximation(reason/policy/absoluteError)을 함께 검증한다. 누락·불일치는 거부하며 스냅샷은 회로 v6다. 이전 기록 키를 읽거나 변환하지 않으며 현재 형식의 새 기록부터 저장한다. 읽기 실패 시 빈 목록 자동 저장을 피하고, 쓰기 실패 시 메모리 기록과 표 복사/CSV 저장을 유지한다. 다중 탭 병합은 지원하지 않는다. [ADR-022](../../decisions/ADR-022-measurement-notebook.md)
 
 ## 후속 공유 범위
+
+측정 기록의 선택적 `provenance`는 `physicalModel`, `profileRevision`, `arithmeticQuality`를 함께 보존한다. 분석 결과에서 만든 기록은 이 출처를 전달하고, 외부 측정이나 기존 선형 공개 API처럼 출처가 없는 기록은 실제로 제공된 조건만 저장한다. 물리 모델의 교육용 근사와 수치 연산 품질을 하나의 quality로 합치지 않는다.
 
 공유 링크와 학생 활동 배포는 단계 6의 미구현 범위다. 링크가 도입되면 보기·제한된 조작·측정·자유 편집 권한을 명시하고, 학생 식별 정보·비밀 키·장기 인증 토큰·교사 원본 수정 권한을 URL에 싣지 않는다. URL 직접 내장과 서버 ID 방식의 선택은 [ADR-005](../../decisions/ADR-005-share-link.md)를 따른다.
 
 회로·활동 기본 스키마에는 개인 식별 필드를 두지 않는다. 상세 행동 로그는 별도 동의를 전제로 한다. 후기 게시판의 Firebase 저장은 회로 문서 저장과 별도이며 [게시판 구조](feedback.md)를 따른다.
+
+다이오드 종류 확장은 회로 v6·측정 기록 v5 안에서 두 프로필 ID를 추가한다. 이전 v6 문서·기록의 프로필 및 참조 생략 의미를 보존한다. 모르는 ID/revision과 지원 밖 문서 버전은 거부하며 자동 변환하지 않는다. 종류 선택 당시 ID는 회로 복사·기록 스냅샷·출처에 함께 남는다. [ADR-028](../../decisions/ADR-028-diode-kinds.md).

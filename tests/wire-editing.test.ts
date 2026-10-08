@@ -19,6 +19,20 @@ function crossingFixture(){
 }
 const join:Command={type:'ConnectCrossing',point:{x:200,y:200},wireIds:['H','V'],junctionId:'J',newWireIds:['H2','V3']};
 describe('wire insertion and explicit crossing edits',()=>{
+  it('inserts a series voltmeter without bypass: zero current, full source voltage, atomic undo and save',()=>{
+    const doc=fixture(),meter=createComponent('voltmeter','M1',{x:300,y:450});
+    const target=insertionCandidates(doc,meter.position)[0];
+    const command:Command={type:'InsertComponentOnWire',component:meter,...target,newWireId:'W3'};
+    const history=apply(doc,command),next=history.present,result=solve(next);
+    expect(q.toNumber(result.branchCurrents.R1)).toBe(0);
+    expect(q.toNumber(result.branchCurrents.M1)).toBe(0);
+    expect(Math.abs(q.toNumber(result.componentVoltages.M1))).toBe(9);
+    const nets=compileCircuit(next).circuit.endpointToNet;
+    expect(nets['M1.a']).not.toBe(nets['M1.b']);
+    expect(previewCommand(doc,command)).toEqual({ok:true,document:next});
+    expect(undo(history).present).toEqual(doc);
+    expect(parseDocument(serializeDocument(next))).toMatchObject({ok:true,document:next});
+  });
   it('inserts 6 Ω in the 9 V / 3 Ω fixture without a bypass, previews identically and undoes atomically',()=>{
     const doc=fixture(),r=createComponent('resistor','R2',{x:300,y:450});r.properties.resistanceOhm=q.store(6);
     const candidate=insertionCandidates(doc,r.position)[0];
@@ -47,13 +61,13 @@ describe('wire insertion and explicit crossing edits',()=>{
     source.terminals.reverse();doc.referenceNode=null;
     const target=insertionCandidates(doc,source.position)[0];
     const next=apply(doc,{type:'InsertComponentOnWire',component:source,...target,newWireId:'W3'}).present;
-    expect(next.referenceNode?.id).toBe('V2.b');
+    expect(next.referenceNode).toBeNull();
     expect(next.wires.find(w=>w.id==='W2')?.end.id).toBe('V2.b');
     expect(wirePoints(next,next.wires.find(w=>w.id==='W2')!).at(-1)).toEqual({x:800,y:264});
   });
-  it.each(['space','crossing','voltmeter','permission','duplicate'])('rejects %s insertion without mutating the document',reason=>{
+  it.each(['space','crossing','permission','duplicate'])('rejects %s insertion without mutating the document',reason=>{
     const doc=fixture(),before=cloneDocument(doc),p=reason==='space'?{x:210,y:450}:reason==='crossing'?{x:400,y:180}:{x:300,y:450};
-    const r=createComponent(reason==='voltmeter'?'voltmeter':'resistor','R2',p),candidate=insertionCandidates(doc,p)[0];
+    const r=createComponent('resistor','R2',p),candidate=insertionCandidates(doc,p)[0];
     if(reason==='permission')doc.activity={allowedCommands:['AddComponent'],revealSteps:[]};
     const history=createHistory(doc),result=executeCommand(history,{type:'InsertComponentOnWire',component:r,...candidate,newWireId:reason==='duplicate'?'W1':'W3'});
     expect(result.ok).toBe(false);expect(history.past).toEqual([]);expect({...doc,activity:null}).toEqual(before);

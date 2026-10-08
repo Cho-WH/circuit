@@ -1,5 +1,5 @@
 import * as q from '../../rational';
-import type { CircuitDocument } from '../../domain';
+import type { CircuitDocument, CompileResult, SimulationResult } from '../../domain';
 import type { AdjustableParameter } from '../../component-library';
 import { buildCurrentModel } from '../../visualization';
 import { analyze } from '../analyze';
@@ -35,8 +35,8 @@ export function parameterScales(
   const voltages: q.Scalar[] = [0],
     relativeVoltages: q.Scalar[] = [0],
     currents: q.Scalar[] = [0];
-  // With one positive resistor varied and all other elements fixed, solved quantities
-  // are fractional-linear functions of R; their extrema occur at the range endpoints.
+  // The endpoints bound linear resistor circuits. For diodes they only seed the
+  // scale; includeCurrentScales adds every verified current point while adjusting.
   for (const value of [parameter.min, parameter.max]) {
     const sample = {
       ...document,
@@ -66,5 +66,22 @@ export function parameterScales(
     voltage: range(voltages),
     height: range(relativeVoltages),
     current: q.sign(current) ? current : q.ONE,
+  };
+}
+
+export function includeCurrentScales(
+  previous: ReturnType<typeof parameterScales>,
+  compilation: CompileResult,
+  result: SimulationResult,
+  current: q.Scalar,
+): ReturnType<typeof parameterScales> {
+  const min = (a:q.Scalar,b:q.Scalar)=>q.compare(a,b)<0?a:b;
+  const max = (a:q.Scalar,b:q.Scalar)=>q.compare(a,b)>0?a:b;
+  const values=Object.values(result.nodeVoltages);
+  const reference=result.nodeVoltages[compilation.circuit.referenceNetId??'']??q.ZERO;
+  return {
+    voltage:{min:values.reduce(min,previous.voltage.min),max:values.reduce(max,previous.voltage.max)},
+    height:{min:values.map(v=>q.sub(v,reference)).reduce(min,previous.height.min),max:values.map(v=>q.sub(v,reference)).reduce(max,previous.height.max)},
+    current:max(previous.current,current),
   };
 }

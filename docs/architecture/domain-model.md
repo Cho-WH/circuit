@@ -24,7 +24,7 @@
 
 ## 핵심 타입 예시
 
-현재 v5 저장·공개 계산 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 따른다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 현재 형식만 지원한다.
+현재 v6 저장·공개 계산 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 따른다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 현재 형식만 지원한다.
 
 ```ts
 interface Rational { readonly numerator: bigint; readonly denominator: bigint }
@@ -36,7 +36,7 @@ type EndpointRef =
 
 interface CircuitDocument {
   format: 'edu-circuit';
-  version: 5;
+  version: 6;
   documentId: string;
   title: string;
   components: ComponentInstance[];
@@ -80,6 +80,18 @@ interface SimulationResult {
 - 회전은 MVP에서 0°, 90°, 180°, 270°다.
 - SIM-008에 따라 0·부호·동일 전위·제약 일치를 정확 비교하며 좌표·화면 기하의 근사 계산과 분리한다.
 
+## 다이오드와 부품 프로필
+
+다이오드의 두 단자는 `anode`와 `cathode`이며 전기 방향은 A→K다. 역할은 배열·화면 회전과 독립적이다. `operatingProfile?: { id, revision: 1 }`은 타입별 교육용 프로필을 참조한다. 생략된 참조는 v6에서 고정한 기본값으로 해석한다. 값과 범위는 [부품 경계](../physics/circuit-operating-boundaries.md)의 D0 표를 따른다.
+
+선택적 `properties.sourceResistanceOhm`, `diodeThresholdV`, `diodeOnResistanceOhm`은 재현할 특성 차이만 정확값으로 저장한다. 기본 프로필·경계는 `domain.operatingProfileFor`를 통해 컴파일에 전달하며 계산 전용 요소를 문서에 추가하지 않는다. 모르는 프로필이나 잘못된 단자 역할·특성값은 문서 검증에서 거부한다.
+
+위 특성을 명시한 부품에는 컴파일 시 `explicitCharacteristics`를 표시한다. 분석 모델 선택은 이를 사용해 안전 범위에서도 명시한 부품 특성을 관찰할 수 있게 한다. 이 표시는 계산 입력의 파생 정보이며 저장 문서에 별도 플래그로 넣지 않는다.
+
+## 전환 스위치
+
+전환 스위치는 [ADR-029](../../decisions/ADR-029-changeover-switch.md)에 따라 기존 switch의 switchKind=spdt·state=a|b와 common/throw-a/throw-b 세 단자를 사용한다. 기존 v6 JSON 구조를 유지하며 domain은 역할 중복/누락·미지원 종류·상태를 거부한다. 컴파일·측정은 공통→선택 접점만 사용하고 미선택 접점은 전류가 주입되지 않는 독립 단자로 남는다. 일반 스위치의 open/closed 계약은 유지한다.
+
 ## 저장하지 않는 값
 
 다음 값은 파일에 정답처럼 저장하지 않는다.
@@ -102,6 +114,8 @@ interface SimulationResult {
 - 도선 삭제로 영향을 받은 분기점과 부품 대체로 만든 점만 연결 수에 따라 정리한다. 앵커 없는 고립점은 제거하고 두 도선 접점은 경로를 합친다. 열린 끝·분기·앵커·폐곡선의 필수 끝점은 유지한다. 삽입은 선택한 연속 경로에 같은 규칙을 적용한다(ADR-018).
 - 연결된 부품 삭제는 단자 자리에 새 분기점을 만들고 도선·주석·기준점의 참조를 함께 옮긴다. 두 단자 사이 도선을 추가하며 기존 경로는 보존한다. 명시적으로 삭제한 도선은 복원하지 않는다. 노드 수동 삭제는 지원하지 않는다(ADR-017/018).
 - 기준점은 존재하는 단자 또는 분기점을 참조하거나 `null`이다.
+- `referenceNode`는 문서에 명시적으로 지정한 수동 접지다. 새 배치·삽입·불러오기는 자동 기준을 기록하지 않는다. null이면 계산기의 독립 기준 정책을 사용하며 접지 기호를 표시하지 않는다. 삭제는 null로 유지하고 Undo/Redo·저장 왕복으로 보존한다([ADR-037](../../decisions/ADR-037-manual-ground-display.md)).
+- 독립 영역의 기준은 `SimulationResult.referenceGroups`에서 파생한다. 수동 접지는 하나의 우선 기준이며 영역별 자동 기준 기호는 그리지 않는다. 기존 파일에 저장된 referenceNode는 출처를 추정하여 지우지 않고 유지한다. 회로 v6·기록 v5는 바꾸지 않는다.
 
 가변저항의 저장 타입은 `resistive-load`를 사용한다. 두 단자와 `resistanceOhm` 속성은 일반 저항과 같으며, UI 이름·기호만 구분한다. ID·이름과 물리값을 별도로 관리한다.
 
@@ -109,8 +123,10 @@ interface SimulationResult {
 
 ## 부품별 숫자 표시
 
-ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성이며 미설정 기본은 auto다. 문서에 저장할 부품 표기 속성으로 위치·이름과 함께 저장·복사·실행 취소한다. 숫자값·Fraction 원문·연결·계산식은 바꾸지 않는다. v5 properties 계약을 사용하며 ADR-019를 따른다.
+ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성이며 미설정 기본은 auto다. 문서에 저장할 부품 표기 속성으로 위치·이름과 함께 저장·복사·실행 취소한다. 숫자값·Fraction 원문·연결·계산식은 바꾸지 않는다. v6 properties 계약을 사용하며 ADR-019를 따른다.
 
 ## 가변저항 범위
 
-resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. v5의 정확값 필드를 사용한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.
+resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. v6의 정확값 필드를 사용한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.
+
+다이오드 종류는 별도 UI 상태가 아닌 operatingProfile의 edu-diode-signal@1 / edu-diode-power@1로 저장한다. 새 부품은 신호용이다. 기존 edu-diode@1과 참조 생략의 고정 의미는 유지한다. [ADR-028](../../decisions/ADR-028-diode-kinds.md).

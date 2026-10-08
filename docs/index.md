@@ -7,6 +7,20 @@
 - [작업 추적](implementation/mvp-tracker.md): 최근 변경과 주요 완료 결과
 - [요구사항](../requirements/requirements.yaml) · [스키마](../schemas/) · [기술 결정 색인](../decisions/README.md): 규범과 계약
 
+## 다이오드 확장 — D0~D4 구현
+
+선형 직류와 다이오드 구간선형 모델, 회로 v6·측정 기록 v5를 지원한다. 이전 형식은 변환 없이 거부한다. 교육용 프로필은 실물 정격이 아니며, 열 축적·파손 후 연쇄 고장은 제외한다. 현재 변경은 푸시·배포 전이고 교실·실기기·보조기술 검증은 남아 있다.
+
+- [기획과 구현 순서](implementation/diode-mvp.md): 목표 경험, 범위, 기존 모듈 연결, 단계별 종료 조건
+- [ADR-026](../decisions/ADR-026-diode-boundary-analysis.md): 채택한 설계와 기존 규범의 관계
+- [다이오드 DC 모델](physics/diode-dc-model.md): 정확한 0.7 V, 상태·해 집합, 유한 부품 모델, 계산 예산
+- [작동 경계](physics/circuit-operating-boundaries.md): 프로필, 정상·노랑·빨강, 모델 선택과 기록
+- [다이오드 종류 선택](ux/diode-kinds.md): 신호용·대전류용 특성과 기존 편집 UI
+- [분석 UX](ux/diode-analysis.md): 만들기 경고, 분석 확정, 가변저항 트리거, 과부하·파손·수정 복귀
+- [설명 물음표](ux/operating-help.md): H01~H07 학생용 문구, 등장 조건·예외, 2D/3D 배치와 모듈 경계 — accepted, 로컬 구현 완료
+- [수용 사례](testing/diode-cases.md): 시험 회로, 경계 포함 관계, 표시·세션 회귀 기준
+- [참고 조사](research/diode-engines.md): 오픈소스와 부품 자료, 채택 근거와 적용 한계
+
 ## 제품
 
 - [`product/brief.md`](product/brief.md): 제품 정의, 사용자, 원칙, 성공 지표
@@ -18,6 +32,7 @@
 
 - [`ux/quick-start.md`](ux/quick-start.md): 실행, 편집, 전위·측정, 저장과 단축키
 - [`ux/overview.md`](ux/overview.md): 화면 모드와 반응형 구조
+- [`ux/selection-copy.md`](ux/selection-copy.md): 영역 선택, 마우스·터치 복사 배치와 예외
 - [`ux/interactions.md`](ux/interactions.md): 부품 배치, 배선, 값 수정, 오류 피드백
 - [`ux/workflows.md`](ux/workflows.md): 현재 교사·학생 흐름과 후속 활동 배포 구분
 
@@ -34,7 +49,7 @@
 - [`architecture/modules.md`](architecture/modules.md): 모듈 책임과 공개 인터페이스
 - [`architecture/data-flow.md`](architecture/data-flow.md): 편집부터 계산·표시·저장까지의 흐름
 - [`architecture/extension-points.md`](architecture/extension-points.md): 부품·엔진·출력 확장 경계
-- [`architecture/persistence-and-sharing.md`](architecture/persistence-and-sharing.md): 자동 저장, 파일, 마이그레이션, 공유
+- [`architecture/persistence-and-sharing.md`](architecture/persistence-and-sharing.md): 자동 저장, 현재 파일 형식 검증, 후속 공유
 
 - [`architecture/feedback.md`](architecture/feedback.md): Firebase 후기 게시판의 데이터·권한·운영 구조
 - [ADR-012](../decisions/ADR-012-worksheet-presentation.md): 출력 표기 속성과 출력 계약

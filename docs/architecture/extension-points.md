@@ -49,6 +49,10 @@ interface SimulationEngine {
 
 후속 엔진은 같은 결과 구조를 반환해야 한다. 엔진별 추가 결과는 공통 결과를 깨지 않는 선택적 확장으로 둔다.
 
+## 부품 이름 확장
+
+새 부품의 `componentDefinitions.short`에 문자 접두어를 등록하면 공통 배치·복사 경로의 `createComponentLabelAllocator`가 같은 이름 규칙을 적용한다. 같은 접두어는 번호를 공유하므로 종류를 구별하려면 다른 접두어를 사용한다. 이름 번호를 ID·전역 카운터에서 만들거나 부품별 정규식 분기를 추가하지 않는다. 실제 배치는 `createComponent`의 label 인자에 생성된 이름을 전달한다. 기본 드래그 드롭의 허용 종류도 별도 목록 없이 같은 부품 정의를 참조한다. 기존 문서 이름은 그대로 읽는다. [ADR-034](../../decisions/ADR-034-component-names.md)
+
 ## 출력 확장
 
 `Exporter<TOptions>`는 같은 `CircuitDocument`와 기호 정의를 사용한다.

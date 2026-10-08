@@ -12,6 +12,7 @@ import { Potential3D, automaticHeight, fitPotentialHeight, type Potential3DProps
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { buildCurrentModel, buildPotentialModel } from '../src/visualization';
+import { createComponent } from '../src/component-library';
 
 const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, end: () => {}, change: () => {}, resize: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
 vi.mock('three', async importOriginal => {
@@ -53,7 +54,7 @@ afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks()
 async function mount(strict = false) {
   const circuit = requireDocument(JSON.parse(readFileSync('fixtures/FIX-02-series.json', 'utf8')).document) as CircuitDocument;
   const compiled = compileCircuit(circuit).circuit, ready = vi.fn(), entered = vi.fn(), error = vi.fn();
-  let props: Potential3DProps = { document: circuit, potential: buildPotentialModel(circuit, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V_1 · −극 단자', sourceView: { x: 100, y: 200, width: 500, height: 400 }, onReady: ready, onEntered: entered, onError: error };
+  let props: Potential3DProps = { document: circuit, potential: buildPotentialModel(circuit, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, sourceView: { x: 100, y: 200, width: 500, height: 400 }, onReady: ready, onEntered: entered, onError: error };
   const update = async (next: Partial<Potential3DProps>) => { props = {...props,...next}; await act(async () => { const scene=createElement(Potential3D, props); root.render(strict?createElement(StrictMode,null,scene):scene); }); };
   await update({});
   return { ready, entered, error, circuit, compiled, update };
@@ -65,6 +66,69 @@ async function advanceFrame(now: number) {
 }
 
 describe('3D prepared first frame and camera lifetime', () => {
+  it('publishes meter symbol anchors even with potential numbers hidden', async () => {
+    const { circuit, update } = await mount();
+    circuit.components.push(createComponent('voltmeter', 'M1', { x: 180, y: 80 }));
+    const layout = vi.fn();
+    await update({ document: structuredClone(circuit), showNumbers: false, onComponentLabelLayout: layout });
+    await act(async () => resolveFont()); await act(async () => images.at(-1)!.onload!());
+    await advanceFrame(performance.now() + 2000);
+    expect(layout.mock.lastCall![0].symbolAnchors).toEqual([expect.objectContaining({ componentId: 'M1', x: expect.any(Number), y: expect.any(Number) })]);
+  });
+  it('keeps automatic references out of 3D labels and the footer after manual ground deletion', async () => {
+    const { circuit, update }=await mount();
+    await act(async()=>resolveFont());await act(async()=>images.at(-1)!.onload!());
+    await advanceFrame(performance.now()+2000);
+    expect(host.querySelector('[data-label-key^="reference:"]')).not.toBeNull();
+    const next={...circuit,referenceNode:null};
+    const compiled=compileCircuit(next).circuit;
+    const potential=buildPotentialModel(next,compiled,solveCircuit(compiled,{referencePolicy:'independent'}));
+    expect(potential.references?.length).toBeGreaterThan(0);
+    await update({document:next,potential});
+    expect(host.querySelector('[data-label-key^="reference:"]')).toBeNull();
+    expect(host.querySelector('.floor-key')).toBeNull();
+  });
+  it('reads all label sizes before writing projected positions and remeasures on the next frame', async () => {
+    await mount(); await act(async () => resolveFont()); await act(async () => images[0].onload!());
+    await advanceFrame(performance.now() + 2000);
+    const events: string[] = [];
+    let width = 52;
+    const tags = [...host.querySelectorAll<HTMLElement>('.potential-tag')];
+    for (const tag of tags) {
+      Object.defineProperty(tag, 'offsetWidth', { configurable: true, get: () => { events.push('read'); return width; } });
+      Object.defineProperty(tag, 'offsetHeight', { configurable: true, get: () => { events.push('read'); return 25; } });
+      const style = new Proxy(tag.style, { set: (target, key, value) => {
+        if (key === 'translate') events.push('write');
+        return Reflect.set(target, key, value);
+      } });
+      Object.defineProperty(tag, 'style', { configurable: true, get: () => style });
+    }
+    await act(async () => observed.change());
+    const firstWrite = events.indexOf('write');
+    expect(firstWrite).toBe(tags.length * 2);
+    expect(events.slice(firstWrite)).not.toContain('read');
+    const axis = host.querySelector<HTMLElement>('.axis-tag')!;
+    const before = parseFloat(axis.style.translate);
+    width = 72; events.length = 0;
+    await act(async () => observed.change());
+    expect(parseFloat(axis.style.translate)).toBeCloseTo(before - 10);
+    expect(events.filter(event => event === 'read')).toHaveLength(tags.length * 2);
+  });
+  it('publishes label geometry through the existing renderer and reports camera interaction without rebuilding resources', async () => {
+    const { update } = await mount();
+    const layout = vi.fn(), interaction = vi.fn();
+    await update({ onComponentLabelLayout: layout, onViewInteraction: interaction });
+    await act(async () => resolveFont()); await act(async () => images[0].onload!());
+    await advanceFrame(performance.now() + 2000);
+    expect(layout).toHaveBeenCalled();
+    expect(layout.mock.lastCall![0].bounds).toMatchObject({ width: 1000, height: 600 });
+    const scene = observed.render.mock.lastCall![0] as THREE.Scene, content = scene.children[1], count = images.length;
+    layout.mockClear(); interaction.mockClear();
+    await act(async () => { observed.start(); observed.change(); });
+    expect(interaction).toHaveBeenCalledOnce(); expect(layout).toHaveBeenCalled();
+    expect((observed.render.mock.lastCall![0] as THREE.Scene).children[1]).toBe(content);
+    expect(images).toHaveLength(count);
+  });
   it('retains the floor, GPU geometry, camera and ticks while a bounded resistance changes', async () => {
     const { circuit, update, ready, entered } = await mount();
     const variable = circuit.components.find(c => c.id === 'R1')!;
@@ -87,6 +151,11 @@ describe('3D prepared first frame and camera lifetime', () => {
     expect(camera.position.equals(position)).toBe(true);
     expect([...host.querySelectorAll('.axis-tag')]).toEqual([...ticks]);
     expect(host.textContent).toContain('6 Ω'); expect(ready).toHaveBeenCalledOnce(); expect(entered).toHaveBeenCalledOnce();
+    variable.properties.quantityMode='plain';
+    await update({document:structuredClone(circuit),potential:{...model(),modelApproximation:true}});
+    expect(host.querySelector('.delta-tag')?.textContent).toContain('≈');
+    expect(host.querySelector('[data-label-key="component:R1"]')?.textContent).not.toContain('≈');
+    expect(decodeURIComponent(images.at(-1)!.src)).not.toContain('≈');
   });
   it('gently attracts a live drag without jumping on start or trapping slow movements', async () => {
     await mount(); await act(async()=>resolveFont()); await act(async()=>images[0].onload!());
@@ -382,7 +451,7 @@ describe('3D prepared first frame and camera lifetime', () => {
     await advanceFrame(1000 + duration);
     expect(raised.scale.z).toBe(1); expect(camera.position.equals(midway)).toBe(false);
     expect(ready).toHaveBeenCalledOnce(); expect(entered).toHaveBeenCalledOnce(); expect(observed.frames.size).toBe(0);
-    expect(host.querySelector('.floor-key small sub')?.textContent).toBe('1');
+    expect(host.querySelector('.floor-key')).toBeNull();
   });
   it('still skips camera preset motion when reduced motion is enabled', async () => {
     reduced = true; const { entered } = await mount();

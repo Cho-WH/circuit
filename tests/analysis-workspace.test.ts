@@ -7,8 +7,14 @@ import { App } from '../src/app/App';
 import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { examples } from '../src/fixtures';
 import { layoutExample } from '../src/app/examples';
+import { createComponent, wirePoints } from '../src/component-library';
+import { copySelection } from '../src/editor';
+import { createDocumentIdAllocator } from '../src/domain';
+import { analyze } from '../src/app/analyze';
+import { buildCurrentModel, buildPotentialModel } from '../src/visualization';
 import { saveLocal, loadLocal, loadMeasurementNotebook } from '../src/persistence';
 import type { Potential3DProps } from '../src/potential-3d';
+import { meterCircuit } from './meter-fixture';
 
 const observed = vi.hoisted(() => ({ document: null as Potential3DProps['document'] | null, current: undefined as Potential3DProps['currentDisplay'], measurement: undefined as Potential3DProps['voltageMeasurement'], selections: [] as string[][], onSelect: undefined as Potential3DProps['onSelect'], onSelectNet: undefined as Potential3DProps['onSelectNet'], selectedNet: null as Potential3DProps['selectedNet'] }));
 vi.mock('../src/potential-3d', () => ({
@@ -41,6 +47,7 @@ afterEach(() => {
   host.remove();
   localStorage.clear();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 const button = (name: string) =>
   [...host.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -50,6 +57,21 @@ const button = (name: string) =>
       b.querySelector(':scope > span:last-child')?.textContent === name,
   )!;
 const click = (name: string) => act(async () => button(name).click());
+
+it('hides automatic ground symbols and reference footers for disconnected parts in build and analysis', async () => {
+  const doc=structuredClone(examples.find(e=>e.document.documentId==='fix-02')!.document);
+  doc.referenceNode=null;
+  doc.components.push(createComponent('resistor','loose',{x:900,y:600}));
+  saveLocal(doc);
+  await act(async()=>root.render(createElement(App)));
+  expect(button('접지')).toBeDefined();
+  expect(host.querySelector('[data-reference-handle]')).toBeNull();
+  await click('분석하기');
+  expect(host.querySelector('[data-reference-handle]')).toBeNull();
+  expect(host.querySelector('.potential-reference')).toBeNull();
+  expect(host.textContent).not.toContain('0 V 기준:');
+  expect(analyze(doc).result.referenceGroups!.length).toBeGreaterThan(1);
+});
 const toggle = (name: string) =>
   [...host.querySelectorAll<HTMLInputElement>('.potential-controls input')].find(
     (input) => input.parentElement?.textContent?.trim() === name,
@@ -72,6 +94,198 @@ async function probeResistor() {
   await enter('[data-endpoint-id="R1.a"]');
   await enter('[data-endpoint-id="R1.b"]');
 }
+
+it('rotates a selected component twice without moving wires and restores each step with undo', async () => {
+  vi.useFakeTimers();
+  const action = async (name: string) => {
+    await click(name);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  };
+  const doc = layoutExample(examples.find(e => e.id === 'FIX-02')!.document);
+  saveLocal(doc);
+  await act(async () => root.render(createElement(App)));
+  await enter('[data-component-id="R1"] .component');
+  const saved = () => {
+    const loaded = loadLocal();
+    if (!loaded?.ok) throw new Error('Expected saved circuit');
+    return loaded.document;
+  };
+  const paths = () => saved().wires.map(w => wirePoints(saved(), w));
+  const originalPaths = paths();
+  await action('회전');
+  const first = saved();
+  expect(paths()).toEqual(originalPaths);
+  expect(first.wires.some(w => [w.start, w.end].some(e => e.id === 'R1.a' || e.id === 'R1.b'))).toBe(false);
+  await action('회전');
+  expect(paths()).toEqual(originalPaths);
+  expect(saved().wires).toEqual(doc.wires.map(w => ({ ...w,
+    start: { ...w.start, id: w.start.id === 'R1.a' ? 'R1.b' : w.start.id === 'R1.b' ? 'R1.a' : w.start.id },
+    end: { ...w.end, id: w.end.id === 'R1.a' ? 'R1.b' : w.end.id === 'R1.b' ? 'R1.a' : w.end.id },
+  })));
+  await action('실행 취소'); expect(saved()).toEqual(first);
+  await action('실행 취소'); expect(saved()).toEqual(doc);
+});
+
+it('keeps multiple meter displays open across selection, tools and views, updates values and collapses only the chosen meter', async () => {
+  const doc = meterCircuit(); saveLocal(doc);
+  await act(async () => root.render(createElement(App)));
+  expect(button('A_1 계기값 펼치기')).toBeUndefined();
+  await click('분석하기');
+  await click('A_1 계기값 펼치기'); await click('M_1 계기값 펼치기');
+  const reading = (name: string) => host.querySelector(`output[aria-label="${name} 측정값"]`)?.textContent;
+  expect(reading('A_1')).toBe('1 A'); expect(reading('M_1')).toBe('3 V');
+  await act(async () => toggle('숫자').click());
+  await enter('[data-component-id="S1"] .component');
+  await click('스위치 열기');
+  expect(reading('A_1')).toBe('0 A'); expect(reading('M_1')).toBe('0 V');
+  await click('스위치 닫기');
+  await click('전압 탐침'); await probeResistor();
+  expect(reading('M_1')).toBe(value());
+  await click('3D');
+  expect(reading('A_1')).toBe('1 A'); expect(reading('M_1')).toBe('3 V');
+  await click('2D'); await click('등가저항'); await click('전지 분리하고 측정');
+  expect(reading('A_1')).toBe('— A'); expect(reading('M_1')).toBe('— V');
+  await click('도구 종료');
+  expect(reading('A_1')).toBe('1 A');
+  await act(async () => host.querySelector('.circuit-canvas')!.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect(reading('M_1')).toBe('3 V');
+  await click('A_1 계기값 축소');
+  expect(reading('A_1')).toBeUndefined(); expect(reading('M_1')).toBe('3 V');
+  await click('회로도 출력');
+  expect(host.querySelector('.meter-readouts')).toBeNull();
+  await click('분석하기'); expect(reading('M_1')).toBe('3 V');
+  const loaded = loadLocal();
+  if (!loaded?.ok) throw new Error('Expected current circuit to remain saved');
+  const saved = loaded.document;
+  expect(saved.components).toEqual(doc.components);
+  expect(saved.wires).toEqual(doc.wires);
+});
+
+it('forgets deleted meter displays and resets them when a document is replaced', async () => {
+  saveLocal(meterCircuit());
+  await act(async () => root.render(createElement(App)));
+  await click('분석하기'); await click('A_1 계기값 펼치기'); await click('M_1 계기값 펼치기');
+  await click('회로 만들기'); await enter('[data-component-id="A1"] .component');
+  await act(async () => host.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })));
+  await click('실행 취소'); await click('분석하기');
+  expect(host.querySelector('output[aria-label="A_1 측정값"]')).toBeNull();
+  expect(host.querySelector('output[aria-label="M_1 측정값"]')).not.toBeNull();
+  await click('회로 만들기'); await click('빈 회로 만들기');
+  await click('실행 취소'); await click('분석하기');
+  expect(host.querySelectorAll('.meter-readouts output')).toHaveLength(0);
+});
+
+it('keeps two copied circuits usable and refuses cross-reference recording in 2D and 3D', async () => {
+  const doc = layoutExample(examples.find(e => e.id === 'FIX-13')!.document);
+  const copy = copySelection(doc, [...doc.components, ...doc.wires, ...doc.junctions].map(e => e.id), createDocumentIdAllocator(doc), { x: 0, y: 500 });
+  doc.components.push(...copy.components); doc.wires.push(...copy.wires); doc.junctions.push(...copy.junctions);
+  saveLocal(doc);
+  await act(async () => root.render(createElement(App)));
+  expect(host.querySelectorAll('[data-reference-handle]')).toHaveLength(1);
+  expect(host.querySelector('.potential-reference')).toBeNull();
+  await click('분석하기'); await click('전압 탐침');
+  const other = copy.components.find(c => c.type === 'resistor')!;
+  await enter('[data-endpoint-id="R1.a"]');
+  await enter(`[data-endpoint-id="${other.terminals[0].id}"]`);
+  expect(value()).toBe('— V');
+  expect(host.textContent).toContain('서로 독립된 기준이라 전압을 비교할 수 없어요');
+  expect(button('측정값 기록').disabled).toBe(true);
+  expect([...host.querySelectorAll('.measure-probe-potential')].map(el => el.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('· A'), expect.stringContaining('· B')]));
+  await click('3D');
+  expect(observed.measurement?.label).toBeNull();
+  await click('2D');
+  await click('빨강 탐침'); await enter(`[data-endpoint-id="${other.terminals[1].id}"]`);
+  expect(value()).toBe('-4.3 V');
+  expect(button('측정값 기록').disabled).toBe(false);
+  await click('측정값 기록');
+  expect(loadMeasurementNotebook().entries).toHaveLength(1);
+  expect(loadMeasurementNotebook().entries[0].record.provenance?.profileRevision).toContain('references:independent-1');
+});
+
+it('switches the selected bridge beside voltage probes and preserves their positions in 2D and 3D', async () => {
+  saveLocal(layoutExample(examples.find(e => e.id === 'FIX-14')!.document));
+  await act(async () => root.render(createElement(App)));
+  await click('분석하기'); await click('전압 탐침'); await probeResistor();
+  const before = value();
+  expect(before).toBe('3.6 V');
+  await enter('[data-component-id="S1"] .component');
+  expect(host.querySelector('.parameter-panel:not([hidden])')?.getAttribute('aria-label')).toBe('전환 스위치 조절');
+  await click('측정값 기록'); await click('B로 전환');
+  expect(value()).toBe(before);
+  expect(button('전압 탐침').getAttribute('aria-pressed')).toBe('true');
+  await click('측정값 기록');
+  expect(loadMeasurementNotebook().entries.map(e => e.record.documentSnapshot.components.find(c => c.id === 'S1')!.properties.state)).toEqual(['a', 'b']);
+  await click('3D');
+  const scene = host.querySelector('[data-test-scene]');
+  await click('A로 전환');
+  expect(host.querySelector('[data-test-scene]')).toBe(scene);
+  expect(observed.measurement?.red?.endpointId).toBe('R1.a');
+  expect(observed.measurement?.black?.endpointId).toBe('R1.b');
+  expect(value()).toBe(before);
+  await act(async () => observed.onSelect!(null));
+  expect(host.querySelector('.parameter-panel:not([hidden])')).toBeNull();
+});
+
+it('reuses the same measurement panel for an ordinary switch', async () => {
+  saveLocal(layoutExample(examples.find(e => e.id === 'FIX-05')!.document));
+  await act(async () => root.render(createElement(App)));
+  await click('분석하기'); await click('전류 센서');
+  await enter('[data-component-id="S1"] .component');
+  expect(host.querySelector('.parameter-panel:not([hidden])')?.getAttribute('aria-label')).toBe('스위치 조절');
+  await click('스위치 닫기');
+  expect(button('스위치 열기')).toBeDefined();
+  expect(button('전류 센서').getAttribute('aria-pressed')).toBe('true');
+});
+
+it('measures and records zero diode voltage with an open switch, sharing exact zero current and finite 3D heights', async () => {
+  const doc=layoutExample(examples.find(e=>e.id==='FIX-13')!.document);
+  const sw=createComponent('switch','S1',{x:400,y:160});
+  sw.properties.state='closed';
+  doc.components.push(sw);
+  const wire=doc.wires.find(w=>w.id==='W1')!,originalEnd=wire.end;
+  wire.end={kind:'terminal',id:'S1.a'};
+  doc.wires.push({id:'switch-wire',start:{kind:'terminal',id:'S1.b'},end:originalEnd,waypoints:[]});
+  saveLocal(doc);
+  await act(async()=>root.render(createElement(App)));
+  await click('분석하기');await click('전압 탐침');
+  await enter('[data-endpoint-id="D1.a"]');await enter('[data-endpoint-id="D1.b"]');
+  expect(value()).toBe('700 mV');
+  await enter('[data-component-id="S1"] .component');
+  await click('스위치 열기');
+  expect(value()).toBe('0 V');
+  await click('측정값 기록');
+  const record=loadMeasurementNotebook().entries.at(-1)!.record;
+  expect(record.value).toEqual(q.store(0));
+  expect(record.provenance?.profileRevision).toContain('diode-equilibrium-1|');
+  const snapshot=record.documentSnapshot;
+  expect(snapshot.components.find(c=>c.id==='S1')!.properties.state).toBe('open');
+  const {compilation,result,assessment}=analyze(snapshot);
+  expect(assessment.status).toBe('normal');
+  expect(result.solution).toBe('unique');
+  expect(result.branchCurrents.D1).toEqual(q.ZERO);
+  const current=buildCurrentModel(snapshot,compilation,result);
+  expect(current.samples.every(sample=>sample.value.status==='known'&&q.sign(sample.value.amperes)===0)).toBe(true);
+  const potential=buildPotentialModel(snapshot,compilation.circuit,result);
+  expect(potential.undefinedCount).toBe(0);
+  expect(potential.endpoints['D1.a'].height).toBe(potential.endpoints['D1.b'].height);
+  await click('3D');
+  expect(value()).toBe('0 V');
+  expect(observed.measurement?.label).toBe('0 V');
+  await click('스위치 닫기');
+  expect(value()).toBe('700 mV');
+  expect(observed.measurement?.red?.endpointId).toBe('D1.a');
+});
+
+it.each(['activity', 'damage'] as const)('disables switch panel actions for %s restrictions', async reason => {
+  const doc = layoutExample(examples.find(e => e.id === 'FIX-14')!.document);
+  if (reason === 'activity') doc.activity = { allowedCommands: [], revealSteps: [] };
+  else doc.components.find(c => c.id === 'R1')!.properties.resistanceOhm = q.store(1);
+  saveLocal(doc);
+  await act(async () => root.render(createElement(App)));
+  await click('분석하기');
+  await enter('[data-component-id="S1"] .component');
+  expect(button('B로 전환').disabled).toBe(true);
+});
 
 it('adjusts resistance beside the probes and records exact conditions without restarting 3D', async () => {
   const doc = layoutExample(examples.find(e => e.id === 'FIX-02')!.document);

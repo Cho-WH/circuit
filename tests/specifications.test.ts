@@ -271,7 +271,7 @@ describe("public CircuitDocument contract", () => {
     const document: PublicCircuitDocument = {
       $schema: "https://example.invalid/edu-circuit/circuit-document.schema.json",
       format: "edu-circuit",
-      version: 5,
+      version: 6,
       documentId: "contract-parity",
       title: "계약 일치",
       components: [
@@ -319,7 +319,7 @@ describe("public CircuitDocument contract", () => {
     expect(value.affectedIds).toEqual(["missing"]);
   });
 
-  it.each([1, 2, 3, 4, 6])("rejects unsupported document version %s without conversion", (version) => {
+  it.each([1, 2, 3, 4, 5, 7])("rejects unsupported document version %s without conversion", (version) => {
     const source = { ...canonicalFixtures[0].fixture.document, version };
     expect(validateDocument(source)).toMatchObject({ ok: false, diagnostics: [{ code: 'INVALID_DOCUMENT' }] });
   });

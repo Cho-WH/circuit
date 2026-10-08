@@ -48,7 +48,8 @@
 .compact-layout .record-scroll table{min-width:650px}
 .compact-layout .record-actions button{min-height:44px}
 
-.compact-layout .desktop-editor-tools,.compact-layout .editor-toolbar>.toolbar-separator{display:none}
+.compact-layout .editor-selection-tools [data-editor-tool]:not([data-editor-tool=select]),.compact-layout .editor-toolbar>.toolbar-separator{display:none}
+.compact-layout .editor-selection-tools span,.compact-layout .copy-tools span{display:none}
 .compact-layout .compact-edit-more{margin-left:auto}
 .compact-layout .compact-parts>.floating-panel-trigger{padding:6px 10px;color:var(--accent)}
 .compact-parts-panel{padding:8px}

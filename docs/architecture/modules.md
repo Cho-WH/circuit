@@ -2,13 +2,27 @@
 
 ## 정확 연산 계약
 
-[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 구현했다. domain은 최소 타입·정규형 직렬화·현재 문서 검증을, rational은 순수 사칙연산·비교·표시 변환을, quantity는 단위 입력·표시 반올림을 담당한다. domain은 rational에 역으로 의존하지 않는다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 현재 저장은 회로 v5·측정 기록 v4만 지원한다.
+[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 구현했다. domain은 최소 타입·정규형 직렬화·현재 문서 검증을, rational은 순수 사칙연산·비교·표시 변환을, quantity는 단위 입력·표시 반올림을 담당한다. domain은 rational에 역으로 의존하지 않는다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 현재 저장은 회로 v6·측정 기록 v5만 지원한다.
 
 ## 구현된 근사 경로의 경계
 
 [ADR-025](../../decisions/ADR-025-bounded-approximate-dc.md)에 따라 simulation이 요청별 정확 계산 예산과 공통 MNA 구성, 정확/근사 풀이, 수용 검사·진단을 소유한다. domain의 공개 결과에는 정확/근사 품질과 측정에 필요한 오차 정보를 명시한다. measurement는 그 품질을 전압차·도선 KCL·등가저항·기록까지 전파하고 quantity/visualization이 ≈와 방향 불확실을 공통으로 표현한다. 렌더러·UI는 행렬·근사 전환·자체 허용오차를 다루지 않는다.
 
-rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v4가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다.
+rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v5가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다.
+
+## 선택과 복사 배치
+
+[ADR-034](../../decisions/ADR-034-component-names.md): `component-library.createComponentLabelAllocator(existingLabels)`는 `{ short }` 부품 정의를 받아 중복되지 않는 `접두어_번호`를 생성·예약하는 함수를 반환한다. 한 배치/복사 묶음마다 새로 만들고 `componentDefinitions`/`componentDefinition`의 접두어만 사용한다. App은 새 배치 이름을 `createComponent(kind, id, position, label)`에 전달하며 `editor.copySelection`은 원본 이름을 포함해 묶음 전체의 새 이름을 배정한다. ID 발급과 저장 스키마는 독립이며 기존·수동 이름은 변경하지 않는다.
+
+[ADR-032](../../decisions/ADR-032-selection-copy.md)에 따라 `editor.copySelection`은 새 ID와 독립 연결을 만들며 명시적으로 선택한 도선의 외부 끝을 독립 연결점으로 복사한다. `MoveComponents.positions`는 선택한 부품·연결점 ID를 받으며 같은 변위의 양 끝을 가진 도선은 경로 전체를 평행 이동한다. 연결점 직접 삭제 금지는 유지한다.
+
+`app/copy-placement`는 선택 영역·위치 변환·기존 부품과의 겹침을 판정하고 `useMarqueeSelection`은 포인터 캡처와 프레임 단위 선택 상자만 관리한다. `CopyPreview`는 공통 기호를 그리며 UI 초안을 문서에 넣지 않는다. 확정은 기존 `Paste` 또는 `InsertComponentOnWire`와 주석 명령을 `useCircuitSession`에서 한 번에 실행해 권한·검증·Undo를 공유한다. 단일 부품의 삽입 후보와 실패 표시는 기존 배치와 같다.
+
+## 독립 기준의 공개 계약
+
+[ADR-033](../../decisions/ADR-033-independent-references.md)에 따라 `SolveOptions.referencePolicy`는 `explicit`(기본) 또는 `independent`이며 `analyzeOperatingCircuit`도 같은 옵션을 두 모델에 전달한다. 앱의 공통 해석은 `independent`를 사용한다. `SimulationResult.referenceGroups`는 `{ id, referenceNetId, netIds }[]`이며 각 `nodeVoltages`의 기준을 규정한다. 기준만 다른 영역을 묶지 않고 기존 piecewise 분할·평형·공통 계산 예산을 재사용한다.
+
+`simulation.independentReferences`와 `queryVoltage`가 기준 간 비교를 막고 `measurement.probeVoltage`는 전용 진단을 반환한다. `visualization`은 이 메타데이터를 `PotentialModel.references`와 `PotentialValue.referenceId`로 전달하고 공통 `referenceGroupLabel`로 A/B 표기를 만든다. Canvas·탐침 패널·3D는 같은 결과를 표시하며 3D 차이 눈금과 경로 그래프도 기준을 검사한다. 자동 기준은 문서·스키마에 추가하지 않는다. 출처 지문 `references:independent-1`은 기존 기록과 현재 해석을 구분한다.
 
 ## 모듈 책임
 
@@ -67,7 +81,13 @@ function validateDocument(input: unknown): DocumentValidation;
 function requireDocument(input: unknown): CircuitDocument;
 ```
 
+[ADR-026](../../decisions/ADR-026-diode-boundary-analysis.md)의 다이오드 확장은 `SolveOptions.physicalModel`(`textbook` 또는 `component`)을 사용한다. `SimulationResult.provenance`는 선택된 물리 모델·고정 프로필과 특성의 식별자·수치 품질을 구별한다. 아핀 해 공간과 부등식은 simulation 내부에만 남는다. `queryVoltage(result, aNet, bNet)`과 `queryCurrent(result, terms)`는 전압차와 전류 선형결합 자체의 유일성을 질의하므로 개별 전위·전류가 미정이어도 확정 가능한 측정을 보존한다.
+
+`analyzeOperatingCircuit(circuit, { physicalModel?, continuousAdjustment? })`는 현재 회로의 두 모델을 해석하고 표시 결과와 `OperatingAssessment`를 함께 반환한다. `assessOperatingPoint`는 검증된 값과 해당 프로필의 경계를 비교하고 부품 ID·원인·근거 값을 보존한다. 모델 유지·파손 후 잠금·연출은 app의 세션 책임이다. 측정 기록의 `provenance`와 CSV에도 모델·프로필·수치 출처가 남는다. 원래 풀이가 근사여도 같은 net의 차처럼 정확히 아는 측정은 기록값의 품질과 풀이의 출처가 다를 수 있다.
+
 ## 연결망 구성
+
+전환 스위치의 역할·선택 쌍·다음 상태는 domain의 switch helpers가 소유한다. component-library는 목록용 ComponentKind와 기호·상태 문구·선택 접점 기하를 제공한다. connectivity는 선택된 한 쌍을 기존 닫힌 스위치 하나로 컴파일하며 measurement/visualization/potential-3d도 같은 쌍을 사용한다. 자세한 계약은 [ADR-029](../../decisions/ADR-029-changeover-switch.md)를 따른다.
 
 1. 모든 부품 단자, 도선 끝, 분기점을 ID로 읽는다.
 2. 명시적으로 연결된 항목을 같은 집합으로 묶는다.
@@ -100,7 +120,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ## 측정과 출력의 공개 계약
 
-관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v5이며 이전 형식의 변환·호환은 제공하지 않는다(ADR-024).
+관련 요구사항: SIM-004~006, MEA-001~004, TCH-001~003. 저장 문서는 v6이며 이전 형식의 변환·호환은 제공하지 않는다(ADR-024).
 
 `measurement`는 `probeVoltage(compilation, result, red, black)`, `probeCurrent(document, compilation, result, target)`, `insertSeriesAmmeter(document, { componentId, ammeter, newWireId })`, `parameterSweep(document, request, compiler, engine)`, `createMeasurementRecord(document, fields)`, `measurementsToCsv(records)`를 공개한다. 결과는 성공 시 `{ ok: true, value, diagnostics }`, 실패 시 `{ ok: false, diagnostics }`로 반환한다. 전류계 ID와 위치, 기록 시각은 호출자가 제공하며 핵심 함수는 외부 시간에 의존하지 않는다.
 
@@ -123,6 +143,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ### 화면 내부의 책임
 
+- `app/MeasurementDisplay`는 기존 측정 도구와 회로 위 계기창의 LCD 타이포그래피를 공유한다. `app/MeterReadouts`는 공개 측정 질의로 값을 읽고 기존 2D/3D `ComponentLabelLayout` 콜백의 선택적 `symbolAnchors`(계기 기호 우측 상단 화면 좌표)를 따라 배치한다. App이 열림 상태와 전원 분리·측정 중단 조건을 소유하며 값·UI 상태를 회로 문서에 저장하지 않는다. [ADR-035](../../decisions/ADR-035-inline-meter-readouts.md).
 - `app/useCircuitSession`: 확정 문서·이력·단일/묶음 명령의 화면 모드 제한·자동 저장을 소유한다. App은 공개 실행 함수와 undo/redo만 호출한다. 학생 활동 권한과 문서 무결성은 계속 editor가 검사한다.
 - `app/useCanvasDragSession`: 부품/도선 이동의 시작 문서·좌표·포인터 캡처·미리보기와 화면 이동 세션을 소유한다. Canvas는 실제 이벤트를 연결하고 터치·배선·측정 등 여러 조작의 취소를 함께 지시한다. 확정에는 미리보기와 같은 명령 구성 함수를 사용한다.
 - `app/InlineComponentEditor`: 이름·값 초안, 파싱 오류, 입력 초점과 입력창 배치를 소유한다. Canvas에는 편집 대상 ID만 남긴다. 화면 크기 변화는 초안을 초기화하지 않는다.
@@ -143,6 +164,8 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ## 연속 값 조절
 
+`app/ComponentControlPanel`은 선택한 가변저항·스위치 조절창의 공통 틀이다. 스위치는 기존 `SwitchStateButton`·SetProperties를 사용하며 가변저항 자동 실행 수명과 비교 축척에 섞지 않는다. `component-library.componentValueDisplay`는 다이오드 종류·스위치 상태의 글자 크기, 표시 이름, 출력 기본 숨김을 한 곳에서 정의해 공통 배치·출력·설정 UI에 제공한다.
+
 component-library.adjustableParameter는 부품의 조절 속성·범위·단위를 제공한다. app/parameters는 재사용 가능한 값 조절 UI·프레임 갱신·자동 왕복과 기존 analyze를 통한 비교 축척 계산을 맡는다. useCircuitSession.execute의 선택적 조작 토큰으로 연속 명령을 한 실행 취소 단위로 묶는다. 새 전원장치의 속성 정의가 추가되면 같은 조절 경로를 사용할 수 있다. potential-3d/primitives는 선·튜브·점 자원을 유지해 계산값 변경 시 좌표와 표시 속성을 갱신한다. 자세한 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다.
 
 
@@ -157,4 +180,10 @@ component-library.adjustableParameter는 부품의 조절 속성·범위·단위
 
 ### 구현 내부 경계
 
+`app/operating-help`는 확정된 분석 결과·공개 질의에서 설명 후보를 고르는 순수 함수, 학생용 문구, 화면 충돌 배치, 공통 HTML UI를 분리한다. `CircuitCanvas`와 `Potential3D`의 선택적 `onComponentLabelLayout`은 `visualization.ComponentLabelLayout`(뷰포트 픽셀 기준 bounds·부품 라벨·장애물 사각형)만 전달한다. 3D는 기존 render 투영을 재사용하고 `onViewInteraction`으로 카메라 이동 시작을 알린다. app는 열림 상태를 소유하며 `FloatingPanel`의 선택적 controlled open과 기존 포털·키보드 처리를 재사용한다. 계산 모델·위험 판정·파손 효과 SVG와 설명 문구는 독립적으로 수정할 수 있다. [ADR-026](../../decisions/ADR-026-diode-boundary-analysis.md), [설명 계약](../ux/operating-help.md).
+
 `rational/conversion`은 단위 없는 10진 토큰 해석과 화면용 binary64 변환을 소유하고, quantity는 이를 재사용해 분수·SI 단위 문법과 표시를 처리한다. domain에는 최소 타입과 저장 정규형 검증만 둔다. `visualization/potential`은 정확 전위와 표시 좌표·축 단위 변환을 함께 관리한다. 2D 범례와 3D 눈금은 같은 공개 변환 함수를 사용하고, 숫자 표시는 정확 전위를 사용한다. 3D 높이 맞춤과 장면 경계는 같은 눈금 계산을 재사용한다.
+
+`domain`은 다이오드 종류와 프로필 ID·특성·경계의 대응을 제공한다. `editor.SetDiodeKind`는 프로필 교체와 이전 편차 제거를 한 번에 처리한다. app의 `DiodeKindField`를 인라인 초안 편집과 상세 즉시 편집에서 공유하며 입력 수치는 quantity로 표시한다. useCircuitSession이 모드·잠금·종류를 바꾸는 이력 복원을 검사한다. [ADR-028](../../decisions/ADR-028-diode-kinds.md).
+
+`simulation/equilibrium`은 엔진 내부의 교육용 평형 선택이다. piecewise가 검증한 후보 아핀 가족과 다이오드 전압 가중치를 받아 정확 KKT와 기존 solution-space의 소거·실현 가능성 검증을 재사용한다. 최소 다이오드 전압 벡터를 만족하는 전체 가족을 보존하고 공개 결과·질의는 이를 공유한다. UI·측정은 보정하지 않는다. 다이오드 결과의 profileRevision 지문에는 diode-equilibrium-1 정책을 포함하여 기존 기록과 구별한다. [ADR-030](../../decisions/ADR-030-diode-equilibrium.md).

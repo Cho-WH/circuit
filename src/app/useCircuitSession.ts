@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { diagnostic, type CircuitDocument, type ComponentInstance } from '../domain';
+import { diagnostic, defaultOperatingProfileRef, type CircuitDocument, type ComponentInstance } from '../domain';
 import {
   createHistory,
   executeCommand,
@@ -13,6 +13,8 @@ import {
 import { loadLocal, saveLocal } from '../persistence';
 import { examples } from '../fixtures';
 import { layoutExample } from './examples';
+import { analyze } from './analyze';
+import { acceptOperatingPoint, analysisLocked, analysisStopped, freshAnalysisSession } from './analysis-session';
 
 export type WorkspaceMode = 'build' | 'analysis' | 'worksheet';
 
@@ -48,9 +50,39 @@ export function useCircuitSession(mode: WorkspaceMode) {
     return createHistory(saved?.ok ? saved.document : layoutExample(examples[1].document));
   });
   const current = useRef(history);
+  const [analysisSession, setAnalysisSession] = useState(freshAnalysisSession);
+  const operating = useRef(analysisSession);
+  const workspace = useRef(mode);
+  workspace.current = mode;
   const group = useRef<{ token: object; base: History; past: History['past'] } | null>(null);
   const [documentEpoch, setDocumentEpoch] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed'>('saving');
+
+  function updateOperating(next: typeof analysisSession) {
+    operating.current = next;
+    setAnalysisSession(next);
+  }
+  function assess(document: CircuitDocument) {
+    const evaluation = analyze(document, operating.current.componentModel);
+    updateOperating(acceptOperatingPoint(operating.current, evaluation.assessment,
+      evaluation.result.provenance?.physicalModel === 'component'));
+  }
+  function changeWorkspace(next: WorkspaceMode) {
+    if (next === workspace.current && (next !== 'analysis' || operating.current.active)) return;
+    workspace.current = next;
+    updateOperating(freshAnalysisSession());
+    if (next === 'analysis') assess(current.current.present);
+  }
+  useEffect(() => {
+    if (analysisSession.phase !== 'breaking') return;
+    const finish = () => {
+      if (operating.current === analysisSession)
+        updateOperating({ ...analysisSession, phase: 'broken' });
+    };
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
+    const timer = window.setTimeout(finish, 500);
+    return () => window.clearTimeout(timer);
+  }, [analysisSession]);
 
   function publish(next: History) {
     current.current = next;
@@ -59,7 +91,7 @@ export function useCircuitSession(mode: WorkspaceMode) {
 
   function execute(command: Command | readonly Command[], token?: object): ExecuteCommandResult {
     const commands: readonly Command[] = 'type' in command ? [command] : command;
-    const denied = commands.find((item) => !allowedInMode(current.current.present, mode, item));
+    const denied = commands.find((item) => analysisLocked(operating.current) || !allowedInMode(current.current.present, workspace.current, item));
     if (denied)
       return {
         ok: false,
@@ -82,33 +114,21 @@ export function useCircuitSession(mode: WorkspaceMode) {
       }
       if (commands.some((item) => item.type === 'ReplaceDocument'))
         setDocumentEpoch((value) => value + 1);
+      if (workspace.current === 'analysis') assess(result.history.present);
       publish(result.history);
     }
     return result;
   }
 
-  // The first source gets a reference when permitted, in the same undo step.
-  // Denying SetReference must still allow the independently permitted placement.
   function placeComponent(
     component: ComponentInstance,
     target?: { wireId: string; segment: number; newWireId: string },
   ): ExecuteCommandResult {
-    const result = execute(
+    return execute(
       target
         ? { type: 'InsertComponentOnWire', component, ...target }
         : { type: 'AddComponent', component },
     );
-    if (!result.ok) return result;
-    if (result.history.present.referenceNode || component.type !== 'dc-voltage-source')
-      return result;
-    const reference = executeCommand(result.history, {
-      type: 'SetReference',
-      endpoint: { kind: 'terminal', id: component.terminals[1].id },
-    });
-    if (!reference.ok) return result;
-    const next = { ...reference.history, past: result.history.past };
-    publish(next);
-    return { ok: true, history: next };
   }
 
   useEffect(() => {
@@ -120,19 +140,44 @@ export function useCircuitSession(mode: WorkspaceMode) {
     return () => window.clearTimeout(timer);
   }, [history.present]);
 
+  function canRestore(document: CircuitDocument | undefined): boolean {
+    if (!document || analysisLocked(operating.current)) return false;
+    if (workspace.current === 'build') return true;
+    const profiles = (doc: CircuitDocument) => JSON.stringify(doc.components
+      .filter(c => c.type === 'diode')
+      .map(c => {
+        const ref = c.operatingProfile ?? defaultOperatingProfileRef('diode')!;
+        return [c.id, ref.id, ref.revision];
+      })
+      .sort(([a], [b]) => String(a).localeCompare(String(b))));
+    return profiles(document) === profiles(current.current.present);
+  }
   return {
+    canUndo: () => canRestore(current.current.past.at(-1)),
+    canRedo: () => canRestore(current.current.future[0]),
     history,
     documentEpoch,
     saveStatus,
+    analysisSession,
+    changeWorkspace,
+    canMeasure: () => !analysisStopped(operating.current),
+    canChangeValues: () => !analysisLocked(operating.current),
+    automaticEpoch: () => operating.current.stopEpoch,
     execute,
     placeComponent,
     undo: () => {
+      if (!canRestore(current.current.past.at(-1))) return;
       group.current = null;
-      publish(undo(current.current));
+      const next = undo(current.current);
+      if (workspace.current === 'analysis') assess(next.present);
+      publish(next);
     },
     redo: () => {
+      if (!canRestore(current.current.future[0])) return;
       group.current = null;
-      publish(redo(current.current));
+      const next = redo(current.current);
+      if (workspace.current === 'analysis') assess(next.present);
+      publish(next);
     },
   };
 }

@@ -1,7 +1,8 @@
 import { quantityInput } from '../quantity';
 import * as q from '../rational';
 import { SwitchStateButton } from './SwitchStateButton';
-import { normalizeComponentLabel } from '../domain';
+import { normalizeComponentLabel, diodeKindFor, type DiodeKind } from '../domain';
+import { DiodeKindField } from './DiodeKindField';
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentInstance, Point } from '../domain';
 import {
@@ -20,6 +21,7 @@ export interface ComponentEdit {
   label: string;
   value?: q.StoredScalar;
   fraction?: string;
+  diodeKind?: DiodeKind;
   range?: ParameterRange;
 }
 interface Props {
@@ -29,6 +31,7 @@ interface Props {
   drawingScale: number;
   labelScale: number;
   editParameterRange?: boolean;
+  editDiodeKind?: boolean;
   onCommit?: (id: string, edit: ComponentEdit) => boolean;
   onClose: () => void;
   onToggleSwitch?: () => boolean;
@@ -41,6 +44,7 @@ export function InlineComponentEditor({
   drawingScale,
   labelScale,
   editParameterRange = false,
+  editDiodeKind = false,
   onCommit,
   onToggleSwitch,
   onClose: closeEditor,
@@ -51,6 +55,7 @@ export function InlineComponentEditor({
   const [editing, setEditing] = useState(() => ({
     id: editingComponent.id,
     label: editingComponent.label,
+    diodeKind: diodeKindFor(editingComponent),
     draft: componentValueInput(editingComponent),
     error: '',
     range: { min: parameter ? quantityInput(parameter.min) : '', max: parameter ? quantityInput(parameter.max) : '' },
@@ -60,7 +65,7 @@ export function InlineComponentEditor({
     inlineInput.current?.focus({ preventScroll: true });
     inlineInput.current?.select();
   }, []);
-  const editorHeight = (editingRange ? 292 : 186) + (editing.error ? 54 : 0);
+  const editorHeight = (editingRange ? 292 : editing.diodeKind ? 244 : 186) + (editing.error ? 54 : 0);
   const editLayout = componentNotationLayout(
     editingComponent,
     editingComponent.label,
@@ -118,6 +123,7 @@ export function InlineComponentEditor({
         if (
           onCommit?.(editing.id, {
             label,
+            ...(editDiodeKind && editing.diodeKind !== diodeKindFor(editingComponent) ? { diodeKind: editing.diodeKind } : {}),
             ...(editedRange ? { range: editedRange } : {}),
             ...(parsed
               ? { value: parsed.value, ...(parsed.fraction ? { fraction: parsed.fraction } : {}) }
@@ -172,13 +178,17 @@ export function InlineComponentEditor({
           </div>
         </>
       )}
+      {editing.diodeKind && (
+        <DiodeKindField component={editingComponent} value={editing.diodeKind} disabled={!editDiodeKind}
+          onChange={diodeKind => setEditing({ ...editing, diodeKind, error: '' })} />
+      )}
       {editingComponent.type === 'switch' && (
         <>
           <label htmlFor="inline-switch-state">상태</label>
           <div>
             <SwitchStateButton
               id="inline-switch-state"
-              closed={editingComponent.properties.state === 'closed'}
+              component={editingComponent}
               onToggle={() => {
                 const applied = onToggleSwitch?.();
                 setEditing((current) => ({

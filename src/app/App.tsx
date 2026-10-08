@@ -1,10 +1,13 @@
 import type { ComponentProperties } from '../domain';
+import { diodeKindFor } from '../domain';
+import { DiodeKindField } from './DiodeKindField';
 import * as q from '../rational';
 import { parseComponentValue } from './component-value';
 import { Tooltip } from './Tooltip';
 import { ExampleMenu, ExampleChoices } from './ExampleMenu';
 import { CanvasDiagnostics } from './CanvasDiagnostics';
 import { SwitchStateButton } from './SwitchStateButton';
+import { ComponentControlPanel } from './ComponentControlPanel';
 import { saveBlob } from './download';
 import { ComponentNameInput } from './ComponentNameInput';
 import { QuantityDisplaySelect } from './QuantityDisplay';
@@ -16,7 +19,7 @@ import {
   type MeasurementTool,
 } from './measurement-tools';
 import { probeCurrent, probeVoltage } from '../measurement';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Zap,
   MousePointer2,
@@ -26,7 +29,6 @@ import {
   Undo2,
   Redo2,
   Copy,
-  ClipboardPaste,
   Plus,
   Check,
   AlertCircle,
@@ -43,17 +45,20 @@ import {
 import {
   cloneDocument,
   emptyDocument,
+  nextSwitchState,
   type CircuitDocument,
-  type ComponentType,
   type EndpointRef,
   type Point,
 } from '../domain';
 import {
   componentDefinitions,
+  componentDefinition,
+  componentValue,
+  type ComponentKind,
   componentValueInput,
   createComponent,
+  createComponentLabelAllocator,
   symbolMarkup,
-  endpointName,
   quantityFormatForTargets,
   adjustableParameter,
 } from '../component-library';
@@ -63,12 +68,18 @@ import {
   parameterRangeProperties,
   parameterContext,
   parameterScales,
+  includeCurrentScales,
 } from './parameters';
-import { copySelection, type Command, type PastePayload } from '../editor';
+import { copySelection, insertionCandidates, type Command, type PastePayload } from '../editor';
+import { copyAt, copyOverlapsComponents, singleCopiedComponent } from './copy-placement';
 import { parseDocument, serializeDocument } from '../persistence';
 import { useCircuitSession, type WorkspaceMode } from './useCircuitSession';
 import { examples } from '../fixtures';
 import { analyze } from './analyze';
+import { failedResult } from '../simulation';
+import { analysisLocked, analysisStopped } from './analysis-session';
+import { operatingReason } from './operating-text';
+import type { ComponentOperatingMark } from '../visualization';
 import { diagnosticText } from './diagnostic-text';
 import { layoutExample } from './examples';
 import { CircuitCanvas } from './CircuitCanvas';
@@ -85,6 +96,7 @@ import {
 import { PotentialPalettePicker } from './PotentialPalettePicker';
 import { PotentialGraph } from './PotentialGraph';
 import { MeasurementPanel } from './MeasurementPanel';
+import { MeterReadouts, type MeterReadoutsHandle } from './MeterReadouts';
 import { AnalysisTools, type MeasurementKind, type AnalysisPanel } from './AnalysisTools';
 import { WorksheetPanel } from './WorksheetPanel';
 import { OutputCanvas, type OutputTool } from './OutputCanvas';
@@ -98,6 +110,8 @@ import { useQuickStart } from './useQuickStart';
 import { FileMenu } from './FileMenu';
 import { FeedbackLoading } from './FeedbackLoading';
 import { PotentialWorkspace, type PotentialWorkspaceStatus } from './PotentialWorkspace';
+import type { ComponentLabelLayout } from '../visualization';
+import { resolveOperatingHelp, measuredHelpComponents, OperatingHelp, OperatingHelpOverlay, type OperatingHelpOverlayHandle } from './operating-help';
 import { CurrentControls, CurrentSettings, useCurrentDisplay } from './CurrentControls';
 import { useVisibleViewport } from './useVisibleViewport';
 import { useCompactLayout } from './useCompactLayout';
@@ -105,6 +119,7 @@ import { FloatingPanel } from './FloatingPanel';
 import './styles.css';
 import './ux.css';
 import './mobile.css';
+import './operating.css';
 const FeedbackFeature = lazy(() => import('./FeedbackBoard'));
 const noSelection: string[] = [];
 
@@ -134,6 +149,13 @@ export function App() {
     history,
     documentEpoch,
     saveStatus,
+    analysisSession,
+    changeWorkspace,
+    canMeasure,
+    canChangeValues,
+    automaticEpoch,
+    canUndo,
+    canRedo,
     execute,
     placeComponent,
     undo: undoEdit,
@@ -145,9 +167,11 @@ export function App() {
     failed: '이 브라우저에 자동 저장 실패',
   }[saveStatus];
   const doc = history.present;
+  const locked = analysisLocked(analysisSession);
+  const stopped = analysisStopped(analysisSession);
   const [selected, setSelected] = useState<string[]>([]);
   const [tool, setTool] = useState('select');
-  const [placement, setPlacement] = useState<ComponentType | null>(null);
+  const [placement, setPlacement] = useState<ComponentKind | null>(null);
   const [paletteDrag, setPaletteDrag] = useState<PaletteDrag | null>(null);
   const [wiringResetKey, setWiringResetKey] = useState(0);
   const [notice, updateNotice] = useState({ message: '', kind: 'status' as 'status' | 'error' });
@@ -159,7 +183,10 @@ export function App() {
     documentId: string;
     view: { x: number; y: number; width: number; height: number };
   } | null>(null);
-  const [clipboard, setClipboard] = useState<PastePayload | null>(null);
+  const [copyDraft, setCopyDraft] = useState<{ source: CircuitDocument; payload: PastePayload; touch: boolean } | null>(null);
+  const copyTouch = useRef(false);
+  const copyPayload = copyDraft?.source === doc ? copyDraft.payload : null;
+  useEffect(() => { setCopyDraft(draft => draft?.source === doc ? draft : null); }, [doc]);
   const [valueDraft, setValueDraft] = useState('');
   const { help, firstVisit, showHelp, closeHelp } = useQuickStart();
   const helpButton = useRef<HTMLButtonElement>(null);
@@ -170,6 +197,36 @@ export function App() {
   const showGraph = analysisPanel === 'path';
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [focusIds, setFocusIds] = useState<string[]>([]);
+  const [riskHighlights, setRiskHighlights] = useState<string[]>([]);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [openHelp, setOpenHelp] = useState<string | null>(null);
+  const [visibleHelpIds, setVisibleHelpIds] = useState<string[]>([]);
+  const helpOverlay = useRef<OperatingHelpOverlayHandle>(null);
+  const meterOverlay = useRef<MeterReadoutsHandle>(null);
+  const [openMeterIds, setOpenMeterIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => setOpenMeterIds(new Set()), [documentEpoch, doc.documentId]);
+  useEffect(() => {
+    setOpenMeterIds(previous => {
+      const next = new Set([...previous].filter(id => doc.components.some(c => c.id === id && (c.type === 'ammeter' || c.type === 'voltmeter'))));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [doc.components]);
+  const componentLayouts = useRef<Partial<Record<'2d' | '3d', ComponentLabelLayout>>>({});
+  const layoutView = useRef<'2d' | '3d'>('2d');
+  const receiveComponentLayout = useCallback((view: '2d' | '3d', layout: ComponentLabelLayout) => {
+    componentLayouts.current[view] = layout;
+    if (layoutView.current === view) {
+      helpOverlay.current?.updateLayout(layout);
+      meterOverlay.current?.updateLayout(layout);
+    }
+  }, []);
+  const receive2DComponentLayout = useCallback((layout: ComponentLabelLayout) => receiveComponentLayout('2d', layout), [receiveComponentLayout]);
+  const receive3DComponentLayout = useCallback((layout: ComponentLabelLayout) => receiveComponentLayout('3d', layout), [receiveComponentLayout]);
+  const closeOperatingHelp = useCallback(() => setOpenHelp(null), []);
+  function showOperatingHelp(key: string | null) {
+    setOpenHelp(key);
+    if (key) { setDiagnosticsOpen(false); setRiskHighlights([]); }
+  }
   const [showNumbers, setShowNumbers] = useState(true);
   const [showColors, setShowColors] = useState(true);
   const [potentialPalette, setPotentialPalette] =
@@ -205,15 +262,25 @@ export function App() {
   const [measurementConsoleHost, setMeasurementConsoleHost] = useState<HTMLDivElement | null>(null);
   const [sourcesDetached, setSourcesDetached] = useState(false);
   const hasSources = doc.components.some((c) => c.type === 'dc-voltage-source');
-  const resistanceMode = mode === 'analysis' && measurementKind === 'resistance';
+  const resistanceMode = mode === 'analysis' && !locked && measurementKind === 'resistance';
   const needsIsolation = resistanceMode && hasSources && !sourcesDetached;
   const isolated = resistanceMode && !needsIsolation;
   const analysisView = resistanceMode ? '2d' : potentialView;
+  layoutView.current = analysisView === '3d' && (potentialStatus === 'entering' || potentialStatus === 'ready') ? '3d' : '2d';
+  useLayoutEffect(() => {
+    const layout = componentLayouts.current[layoutView.current];
+    if (layout) {
+      helpOverlay.current?.updateLayout(layout);
+      meterOverlay.current?.updateLayout(layout);
+    }
+  });
+  useEffect(() => { setOpenHelp(null); setDiagnosticsOpen(false); setRiskHighlights([]); }, [mode, documentEpoch, doc.documentId, analysisView, potentialStatus]);
   const measurementActive =
-    mode === 'analysis' && measurementKind !== null && analysisView === '2d' && !needsIsolation && (!compact || mobileMeasuring);
-  const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation;
-  const showOperatingState = mode === 'analysis' && !isolated;
+    mode === 'analysis' && !stopped && measurementKind !== null && !(locked && measurementKind === 'resistance') && analysisView === '2d' && !needsIsolation && (!compact || mobileMeasuring);
+  const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation && !(locked && measurementKind === 'resistance');
+  const showOperatingState = mode === 'analysis' && !isolated && !stopped;
   function chooseMeasurement(kind: MeasurementKind | null) {
+    if (kind && (!canMeasure() || (kind === 'resistance' && !canChangeValues()))) return;
     setMeasurementKind(kind);
     setMobileMeasuring(kind !== null);
     setSourcesDetached(false);
@@ -270,14 +337,30 @@ export function App() {
     mode === 'analysis' && comparisonComponent && comparisonParameter
       ? parameterContext(doc, comparisonComponent.id, comparisonParameter)
       : null;
-  const comparisonScales = useMemo(
+  const comparisonBaseline = useMemo(
     () =>
       scaleContext && comparisonComponent && comparisonParameter
         ? parameterScales(doc, comparisonComponent.id, comparisonParameter)
         : null,
     [scaleContext],
   );
-  const { compilation, result } = useMemo(() => analyze(doc), [doc]);
+  const evaluation = useMemo(() => analyze(doc, analysisSession.componentModel), [doc, analysisSession.componentModel]);
+  const { compilation } = evaluation;
+  const result = useMemo(() => stopped ? { ...failedResult([]), provenance: evaluation.result.provenance } : evaluation.result, [evaluation, stopped]);
+  const assessment = mode === 'analysis' ? analysisSession.assessment : evaluation.assessment;
+  const operatingMarks = useMemo(() => {
+    if (mode !== 'analysis') return undefined;
+    const marks: Record<string, ComponentOperatingMark> = {};
+    for (const cause of assessment.components) {
+      if (marks[cause.componentId]) continue;
+      marks[cause.componentId] = {
+        state: cause.level === 'damage' ? analysisSession.phase === 'broken' ? 'broken' : 'breaking' : 'overload',
+        event: analysisSession.events[cause.componentId] ?? 0,
+        label: operatingReason(cause, cause.level === 'damage'),
+      };
+    }
+    return marks;
+  }, [mode, assessment, analysisSession.phase, analysisSession.events]);
   const voltageReading = useMemo(
     () =>
       probeVoltage(
@@ -291,10 +374,10 @@ export function App() {
   const voltageLabel = formatQuantity(
     voltageReading.ok ? voltageReading.value.voltageV : undefined,
     'V',
-    quantityFormatForTargets(doc, [redProbe, blackProbe]),
+    { ...quantityFormatForTargets(doc, [redProbe, blackProbe]), modelApproximation: result.provenance?.physicalModel === 'component' },
   );
   const voltageMeasurement = useMemo<VoltageMeasurement | undefined>(() => {
-    if (mode !== 'analysis' || measurementKind !== 'voltage') return undefined;
+    if (mode !== 'analysis' || stopped || measurementKind !== 'voltage') return undefined;
     const probe = (anchor: MeasurementAnchor | null) => {
       const pose = anchorPose(doc, anchor),
         endpoint = anchorEndpoint(doc, anchor);
@@ -303,12 +386,21 @@ export function App() {
     const red = probe(measurementAnchors.red),
       black = probe(measurementAnchors.black);
     return { red, black, label: voltageReading.ok ? voltageLabel : null };
-  }, [doc, storedMeasurementAnchors, voltageReading, voltageLabel, measurementKind, mode]);
+  }, [doc, storedMeasurementAnchors, voltageReading, voltageLabel, measurementKind, mode, stopped]);
 
   const currents = useMemo(
     () => buildCurrentModel(doc, compilation, result),
     [doc, compilation, result],
   );
+  const controlledSwitch = doc.components.find(c => selected.length === 1 && c.id === selected[0] && c.type === 'switch');
+  const controlsDisabled = locked || (!!doc.activity && !doc.activity.allowedCommands.includes('SetProperties'));
+  const heldScales = useRef<{ context: string; scales: NonNullable<typeof comparisonBaseline> } | null>(null);
+  let comparisonScales = comparisonBaseline;
+  if (scaleContext && comparisonBaseline && doc.components.some(c => c.type === 'diode')) {
+    const previous = heldScales.current?.context === scaleContext ? heldScales.current.scales : comparisonBaseline;
+    comparisonScales = includeCurrentScales(previous, compilation, result, currents.maxMagnitude);
+    heldScales.current = { context: scaleContext, scales: comparisonScales };
+  } else heldScales.current = null;
   const {
     display: currentDisplay,
     setPaused: setCurrentPaused,
@@ -331,7 +423,7 @@ export function App() {
     ? makePath(compilation.circuit, customPathIds)
     : (paths[activePath] ?? paths[0] ?? null);
   const component = doc.components.find((c) => c.id === selected[0]);
-  const definition = component ? componentDefinitions[component.type] : null;
+  const definition = component ? componentDefinition(component) : null;
   function newId(prefix: string) {
     const all = new Set(
       [
@@ -369,30 +461,43 @@ export function App() {
   }, [notice]);
   useEffect(() => {
     setValueDraft(component && definition?.property ? componentValueInput(component) : '');
-  }, [component?.id, component?.properties, definition?.property]);
+  }, [component?.id, component?.properties, definition?.property, locked]);
   function copy() {
-    if (!selected.length) return;
-    setClipboard(copySelection(doc, selected, newId, { x: 40, y: 40 }));
-    setNotice('복사했어요');
+    if (mode !== 'build' || !selected.length) return;
+    const payload = copySelection(doc, selected, newId, { x: 0, y: 0 });
+    if (!payload.components.length && !payload.junctions.length && !payload.wires.length) return;
+    cancelTool();
+    setCopyDraft({ source: doc, payload, touch: copyTouch.current });
   }
-  function paste() {
-    if (!clipboard) return;
-    const temporary = { ...emptyDocument(), ...clipboard };
-    const payload = copySelection(
-      temporary,
-      [...clipboard.components, ...clipboard.junctions, ...clipboard.wires].map((x) => x.id),
-      newId,
-      { x: 20, y: 20 },
-    );
-    if (dispatch({ type: 'Paste', ...payload })) {
-      setSelection(payload.components.map((c) => c.id));
-      setClipboard(payload);
+  function placeCopy(point: Point, target?: { wireId: string; segment: number }): boolean {
+    if (!copyPayload || mode !== 'build') return false;
+    const payload = copyAt(copyPayload, point);
+    const single = singleCopiedComponent(payload);
+    if (target && single) {
+      const candidate = insertionCandidates(doc, point, target.wireId).find(c => c.segment === target.segment);
+      if (!candidate || candidate.reason) return false;
+      single.rotation = candidate.rotation;
     }
+    if (copyOverlapsComponents(doc, payload)) return false;
+    const commands: Command[] = target && single
+      ? [{ type: 'InsertComponentOnWire', component: single, ...target, newWireId: newId('W') },
+          ...(payload.annotations.length ? [{ type: 'Paste' as const, components: [], wires: [], junctions: [], annotations: payload.annotations }] : [])]
+      : [{ type: 'Paste', ...payload }];
+    if (!execute(commands).ok) return false;
+    setSelection([...payload.components, ...payload.junctions, ...payload.wires].map(c => c.id));
+    cancelTool();
+    return true;
+  }
+  function rotateSelection() {
+    const ids = doc.components.filter(c => selected.includes(c.id)).map(c => c.id);
+    if (ids.length) dispatch({ type: 'RotateComponents', ids });
   }
   function remove() {
-    if (dispatch({ type: 'DeleteElements', ids: selected })) setSelection([]);
+    const ids = selected.filter(id => !doc.junctions.some(j => j.id === id));
+    if (ids.length && dispatch({ type: 'DeleteElements', ids })) setSelection([]);
   }
   function cancelTool() {
+    setCopyDraft(null);
     setMeasurementKind(null);
     setMobileMeasuring(false);
     setSourcesDetached(false);
@@ -433,13 +538,11 @@ export function App() {
         return;
       } else if (modifier && event.key.toLowerCase() === 'a') {
         event.preventDefault();
-        setSelection(doc.components.map((c) => c.id));
+        setSelection([...doc.components, ...doc.junctions, ...doc.wires].map((c) => c.id));
       } else if (modifier && event.key.toLowerCase() === 'c') {
         event.preventDefault();
+        copyTouch.current = false;
         copy();
-      } else if (modifier && event.key.toLowerCase() === 'v') {
-        event.preventDefault();
-        paste();
       } else if (event.key === 'Escape') {
         cancelTool();
         setSelection([]);
@@ -447,9 +550,9 @@ export function App() {
         event.preventDefault();
         remove();
       } else if (event.key.toLowerCase() === 'r')
-        dispatch({ type: 'RotateComponents', ids: selected });
+        rotateSelection();
       else if (event.key.toLowerCase() === 'w') {
-        setPlacement(null);
+        cancelTool();
         setTool('wire');
       } else if (event.key.startsWith('Arrow') && selected.length) {
         event.preventDefault();
@@ -457,7 +560,7 @@ export function App() {
         dispatch({
           type: 'MoveComponents',
           positions: Object.fromEntries(
-            doc.components
+            [...doc.components, ...doc.junctions]
               .filter((c) => selected.includes(c.id))
               .map((c) => [
                 c.id,
@@ -478,11 +581,13 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   });
   function place(
-    type: ComponentType,
+    type: ComponentKind,
     position: Point,
     target?: { wireId: string; segment: number },
   ) {
-    const c = createComponent(type, newId(componentDefinitions[type].short), position);
+    const definition = componentDefinitions[type];
+    const allocateLabel = createComponentLabelAllocator(doc.components.map(c => c.label));
+    const c = createComponent(type, newId(definition.short), position, allocateLabel(definition));
     const added = placeComponent(c, target ? { ...target, newWireId: newId('W') } : undefined);
     if (!added.ok) {
       setNotice('부품을 놓을 수 없어요. 삽입 공간과 편집 권한을 확인해 주세요.', 'error');
@@ -498,6 +603,18 @@ export function App() {
     currentAnchor && currentAnchor.kind !== 'endpoint'
       ? { kind: currentAnchor.kind, id: currentAnchor.id }
       : null;
+  const helpItems = useMemo(() => resolveOperatingHelp({
+    document: doc, circuit: compilation.circuit, result, assessment,
+    active: mode === 'analysis' && !isolated, phase: analysisSession.phase, selectedIds: selected, showNumbers,
+    measuredComponentIds: measurementEnabled && !stopped ? measuredHelpComponents(compilation.circuit,
+      measurementKind === 'voltage' ? redProbe : '', measurementKind === 'voltage' ? blackProbe : '',
+      measurementKind === 'current' ? currentTarget?.id : undefined) : [],
+  }), [doc, compilation.circuit, result, assessment, mode, isolated, analysisSession.phase, selected, showNumbers, measurementEnabled, stopped, measurementKind, redProbe, blackProbe, currentTarget?.id]);
+  const openedHelpItem = helpItems.find(item => openHelp === `canvas:${item.key}` || openHelp === `detail:${item.key}`);
+  const selectedHelp = helpItems.find(item => item.componentId === selected[0] && !visibleHelpIds.includes(item.componentId));
+  useEffect(() => {
+    if (openHelp && (!openedHelpItem || (openHelp.startsWith('detail:') && openHelp !== `detail:${selectedHelp?.key}`))) setOpenHelp(null);
+  }, [openHelp, openedHelpItem, selectedHelp]);
   const currentReading = useMemo(
     () => probeCurrent(doc, compilation, result, currentTarget),
     [doc, compilation, result, currentAnchor],
@@ -510,7 +627,6 @@ export function App() {
     if (tool === 'reference') {
       dispatch({ type: 'SetReference', endpoint });
       cancelTool();
-      setNotice(`0 V 기준점: ${endpointName(doc, endpoint.id)}`);
       return;
     }
     if (measurementActive) {
@@ -557,11 +673,11 @@ export function App() {
     return dispatch({
       type: 'SetProperties',
       id,
-      properties: { state: component.properties.state === 'closed' ? 'open' : 'closed' },
+      properties: { state: nextSwitchState(component) },
     });
   }
   function applyValue() {
-    if (!component || !definition?.property) return;
+    if (!canChangeValues() || !component || !definition?.property) return;
     const parsed = parseComponentValue(component, valueDraft);
     if (!parsed.ok) {
       setNotice(parsed.error);
@@ -680,6 +796,7 @@ export function App() {
     if (fileInput.current) fileInput.current.value = '';
   }
   function changeMode(next: Mode) {
+    changeWorkspace(next);
     setMode(next);
     if (compact) { setDetailsOpen(false); setPresentation(false); }
     cancelTool();
@@ -724,7 +841,7 @@ export function App() {
       <button className={showColors ? 'active' : ''} aria-pressed={showColors} onClick={togglePotentialColors}>전위</button>
       <button className={showCurrent ? 'active' : ''} aria-pressed={showCurrent} onClick={toggleCurrentDisplay}>전류</button>
     </div>
-    <button className="compact-measure-start" onClick={() => chooseMeasurement(measurementKind ?? 'voltage')}>측정</button>
+    <button className="compact-measure-start" disabled={stopped} onClick={() => chooseMeasurement(locked && measurementKind === 'resistance' ? 'voltage' : measurementKind ?? 'voltage')}>측정</button>
     <FloatingPanel label="보기 더보기" contentLabel="보기 더보기" className="compact-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
       {close => <>
         <div className="compact-palette-row">
@@ -738,11 +855,18 @@ export function App() {
     </FloatingPanel>
   </>;
   const canvasDiagnostics =
-    !isolated && result.diagnostics.length > 0 ? (
+    !isolated && (result.diagnostics.length > 0 || assessment.components.length > 0) ? (
       <CanvasDiagnostics
+        open={diagnosticsOpen}
+        onOpenChange={open => { setDiagnosticsOpen(open); if (open) closeOperatingHelp(); }}
         key={`${documentEpoch}:${doc.documentId}:${mode}`}
         document={doc}
         diagnostics={result.diagnostics}
+        assessment={assessment}
+        analyzing={mode === 'analysis'}
+        selectedId={selected[0]}
+        onHighlight={setRiskHighlights}
+        onReset={locked ? () => changeMode('build') : undefined}
         onLocate={(ids) => {
           setSelection(ids);
           setFocusIds([...ids]);
@@ -751,29 +875,18 @@ export function App() {
     ) : null;
   const circuitCanvas = (
     <CircuitCanvas
+      onComponentLabelLayout={mode === 'analysis' ? receive2DComponentLayout : undefined}
       paletteDrag={paletteDrag}
       preserveViewOnResize={mode === 'analysis'}
       initialView={
         canvasView.current?.documentId === doc.documentId ? canvasView.current.view : undefined
       }
       onViewChange={(view) => {
+        closeOperatingHelp();
         canvasView.current = { documentId: doc.documentId, view };
       }}
-      viewLabel={
-        showOperatingState ? (
-          <div
-            className="potential-reference"
-            data-tooltip={`접지(0V): ${doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'}`}
-          >
-            <span>접지(0V):</span>
-            <Notation
-              symbol
-              text={doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'}
-            />
-          </div>
-        ) : undefined
-      }
       document={doc}
+      operatingMarks={operatingMarks}
       largeLabels={presentation}
       measurement={
         measurementActive
@@ -791,7 +904,7 @@ export function App() {
       }
       readOnly={mode === 'analysis'}
       readOnlyLabel="분석 회로"
-      allowValueEditing={mode === 'analysis' && !measurementActive}
+      allowValueEditing={mode === 'analysis' && !measurementActive && !locked}
       onWiringCommit={mode === 'build' ? commitWiring : undefined}
       wiringResetKey={wiringResetKey}
       selected={
@@ -823,7 +936,7 @@ export function App() {
           ? Object.fromEntries(
               Object.entries(potential.endpoints).map(([id, v]) => [
                 id,
-                formatQuantity(v.exactVoltage, 'V'),
+                formatQuantity(v.exactVoltage, 'V', {modelApproximation:potential.modelApproximation}),
               ]),
             )
           : undefined
@@ -831,9 +944,13 @@ export function App() {
       highlightedEndpoints={
         mode === 'analysis' && selectedNet ? potential.nets[selectedNet]?.endpointIds : undefined
       }
-      highlightedElements={!measurementActive && hovered ? [hovered] : undefined}
+      highlightedElements={openedHelpItem ? [openedHelpItem.componentId] : riskHighlights.length ? riskHighlights : !measurementActive && hovered ? [hovered] : undefined}
       onHoverElement={setHovered}
       onSelect={selectElement}
+      onSelectMany={setSelection}
+      copyPayload={copyPayload}
+      copyTouch={copyDraft?.touch}
+      onPlaceCopy={placeCopy}
       onMove={(positions) => dispatch({ type: 'MoveComponents', positions })}
       onPlace={place}
       onEndpoint={endpoint}
@@ -844,6 +961,10 @@ export function App() {
         const c = doc.components.find((c) => c.id === id);
         if (!c || mode === 'worksheet') return false;
         const commands: Command[] = [];
+        if (edit.diodeKind !== undefined && edit.diodeKind !== diodeKindFor(c)) {
+          if (mode !== 'build') return false;
+          commands.push({ type: 'SetDiodeKind', id, kind: edit.diodeKind });
+        }
         if (edit.label !== c.label) commands.push({ type: 'SetLabel', id, label: edit.label });
         const property = componentDefinitions[c.type].property;
         const properties: ComponentProperties = {};
@@ -866,10 +987,8 @@ export function App() {
         mode === 'build'
           ? (action) =>
               action === 'rotate'
-                ? dispatch({ type: 'RotateComponents', ids: selected })
-                : action === 'copy'
-                  ? copy()
-                  : remove()
+                ? rotateSelection()
+                : remove()
           : undefined
       }
       onValue={(id) => {
@@ -883,7 +1002,7 @@ export function App() {
   );
   return (
     <div
-      className={`app-shell mode-${mode}${compact ? ' compact-layout' : ''}${compact && controlledComponent ? ' parameter-open' : ''}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
+      className={`app-shell mode-${mode}${compact ? ' compact-layout' : ''}${compact && (controlledComponent || controlledSwitch) ? ' parameter-open' : ''}${mode === 'analysis' && analysisView === '3d' ? ' view-3d' : ''}${detailsOpen ? ' details-open' : ''}${presentation ? ' presentation' : ''}`}
     >
       <Tooltip />
       <header className="topbar">
@@ -958,10 +1077,12 @@ export function App() {
         <aside className="library-panel" hidden={mode === 'worksheet'}>
           {mode === 'analysis' ? (!compact &&
             <AnalysisTools
+              stopped={stopped}
+              resistanceDisabled={locked}
               kind={measurementKind}
               onChoose={chooseMeasurement}
               needsIsolation={needsIsolation}
-              onIsolate={() => setSourcesDetached(true)}
+              onIsolate={() => { if (canChangeValues()) setSourcesDetached(true); }}
               threeDimensional={analysisView === '3d'}
             />
           ) : (!compact &&
@@ -974,6 +1095,7 @@ export function App() {
                 resetKey={doc}
                 placement={placement}
                 onChoose={(type) => {
+                  setCopyDraft(null);
                   setPlacement(type);
                   setTool('select');
                   setWiringResetKey((key) => key + 1);
@@ -1010,26 +1132,20 @@ export function App() {
             adjustableComponents.map((adjustableComponent) => {
               const parameter = adjustableParameter(adjustableComponent)!;
               return (
-                <section
+                <ComponentControlPanel
                   key={`${documentEpoch}:${doc.documentId}:${adjustableComponent.id}:${q.exactText(parameter.min)}:${q.exactText(parameter.max)}`}
-                  className="parameter-panel"
-                  aria-label="가변저항 조절"
+                  component={adjustableComponent}
+                  compact={compact}
+                  onClose={() => setSelection([])}
                   hidden={controlledComponent?.id !== adjustableComponent.id}
                 >
-                  <div className="section-heading">
-                    <h2>가변저항</h2>
-                    {compact && <button aria-label="가변저항 조절 닫기" onClick={() => setSelection([])}><X size={16} /></button>}
-                    <span className="parameter-name">
-                      <Notation symbol text={adjustableComponent.label} />
-                    </span>
-                  </div>
                   <ParameterControl
+                    stopEpoch={analysisSession.stopEpoch}
+                    inspectIntermediate={doc.components.some(c => c.type === 'diode')}
                     onAdjustingChange={onParameterAdjusting}
                     component={adjustableComponent}
                     parameter={parameter}
-                    disabled={
-                      !!doc.activity && !doc.activity.allowedCommands.includes('SetProperties')
-                    }
+                    disabled={controlsDisabled}
                     onChange={(value, group, fraction) => {
                       if (
                         q.equal(value,parameter.value) &&
@@ -1037,7 +1153,8 @@ export function App() {
                           (adjustableComponent.properties[parameter.property + 'Fraction'] ?? '')
                       )
                         return true;
-                      return execute(
+                      const before = automaticEpoch();
+                      const applied = execute(
                         {
                           type: 'SetProperties',
                           id: adjustableComponent.id,
@@ -1049,37 +1166,44 @@ export function App() {
                           },
                         },
                         group,
-                      ).ok;
+                      );
+                      return !applied.ok ? false : automaticEpoch() !== before ? 'stop' : true;
                     }}
                   />
-                </section>
+                </ComponentControlPanel>
               );
             })}
+          {mode === 'analysis' && controlledSwitch && (
+            <ComponentControlPanel component={controlledSwitch} compact={compact} onClose={() => setSelection([])}>
+              <p>{componentValue(controlledSwitch)}</p>
+              <SwitchStateButton component={controlledSwitch} disabled={controlsDisabled} onToggle={() => toggleSwitch(controlledSwitch.id)} />
+            </ComponentControlPanel>
+          )}
         </aside>
         <main className="canvas-column">
           <div className="editor-toolbar" hidden={mode !== 'build'}>
             {compact && <FloatingPanel label="부품 추가" contentLabel="부품 추가" trigger={<><Plus size={17} />부품</>} className="compact-parts" contentClassName="compact-parts-panel" align="start" width={330}>
               {close => <>
-                <ComponentPalette tapOnly resetKey={doc} placement={placement} onChoose={type => close(() => {setPlacement(type);setTool('select');setWiringResetKey(key => key + 1);})} onClear={() => close(() => setPlacement(null))} />
+                <ComponentPalette tapOnly resetKey={doc} placement={placement} onChoose={type => close(() => {setCopyDraft(null);setPlacement(type);setTool('select');setWiringResetKey(key => key + 1);})} onClear={() => close(() => setPlacement(null))} />
                 <details className="compact-examples"><summary>예제 회로</summary><ExampleChoices documentId={doc.documentId} onSelect={document => close(() => replace(document))} /></details>
               </>}
             </FloatingPanel>}
-            <div className="tool-group desktop-editor-tools">
+            <div className="tool-group editor-selection-tools">
               {[
                 { id: 'select', label: '선택', Icon: MousePointer2 },
                 { id: 'wire', label: '배선', Icon: Cable },
-                { id: 'reference', label: '접지(0V)', Icon: GroundIcon },
+                { id: 'reference', label: '접지', Icon: GroundIcon },
               ].map(({ id, label, Icon }) => (
                 <button
                   key={id}
+                  data-editor-tool={id}
                   aria-pressed={tool === id && !placement}
                   className={tool === id && !placement ? 'active' : ''}
                   data-tooltip={label}
                   aria-label={label}
                   onClick={() => {
+                    cancelTool();
                     setTool(id);
-                    setPlacement(null);
-                    setWiringResetKey((key) => key + 1);
                   }}
                 >
                   <Icon size={18} />
@@ -1087,12 +1211,17 @@ export function App() {
                 </button>
               ))}
             </div>
+            {selected.length > 0 && <div className="tool-group copy-tools">
+              <button aria-label="복사" data-tooltip="복사 Ctrl+C" onPointerDown={e => { copyTouch.current = e.pointerType === 'touch'; }} onKeyDown={() => { copyTouch.current = false; }} onClick={copy}>
+                <Copy size={18} /><span>복사</span>
+              </button>
+            </div>}
             <span className="toolbar-separator" />
             <div className="tool-group">
               <button
                 aria-label="실행 취소"
                 data-tooltip="실행 취소 Ctrl+Z"
-                disabled={!history.past.length}
+                disabled={!canUndo()}
                 onClick={() => undoEdit()}
               >
                 <Undo2 size={18} />
@@ -1100,7 +1229,7 @@ export function App() {
               <button
                 aria-label="다시 실행"
                 data-tooltip="다시 실행 Ctrl+Shift+Z"
-                disabled={!history.future.length}
+                disabled={!canRedo()}
                 onClick={() => redoEdit()}
               >
                 <Redo2 size={18} />
@@ -1108,19 +1237,19 @@ export function App() {
             </div>
             {compact ? <FloatingPanel label="편집 더보기" contentLabel="편집 더보기" className="compact-edit-more" contentClassName="action-menu-content" role="menu" trigger={<Ellipsis size={18} />}>
               {close => <>
-                <button role="menuitem" onClick={() => close(() => { setTool('reference'); setPlacement(null); setWiringResetKey(key => key + 1); })}><GroundIcon size={16} />접지(0V) 지정</button>
+                <button role="menuitem" onClick={() => close(() => { cancelTool(); setTool('reference'); })}><GroundIcon size={16} />접지 지정</button>
                 <button role="menuitem" onClick={() => close(() => setDetailsOpen(true))}><SlidersHorizontal size={16} />상세 설정</button>
               </>}
             </FloatingPanel> : settingsButton}
           </div>
           {mode === 'worksheet' && <div id="worksheet-actions" className="worksheet-topbar" />}
           {mode === 'analysis' && !compact && (
-            <div className={`potential-controls${isolated || !showColors ? ' no-legend' : ''}`}>
+            <div className={`potential-controls${isolated || stopped || !showColors ? ' no-legend' : ''}`}>
               {viewSwitcher}
               <label>
                 <input
                   type="checkbox"
-                  disabled={isolated}
+                  disabled={isolated || stopped}
                   checked={!isolated && showColors}
                   onChange={togglePotentialColors}
                 />
@@ -1129,7 +1258,7 @@ export function App() {
               <label>
                 <input
                   type="checkbox"
-                  disabled={isolated}
+                  disabled={isolated || stopped}
                   checked={!isolated && showNumbers}
                   onChange={(e) => setShowNumbers(e.target.checked)}
                 />
@@ -1138,21 +1267,21 @@ export function App() {
               <label className="potential-current">
                 <input
                   type="checkbox"
-                  disabled={isolated}
+                  disabled={isolated || stopped}
                   checked={!isolated && showCurrent}
                   onChange={toggleCurrentDisplay}
                 />
                 전류 흐름
               </label>
               <button
-                disabled={isolated}
+                disabled={isolated || stopped}
                 aria-expanded={showGraph}
                 onClick={() => setAnalysisPanel(showGraph ? null : 'path')}
               >
                 경로 그래프
               </button>
               <div className="potential-legend-tools">
-                <div className="potential-legend" hidden={isolated || !showColors}>
+                <div className="potential-legend" hidden={isolated || stopped || !showColors}>
                   {potential.undefinedCount === Object.keys(potential.nets).length ? (
                     <span>전위 미정</span>
                   ) : (
@@ -1177,7 +1306,7 @@ export function App() {
               mobile={compact ? {
                 viewControls: mobileViewControls, measuring: mobileMeasuring,
                 onBack: () => { setMobileMeasuring(false); setAnalysisPanel(null); if (measurementKind === 'resistance') chooseMeasurement(null); },
-                onChoose: chooseMeasurement, needsIsolation, onIsolate: () => setSourcesDetached(true),
+                onChoose: chooseMeasurement, needsIsolation, onIsolate: () => { if (canChangeValues()) setSourcesDetached(true); },
               } : undefined}
               consoleHost={measurementConsoleHost}
               kind={measurementKind}
@@ -1189,6 +1318,9 @@ export function App() {
               document={doc}
               compilation={compilation}
               result={result}
+              canRecord={canMeasure}
+              stopped={stopped}
+              resistanceDisabled={locked}
               voltageReading={voltageReading}
               voltageLabel={voltageLabel}
               active={mode === 'analysis'}
@@ -1211,6 +1343,18 @@ export function App() {
                   overlayControls={
                     <>
                       {canvasDiagnostics}
+                      <MeterReadouts ref={meterOverlay} document={doc} compilation={compilation} result={result}
+                        suspended={isolated || stopped} openIds={openMeterIds} onToggle={id => setOpenMeterIds(previous => {
+                          const next = new Set(previous);
+                          if (next.has(id)) next.delete(id); else next.add(id);
+                          return next;
+                        })} />
+                      <OperatingHelpOverlay ref={helpOverlay} items={helpItems} openKey={openHelp?.startsWith('canvas:') ? openHelp.slice(7) : null}
+                        onOpen={key => showOperatingHelp(key ? `canvas:${key}` : null)} onVisible={ids => {
+                          setVisibleHelpIds(ids);
+                          setOpenHelp(key => key?.startsWith('canvas:') && !helpItems.some(item => `canvas:${item.key}` === key && ids.includes(item.componentId)) ? null : key);
+                        }} />
+                      <span className="measurement-sr-only" role="status" key={analysisSession.stopEpoch}>{assessment.representative ? `${doc.components.find(c => c.id === assessment.representative!.componentId)?.label ?? ''}: ${operatingReason(assessment.representative,assessment.representative.level === 'damage')}` : ''}</span>
                       {showOperatingState && showCurrent && (
                         <CurrentControls
                           paused={currentDisplay.paused}
@@ -1220,6 +1364,8 @@ export function App() {
                     </>
                   }
                   onStatusChange={setPotentialStatus}
+                  onComponentLabelLayout={receive3DComponentLayout}
+                  onViewInteraction={closeOperatingHelp}
                   active={analysisView === '3d'}
                   sourceView={
                     canvasView.current?.documentId === doc.documentId
@@ -1228,18 +1374,17 @@ export function App() {
                   }
                   onReturnTo2D={() => setPotentialView('2d')}
                   document={doc}
+                  operatingMarks={operatingMarks}
+                  operatingStopped={stopped}
                   potential={potential}
                   voltageMeasurement={voltageMeasurement}
                   currentDisplay={showOperatingState && showCurrent ? currentDisplay : undefined}
                   heightMultiplier={heightScale}
                   selectedIds={measurementKind === 'voltage' ? noSelection : selected}
-                  highlightedId={hovered}
+                  highlightedId={openedHelpItem?.componentId ?? hovered}
                   selectedNet={selectedNet}
-                  showNumbers={!isolated && showNumbers}
-                  showColors={!isolated && showColors}
-                  referenceLabel={
-                    doc.referenceNode ? endpointName(doc, doc.referenceNode.id) : '미지정'
-                  }
+                  showNumbers={showOperatingState && showNumbers}
+                  showColors={showOperatingState && showColors}
                   onSelect={selectElement}
                   onSelectNet={measurementKind === 'voltage' ? undefined : selectNet}
                 >
@@ -1376,8 +1521,8 @@ export function App() {
               onFontPreview={setOutputFontPreview}
               undo={() => undoEdit()}
               redo={() => redoEdit()}
-              canUndo={!!history.past.length}
-              canRedo={!!history.future.length}
+              canUndo={canUndo()}
+              canRedo={canRedo()}
             />
           </div>
 
@@ -1431,7 +1576,7 @@ export function App() {
                     <p>{definition.name}</p>
                   </div>
                 </div>
-                <div>
+                <fieldset className="component-properties" disabled={locked}>
                   <label className="field-label">
                     이름
                     <ComponentNameInput
@@ -1486,28 +1631,30 @@ export function App() {
                     />
                   )}
                   {!definition.property && quantityControl}
+                  {component.type === 'diode' && (
+                    <DiodeKindField component={component} value={diodeKindFor(component)!}
+                      disabled={mode !== 'build' || (!!doc.activity && !doc.activity.allowedCommands.includes('SetDiodeKind'))}
+                      onChange={kind => dispatch({ type: 'SetDiodeKind', id: component.id, kind })} />
+                  )}
                   {component.type === 'switch' && (
                     <SwitchStateButton
-                      closed={component.properties.state === 'closed'}
+                      component={component}
                       onToggle={() => toggleSwitch(component.id)}
                     />
                   )}
                   <div className="selection-actions" hidden={mode !== 'build'}>
-                    <button onClick={() => dispatch({ type: 'RotateComponents', ids: selected })}>
+                    <button onClick={() => rotateSelection()}>
                       <RotateCw size={17} />
                       회전
-                    </button>
-                    <button onClick={copy}>
-                      <Copy size={17} />
-                      복사
                     </button>
                     <button onClick={remove}>
                       <Trash2 size={17} />
                       삭제
                     </button>
                   </div>
-                </div>
-                <div hidden={mode === 'analysis' && (isolated || !showNumbers)}>
+                </fieldset>
+                {selectedHelp && <div className="operating-help-fallback"><span>부품 설명</span><OperatingHelp item={selectedHelp} open={openHelp === `detail:${selectedHelp.key}`} onOpenChange={open => showOperatingHelp(open ? `detail:${selectedHelp.key}` : null)} /></div>}
+                <div hidden={mode === 'analysis' && (isolated || stopped || !showNumbers)}>
                   <div className="library-divider" />
                   <div className="section-heading">
                     <h2>빠른 값 보기</h2>
@@ -1521,7 +1668,7 @@ export function App() {
                         {formatQuantity(
                           result.componentVoltages[component.id],
                           'V',
-                          quantityFormatFor(component.properties),
+                          {...quantityFormatFor(component.properties),modelApproximation:result.provenance?.physicalModel==='component'},
                         )}
                       </strong>
                     </div>
@@ -1531,7 +1678,7 @@ export function App() {
                         {formatQuantity(
                           result.branchCurrents[component.id],
                           'A',
-                          quantityFormatFor(component.properties),
+                          {...quantityFormatFor(component.properties),modelApproximation:result.provenance?.physicalModel==='component'},
                         )}
                       </strong>
                     </div>
@@ -1545,7 +1692,7 @@ export function App() {
                         {formatQuantity(
                           result.componentPowers[component.id] === undefined ? undefined : q.abs(result.componentPowers[component.id]),
                           'W',
-                          quantityFormatFor(component.properties),
+                          {...quantityFormatFor(component.properties),modelApproximation:result.provenance?.physicalModel==='component'},
                         )}
                       </strong>
                     </div>
@@ -1579,12 +1726,6 @@ export function App() {
               <button className="wide-button" onClick={remove}>
                 <Trash2 size={16} />
                 선택 요소 삭제
-              </button>
-            )}
-            {mode === 'build' && clipboard && (
-              <button className="wide-button" onClick={paste}>
-                <ClipboardPaste size={16} />
-                붙여넣기
               </button>
             )}
           </div>

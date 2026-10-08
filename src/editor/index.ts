@@ -1,5 +1,5 @@
 import type { ComponentProperties } from '../domain';
-import { isStoredScalar } from '../domain';
+import { isStoredScalar, diodeProfileRef, diodeKindFor, isDiodeKind, validSwitchState, type DiodeKind } from '../domain';
 import * as q from '../rational';
 import { normalizeComponentLabel } from '../domain';
 import { parseQuantity, isQuantityMode } from '../quantity';
@@ -18,8 +18,10 @@ import {
 } from '../domain';
 import { connectCrossing, disconnectCrossing, insertComponent, splitWire, preserveConnectedWirePaths } from './wire-edits';
 import { shiftWireSegment } from '../wire-geometry';
-import { wirePoints } from '../component-library';
+import { endpointPosition, wirePoints, componentDefinition, createComponentLabelAllocator } from '../component-library';
 import { deleteElements } from './delete-elements';
+import { rotateComponents } from './rotate-components';
+import { normalizeWireJunctions } from './wire-topology';
 export { insertionCandidates, type InsertionCandidate } from './wire-edits';
 
 export type Command =
@@ -38,6 +40,7 @@ export type Command =
       id: string;
       properties: ComponentProperties;
     }
+  | { type: 'SetDiodeKind'; id: string; kind: DiodeKind }
   | { type: 'SetLabel'; id: string; label: string }
   | { type: 'SetReference'; endpoint: EndpointRef | null }
   | { type: 'AddJunction'; junction: Junction; wireId?: string; newWireId?: string }
@@ -107,7 +110,7 @@ function invalidProperties(
   }
 
   if (component.type === 'switch' && Object.hasOwn(properties, 'state')) {
-    if (properties.state !== 'open' && properties.state !== 'closed') {
+    if (!validSwitchState({ ...component, properties: { ...component.properties, ...properties } })) {
       return [
         diagnostic('INVALID_COMPONENT_VALUE', [component.id], 'error', { property: 'state' }),
       ];
@@ -171,11 +174,11 @@ function applyCommand(
 
     case 'MoveComponents': {
       const ids = Object.keys(command.positions);
-      const missing = missingTargets(ids, componentIds);
+      const missing = missingTargets(ids, new Set([...componentIds, ...document.junctions.map(j => j.id)]));
       if (missing.length) return [diagnostic('COMMAND_TARGET_NOT_FOUND', missing)];
       const invalid = ids.filter(id => !Number.isFinite(command.positions[id].x) || !Number.isFinite(command.positions[id].y));
       if (invalid.length) return [diagnostic('INVALID_COMMAND', invalid, 'error', { command: command.type })];
-      for (const component of document.components) {
+      for (const component of [...document.components, ...document.junctions]) {
         const position = command.positions[component.id];
         if (position && (position.x !== component.position.x || position.y !== component.position.y)) {
           component.position = { ...position };
@@ -189,12 +192,7 @@ function applyCommand(
       const ids = new Set(command.ids);
       const missing = missingTargets(ids, componentIds);
       if (missing.length) return [diagnostic('COMMAND_TARGET_NOT_FOUND', missing)];
-      for (const component of document.components) {
-        if (ids.has(component.id)) {
-          component.rotation = ((component.rotation + 90) % 360) as ComponentInstance['rotation'];
-        }
-      }
-      preserveConnectedWirePaths(present, document);
+      rotateComponents(document, ids);
       break;
     }
 
@@ -226,6 +224,18 @@ function applyCommand(
       break;
     }
 
+    case 'SetDiodeKind': {
+      const component = document.components.find(item => item.id === command.id);
+      if (!component) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.id])];
+      if (component.type !== 'diode' || !isDiodeKind(command.kind))
+        return [diagnostic('INVALID_COMPONENT_PROFILE', [command.id])];
+      if (diodeKindFor(component) === command.kind) break;
+      component.operatingProfile = diodeProfileRef(command.kind);
+      delete component.properties.diodeThresholdV;
+      delete component.properties.diodeOnResistanceOhm;
+      break;
+    }
+
     case 'SetLabel': {
       const component = document.components.find((item) => item.id === command.id);
       if (!component) return [diagnostic('COMMAND_TARGET_NOT_FOUND', [command.id])];
@@ -235,9 +245,12 @@ function applyCommand(
       break;
     }
 
-    case 'SetReference':
+    case 'SetReference': {
+      const previous = document.referenceNode;
       document.referenceNode = command.endpoint ? { ...command.endpoint } : null;
+      if (previous?.kind === 'junction') normalizeWireJunctions(document, [previous.id]);
       break;
+    }
 
     case 'AddJunction': {
       if ((command.wireId === undefined) !== (command.newWireId === undefined)) {
@@ -310,7 +323,7 @@ export function executeCommand(history: History, command: Command): ExecuteComma
   if (command.type === 'MoveWireSegment' && command.offset === 0) return { ok: true, history };
   // A click, sub-grid movement, or returning to the starting position is not an edit.
   if (command.type === 'MoveComponents' && Object.entries(command.positions).every(([id, p]) => {
-    const original = history.present.components.find(c => c.id === id)!;
+    const original = [...history.present.components, ...history.present.junctions].find(c => c.id === id)!;
     return original.position.x === p.x && original.position.y === p.y;
   })) return { ok: true, history };
   const past = [...history.past, cloneDocument(history.present)].slice(-HISTORY_CAPACITY);
@@ -370,8 +383,15 @@ export function copySelection(
     ...selectedJunctions.map((junction) => junction.id),
   ]);
   const selectedWires = document.wires.filter(
-    (wire) => includedEndpointIds.has(wire.start.id) && includedEndpointIds.has(wire.end.id),
+    (wire) => selectedIds.has(wire.id) || (includedEndpointIds.has(wire.start.id) && includedEndpointIds.has(wire.end.id)),
   );
+  const detachedEndpoints = new Set<string>();
+  for (const wire of selectedWires) for (const endpoint of [wire.start, wire.end]) {
+    if (includedEndpointIds.has(endpoint.id)) continue;
+    selectedJunctions.push({ id: endpoint.id, position: endpointPosition(document, endpoint) });
+    includedEndpointIds.add(endpoint.id);
+    detachedEndpoints.add(endpoint.id);
+  }
   const selectedAnnotations = document.annotations.filter((annotation) =>
     (annotation.anchor ? includedEndpointIds.has(annotation.anchor.id) : selectedIds.has(annotation.id)),
   );
@@ -386,14 +406,16 @@ export function copySelection(
   for (const annotation of selectedAnnotations) idMap.set(annotation.id, newId('annotation'));
 
   const remapEndpoint = (endpoint: EndpointRef): EndpointRef => ({
-    kind: endpoint.kind,
+    kind: detachedEndpoints.has(endpoint.id) ? 'junction' : endpoint.kind,
     id: idMap.get(endpoint.id) as string,
   });
 
+  const allocateLabel = createComponentLabelAllocator(document.components.map(c => c.label));
   return {
     components: selectedComponents.map((component) => ({
       ...cloneValue(component),
       id: idMap.get(component.id) as string,
+      label: allocateLabel(componentDefinition(component)),
       position: {
         x: component.position.x + offset.x,
         y: component.position.y + offset.y,
