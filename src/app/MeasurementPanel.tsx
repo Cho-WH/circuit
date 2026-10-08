@@ -89,7 +89,7 @@ export function MeasurementPanel(props: Props) {
     previousMeasuring.current = props.mobile?.measuring;
   }, [props.mobile?.measuring, props.active]);
 
-  const { entries, setEntries, storageWarning } = useMeasurementRecords();
+  const { entries, setEntries, storageWarning, deleteEntries, deletedCount, restoreDeleted } = useMeasurementRecords();
   const [message, setMessage] = useState('');
   useEffect(() => {
     if (!message) return;
@@ -395,8 +395,10 @@ export function MeasurementPanel(props: Props) {
             previous.map((entry) => (entry.id === id ? { ...entry, note } : entry)),
           )
         }
-        onDelete={(id) => setEntries((previous) => previous.filter((entry) => entry.id !== id))}
-        onClear={() => setEntries([])}
+        onDelete={deleteEntries}
+        onClear={() => deleteEntries()}
+        deletedCount={deletedCount}
+        onRestoreDeleted={restoreDeleted}
       />
     </section>
   );

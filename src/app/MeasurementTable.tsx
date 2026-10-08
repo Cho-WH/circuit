@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Copy, Download, RotateCcw, Trash2, X } from 'lucide-react';
 import type { MeasurementEntry } from '../persistence';
@@ -6,6 +6,7 @@ import { Notation } from './Notation';
 import { saveBlob } from './download';
 import { CircuitCanvas } from './CircuitCanvas';
 import { useDialogFocus } from './useDialogFocus';
+import { FloatingPanel } from './FloatingPanel';
 import {
   conditionValues,
   measurementQuantityName,
@@ -29,7 +30,9 @@ function ConditionSummary({ entry }: { entry: MeasurementEntry }) {
           </span>
         ))}
         {entry.sourcesDisconnected && <span className="record-isolation">모든 전원 분리</span>}
-        {entry.record.provenance?.physicalModel === 'component' && <span className="record-isolation">부품 특성</span>}
+        {entry.record.provenance?.physicalModel === 'component' && (
+          <span className="record-isolation">부품 특성</span>
+        )}
       </div>
     </div>
   );
@@ -106,6 +109,8 @@ interface Props {
   onNote: (id: string, note: string) => void;
   onDelete: (id: string) => void;
   onClear: () => void;
+  deletedCount: number;
+  onRestoreDeleted: () => void;
 }
 export function MeasurementTable({
   entries,
@@ -115,8 +120,14 @@ export function MeasurementTable({
   onNote,
   onDelete,
   onClear,
+  deletedCount,
+  onRestoreDeleted,
 }: Props) {
   const [message, setMessage] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
+  useEffect(() => {
+    if (!open) setConfirmClear(false);
+  }, [open]);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const preview = entries.find((entry) => entry.id === previewId);
   const groups = measurementConditions(entries);
@@ -154,17 +165,53 @@ export function MeasurementTable({
           <button disabled={!entries.length} onClick={copy}>
             <Copy size={14} />표 복사
           </button>
-          <button
+          {deletedCount > 0 && (
+            <button
+              aria-label="기록 삭제 되돌리기"
+              onClick={() => {
+                onRestoreDeleted();
+                setMessage(`기록 ${deletedCount}개를 복원했어요.`);
+              }}
+            >
+              <RotateCcw size={14} />
+              되돌리기
+            </button>
+          )}
+          <FloatingPanel
+            label="기록 전체 삭제"
             disabled={!entries.length}
-            onClick={() => {
-              onClear();
-              setPreviewId(null);
-              setMessage('기록을 초기화했어요.');
-            }}
+            trigger={
+              <>
+                <Trash2 size={14} />
+                전체 삭제
+              </>
+            }
+            contentLabel="기록 전체 삭제 확인"
+            contentClassName="record-delete-confirm"
+            width={240}
+            open={confirmClear && open && entries.length > 0}
+            onOpenChange={setConfirmClear}
           >
-            <RotateCcw size={14} />
-            기록 초기화
-          </button>
+            {(close) => (
+              <>
+                <p>기록 {entries.length}개를 삭제할까요?</p>
+                <div>
+                  <button onClick={() => close()}>취소</button>
+                  <button
+                    onClick={() =>
+                      close(() => {
+                        onClear();
+                        setPreviewId(null);
+                        setMessage(`기록 ${entries.length}개를 삭제했어요.`);
+                      })
+                    }
+                  >
+                    삭제
+                  </button>
+                </div>
+              </>
+            )}
+          </FloatingPanel>
           <button
             disabled={!entries.length}
             onClick={() =>
@@ -244,7 +291,10 @@ export function MeasurementTable({
                         <button
                           className="record-delete"
                           aria-label={`기록 ${index} 삭제`}
-                          onClick={() => onDelete(entry.id)}
+                          onClick={() => {
+                            onDelete(entry.id);
+                            setMessage('기록 1개를 삭제했어요.');
+                          }}
                         >
                           <Trash2 size={15} />
                         </button>

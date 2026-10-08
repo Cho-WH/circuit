@@ -1424,7 +1424,7 @@ export function CircuitCanvas(props: CanvasProps) {
               y={label.y + 15 * labelScale}
               textAnchor="middle"
               fontSize={12 * labelScale}
-              fill={endColor(label.id)}
+              fill="#30382f"
             >
               {label.text}
             </text>

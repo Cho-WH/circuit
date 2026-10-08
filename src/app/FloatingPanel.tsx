@@ -21,6 +21,7 @@ interface Props {
   onOpen?: () => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  disabled?: boolean;
   children: (close: (action?: () => void) => void) => ReactNode;
 }
 
@@ -37,6 +38,7 @@ export function FloatingPanel({
   onOpen,
   onOpenChange,
   open: controlledOpen,
+  disabled,
   children,
 }: Props) {
   const [localOpen, setLocalOpen] = useState(false),
@@ -150,6 +152,7 @@ export function FloatingPanel({
     >
       <button
         type="button"
+        disabled={disabled}
         className="floating-panel-trigger"
         ref={trigger}
         aria-label={label}

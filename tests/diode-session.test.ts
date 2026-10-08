@@ -12,7 +12,7 @@ import { analyze } from '../src/app/analyze';
 import { App } from '../src/app/App';
 import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { createMeasurementRecord } from '../src/measurement';
-import { measurementConditionKey, measurementValue } from '../src/app/measurement-records';
+import { conditionValues, measurementConditionKey, measurementTableText, measurementValue } from '../src/app/measurement-records';
 import { componentPresentation } from '../src/component-library';
 import { exportSvg } from '../src/export';
 
@@ -141,7 +141,7 @@ it('shows only a build warning, then damage decoration, a short cause and a work
   const tools=[...host.querySelectorAll<HTMLButtonElement>('.analysis-tools button')];
   expect(tools).toHaveLength(3);expect(tools.every(b=>b.disabled)).toBe(true);
   expect(host.querySelector('.measure-diagnostics')).toBeNull();
-  await act(async()=>button('회로 초기화').click());
+  await act(async()=>button('회로 수정하기').click());
   expect(host.querySelector('[data-operating-state]')).toBeNull();expect(button('파손 주의')).toBeTruthy();
 });
 
@@ -153,7 +153,7 @@ it('keeps overload voltage/current recording available with disabled value contr
   await click('분석하기');
   expect(host.querySelector('[data-component-id="D1"]')?.getAttribute('data-operating-state')).toBe('overload');
   expect(host.querySelector('.physical-model-badge')).toBeNull();
-  expect(button('과부하 주의').closest('.canvas-status-actions')).toContain(button('회로 초기화'));
+  expect(button('과부하 주의').closest('.canvas-status-actions')).toContain(button('회로 수정하기'));
   await enter('[data-component-id="R1"] .component');
   expect(host.querySelector<HTMLFieldSetElement>('.parameter-control')?.disabled).toBe(true);
   expect(host.querySelector<HTMLFieldSetElement>('.component-properties')?.disabled).toBe(true);
@@ -169,7 +169,7 @@ it('keeps overload voltage/current recording available with disabled value contr
   const records=loadMeasurementNotebook().entries;
   expect(records.map(e=>e.record.quantity)).toEqual(['voltage','current']);
   expect(records.every(e=>e.record.provenance?.physicalModel==='component')).toBe(true);
-  await click('회로 초기화');
+  await click('회로 수정하기');
   expect(host.querySelector('[data-operating-state]')).toBeNull();expect(button('과부하 주의')).toBeTruthy();
   expect(host.querySelector<HTMLFieldSetElement>('.component-properties')?.disabled).toBe(false);
 });
@@ -199,7 +199,7 @@ it('keeps physical help available outside locked fields, with one dialog and unc
   expect(document.querySelector('.canvas-diagnostics-bubble')).toBeNull();
   expect(host.querySelector<HTMLFieldSetElement>('.component-properties')!.disabled).toBe(true);
   expect(loadLocal()).toEqual(saved);
-  await act(async () => button('회로 초기화').click());
+  await act(async () => button('회로 수정하기').click());
   expect(document.querySelector('.operating-help-content')).toBeNull();
   expect(host.querySelector('.operating-help-fallback')).toBeNull();
 });
@@ -212,6 +212,15 @@ it('keeps model/profile provenance in measurement grouping and uses a display ap
   expect(measurementValue(entry)).toContain('≈');expect(value.approximation).toBeUndefined();
   const other={...entry,record:{...entry.record,provenance:{...entry.record.provenance!,physicalModel:'textbook' as const}}};
   expect(measurementConditionKey(other)).not.toBe(measurementConditionKey(entry));
+  const power = structuredClone(entry);
+  power.record.documentSnapshot.components.find(c=>c.id==='D1')!.operatingProfile=diodeProfileRef('power');
+  expect(measurementConditionKey(power)).not.toBe(measurementConditionKey(entry));
+  expect(conditionValues(entry)).toContainEqual({label:'D1',value:'신호용'});
+  expect(conditionValues(power)).toContainEqual({label:'D1',value:'대전류용'});
+  expect(measurementTableText([entry,power],',')).toContain('D1 신호용');
+  expect(measurementTableText([entry,power],',')).toContain('D1 대전류용');
+  doc.components.find(c=>c.id==='D1')!.operatingProfile=diodeProfileRef('power');
+  expect(conditionValues(entry)).toContainEqual({label:'D1',value:'신호용'});
   const diode=doc.components.find(c=>c.id==='D1')!;
   diode.properties.showVoltage=true;diode.properties.showCurrent=true;diode.properties.quantityMode='plain';
   const presentation=componentPresentation(diode,evaluated.result);
