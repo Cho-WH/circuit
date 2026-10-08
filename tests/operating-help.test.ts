@@ -28,6 +28,17 @@ const topics = (items: ReturnType<typeof resolveOperatingHelp>, id: string) =>
   items.find((i) => i.componentId === id)?.questions.map((q) => q.topic) ?? [];
 
 describe('physical explanations use confirmed observations', () => {
+  it('uses the adjustable source name with the existing physical explanations', () => {
+    const doc=document(1000);
+    Object.assign(doc.components[0].properties,{sourceKind:'adjustable',voltageMinV:q.store(0),voltageMaxV:q.store(12)});
+    const items=resolveOperatingHelp({...input(doc),selectedIds:['V1']});
+    const source=items.find(item=>item.componentId==='V1')!;
+    expect(source.questions.length).toBeGreaterThan(0);
+    for(const question of source.questions) {
+      expect(JSON.stringify(helpText(question))).toContain('전원');
+      expect(JSON.stringify(helpText(question))).not.toContain('전지');
+    }
+  });
   it('does not infer a direction from an approximate current whose uncertainty crosses zero', () => {
     const value = input(document(1000), true);
     const uncertain = {

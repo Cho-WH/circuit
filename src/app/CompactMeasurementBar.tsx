@@ -40,8 +40,8 @@ export function CompactMeasurementBar(props: Props) {
         <button key={kind} role="menuitemradio" disabled={props.stopped || (kind === 'resistance' && props.resistanceDisabled)} aria-checked={props.kind === kind} onClick={() => close(() => props.onChoose(kind))}>{measurementLabels[kind]}</button>,
       )}
     </ActionMenu>
-    {props.needsIsolation ? <button className="compact-isolate" onClick={props.onIsolate} data-tooltip="등가저항은 전지를 분리하고 측정해요">
-      <Unplug size={16} />전지 분리하고 측정
+    {props.needsIsolation ? <button className="compact-isolate" onClick={props.onIsolate} data-tooltip="등가저항은 전원을 분리하고 측정해요">
+      <Unplug size={16} />전원 분리하고 측정
     </button> : <>
       <FloatingPanel label="측정값 상세" contentLabel="측정값 상세" className="compact-reading" contentClassName="compact-reading-detail" width={300}
         trigger={<output aria-label="측정값" aria-live="polite" aria-atomic="true" style={{ fontSize: `${Math.max(12, Math.min(24, 100 / Math.max(4, props.reading.length * .55)))}px` }}>{props.reading}</output>}>
@@ -49,7 +49,7 @@ export function CompactMeasurementBar(props: Props) {
           <strong>{props.reading}</strong>
           {props.kind === 'voltage' && <p>빨강 {props.potentials.red} · 검정 {props.potentials.black}</p>}
           {props.kind === 'current' && <p>{props.targetName || '측정 위치를 선택하세요'}</p>}
-          {props.isolated && <p><Unplug size={14} /> 전지 분리 상태</p>}
+          {props.isolated && <p><Unplug size={14} /> 전원 분리 상태</p>}
           {props.diagnostics}
         </>}
       </FloatingPanel>

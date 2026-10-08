@@ -8,6 +8,7 @@ import {
   loadMeasurementNotebook,
   saveMeasurementNotebook,
   type MeasurementEntry,
+  readLocalSource, recoverDocument,
 } from '../src/persistence';
 import { releaseChannel, channelStorageKey, readChannelStorage } from '../src/release';
 import * as q from '../src/rational';
@@ -60,7 +61,8 @@ describe('release channel storage', () => {
     vi.stubEnv('VITE_RELEASE_CHANNEL', 'main');
     store.setItem('edu-circuit:auto:v1', '{broken');
     store.setItem('edu-circuit:auto:v1:backup', serializeDocument(document('recovered')));
-    expect(loadLocal('auto', store)).toMatchObject({ ok: true, document: { title: 'recovered' } });
+    expect(loadLocal('auto', store)).toMatchObject({ ok: false });
+    expect(recoverDocument(readLocalSource('auto', store)!, store)).toMatchObject({ ok: true, document: { title: 'recovered' } });
     saveMeasurementNotebook([entry('recovered notes')], store);
     const scoped = [...store.values.keys()].find((k) => k.includes('measurement-notebook:'))!;
     const raw = store.getItem(scoped)!;
@@ -96,7 +98,7 @@ describe('release channel storage', () => {
         document: { title: `${channel} manual` },
       });
       store.setItem(channelStorageKey('edu-circuit:auto:v1'), '{broken');
-      expect(loadLocal('auto', store)).toMatchObject({
+      expect(recoverDocument(readLocalSource('auto', store)!, store)).toMatchObject({
         ok: true,
         document: { title: `${channel} backup` },
       });
@@ -147,7 +149,7 @@ describe('release channel storage', () => {
     store.setItem('edu-circuit:auto:v1', legacy);
     for (const channel of ['main', 'dev'] as const) {
       vi.stubEnv('VITE_RELEASE_CHANNEL', channel);
-      expect(loadLocal('auto', store)).toBeNull();
+      expect(loadLocal('auto', store)).toMatchObject({ ok: false });
       expect(store.getItem(channelStorageKey('edu-circuit:auto:v1'))).toBeNull();
     }
     expect(store.getItem('edu-circuit:auto:v1')).toBe(legacy);

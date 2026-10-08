@@ -17,57 +17,66 @@ export interface HelpQuestion {
   damaged?: boolean;
   general?: boolean;
   zeroCurrent?: boolean;
+  adjustableSource?: boolean;
 }
 
 /** Student copy only. Physics selection and renderer coordinates live elsewhere. */
 export function helpText(question: HelpQuestion): { title: string; paragraphs: string[] } {
   const { topic, damaged, general, zeroCurrent } = question;
+  const source = question.adjustableSource ? '전원' : '전지';
+  const subject = question.adjustableSource ? '전원이' : '전지가';
   switch (topic) {
     case 'source-terminal-drop':
       return {
-        title: general ? '설정 전압과 측정값은 왜 달라질 수 있나요?' : '전지 전압이 왜 낮아졌나요?',
+        title: general
+          ? '설정 전압과 측정값은 왜 달라질 수 있나요?'
+          : `${source} 전압이 왜 낮아졌나요?`,
         paragraphs: [
-          "전지 안에도 '내부저항'이 있어요. 전류가 작을 때는 그 영향을 무시할 수 있지만, 전류가 많이 흐르면 전지 양끝에서 측정하는 전압이 낮아지고 내부에서 열도 더 많이 발생해요.",
+          `${source} 안에도 '내부저항'이 있어요. 전류가 작을 때는 그 영향을 무시할 수 있지만, 전류가 많이 흐르면 ${source} 양끝에서 측정하는 전압이 낮아지고 내부에서 열도 더 많이 발생해요.`,
           '지금은 이 영향을 포함한 전압을 보여주고 있어요.',
         ],
       };
     case 'source-terminal-rise':
       return {
-        title: '전지 전압이 왜 더 높게 나오나요?',
+        title: `${source} 전압이 왜 더 높게 나오나요?`,
         paragraphs: [
-          '다른 전원이 이 전지 쪽으로 전류를 밀어 넣고 있어요. 전류가 반대로 흐르면 내부저항에 걸리는 전압의 방향도 바뀌어, 전지 양끝에서 재는 전압이 더 높아질 수 있어요. 그렇다고 모든 전지를 이렇게 충전할 수 있는 것은 아니에요.',
+          `다른 전원이 이 ${source} 쪽으로 전류를 밀어 넣고 있어요. 전류가 반대로 흐르면 내부저항에 걸리는 전압의 방향도 바뀌어, ${source} 양끝에서 재는 전압이 더 높아질 수 있어요. ${question.adjustableSource ? '' : '그렇다고 모든 전지를 이렇게 충전할 수 있는 것은 아니에요.'}`,
         ],
       };
     case 'source-terminal-general':
       return {
-        title: '전지 옆 숫자와 측정값은 무엇이 다른가요?',
+        title: `${source} 옆 숫자와 측정값은 무엇이 다른가요?`,
         paragraphs: [
-          '전지 옆 숫자는 전류가 흐르지 않을 때의 전압을 나타내요. 탐침은 지금 전지 양끝의 전압을 재고 있어요. 전류가 흐르면 내부저항의 영향으로 두 값이 달라질 수 있어요.',
+          `${source} 옆 숫자는 전류가 흐르지 않을 때의 전압을 나타내요. 탐침은 지금 ${source} 양끝의 전압을 재고 있어요. 전류가 흐르면 내부저항의 영향으로 두 값이 달라질 수 있어요.`,
         ],
       };
     case 'source-not-broken':
       return {
-        title: '전지가 망가진 건가요?',
+        title: `${subject} 망가진 건가요?`,
         paragraphs: [
-          '전압이 낮아졌다고 해서 전지가 망가진 것은 아니에요. 전류가 흐르는 동안 내부저항 때문에 양끝의 전압이 낮아질 수 있어요. 이것은 전지가 영구적으로 손상된 것과는 달라요.',
+          `전압이 낮아졌다고 해서 ${subject} 망가진 것은 아니에요. 전류가 흐르는 동안 내부저항 때문에 양끝의 전압이 낮아질 수 있어요. 이것은 ${subject} 영구적으로 손상된 것과는 달라요.`,
         ],
       };
     case 'source-current':
       return {
-        title: damaged ? '왜 이 전지가 손상된 모습인가요?' : '왜 이 전지에 과부하가 걸렸나요?',
+        title: damaged
+          ? `왜 이 ${subject} 손상된 모습인가요?`
+          : `왜 이 ${source}에 과부하가 걸렸나요?`,
         paragraphs: [
           damaged
-            ? '전지에 너무 많은 전류가 흐르면 내부에서 열이 많이 나고 손상될 수 있어요. 지금은 전지가 감당하기 어려운 상태여서 손상된 모습으로 보여주고 있어요.'
-            : '전지가 감당하기 어려울 만큼 많은 전류가 흐르고 있어요. 전지 안에도 저항이 있어서, 전류가 많이 흐를수록 내부에서 열이 더 많이 나요. 지금은 전지에 무리가 가는 상태를 보여주고 있어요.',
+            ? `${source}에 너무 많은 전류가 흐르면 내부에서 열이 많이 나고 손상될 수 있어요. 지금은 ${subject} 감당하기 어려운 상태여서 손상된 모습으로 보여주고 있어요.`
+            : `${subject} 감당하기 어려울 만큼 많은 전류가 흐르고 있어요. ${source} 안에도 저항이 있어서, 전류가 많이 흐를수록 내부에서 열이 더 많이 나요. 지금은 ${source}에 무리가 가는 상태를 보여주고 있어요.`,
         ],
       };
     case 'source-power':
       return {
-        title: damaged ? '왜 이 전지가 손상된 모습인가요?' : '왜 이 전지에 과부하가 걸렸나요?',
+        title: damaged
+          ? `왜 이 ${subject} 손상된 모습인가요?`
+          : `왜 이 ${source}에 과부하가 걸렸나요?`,
         paragraphs: [
           damaged
-            ? '전지 내부에서 너무 많은 에너지가 열로 바뀌면 전지가 손상될 수 있어요. 지금은 전지가 감당하기 어려운 상태여서 손상된 모습으로 보여주고 있어요.'
-            : '전지 안에도 저항이 있어서, 전류가 흐르면 전기 에너지의 일부가 열로 바뀌어요. 지금은 그 양이 너무 커서 전지에 무리가 가고 있어요.',
+            ? `${source} 내부에서 너무 많은 에너지가 열로 바뀌면 ${subject} 손상될 수 있어요. 지금은 ${subject} 감당하기 어려운 상태여서 손상된 모습으로 보여주고 있어요.`
+            : `${source} 안에도 저항이 있어서, 전류가 흐르면 전기 에너지의 일부가 열로 바뀌어요. 지금은 그 양이 너무 커서 ${source}에 무리가 가고 있어요.`,
         ],
       };
     case 'diode-forward-voltage':

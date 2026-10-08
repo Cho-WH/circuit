@@ -111,10 +111,10 @@ describe('contextual output settings',()=>{
       expect(host.querySelector('h3')?.textContent).toBe('화살표');
       expect(host.querySelector('h4')).toBeNull();
       expect(host.querySelector('fieldset legend')?.textContent).toBe('그림 설정');
-      const polarity = [...host.querySelectorAll<HTMLInputElement>('input[role="switch"]')].find(input => input.parentElement?.textContent === '계기 +/− 표시')!;
+      const polarity = [...host.querySelectorAll<HTMLInputElement>('input[role="switch"]')].find(input => input.parentElement?.textContent === '기호 +/− 표시')!;
       expect(polarity.checked).toBe(false);
       act(() => polarity.click());
-      expect(onOptions).toHaveBeenLastCalledWith({ monochrome: true, showMeterPolarity: true });
+      expect(onOptions).toHaveBeenLastCalledWith({ monochrome: true, showSymbolPolarity: true });
       expect(host.querySelector<HTMLInputElement>('[aria-label="값 출력 문자"]')?.value).toBe('3/4 A');
       act(()=>host.querySelector<HTMLInputElement>('[aria-label="기호·이름 표시"]')!.click());
       expect(dispatch).toHaveBeenLastCalledWith({type:'UpdateAnnotation',id:'arrow',changes:{presentation:{...doc.annotations[0].presentation,labelVisible:false}}});

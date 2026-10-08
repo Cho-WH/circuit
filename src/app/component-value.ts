@@ -2,7 +2,7 @@ import * as q from '../rational';
 import type { ComponentInstance } from '../domain';
 import {
   adjustableParameter,
-  componentDefinitions,
+  componentDefinition,
   componentValueInput,
 } from '../component-library';
 import { formatQuantity, parseQuantity } from '../quantity';
@@ -13,7 +13,7 @@ export function parseComponentValue(
   draft: string,
   editedRange?: { min: q.Scalar; max: q.Scalar },
 ): { ok: true; value: q.StoredScalar; fraction?: string } | { ok: false; error: string } {
-  const definition = componentDefinitions[component.type];
+  const definition = componentDefinition(component);
   const parsed = parseQuantity(draft, definition.unit);
   if (!parsed || (definition.unit === 'Ω' && q.sign(parsed.value) < 0))
     return {

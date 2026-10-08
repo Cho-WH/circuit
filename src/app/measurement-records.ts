@@ -1,7 +1,7 @@
 import * as q from '../rational';
 import type { MeasurementEntry } from '../persistence';
 import {
-  componentDefinitions,
+  componentDefinition,
   componentValue,
   endpointName,
   wireName,
@@ -26,8 +26,8 @@ export function measurementConditionKey(entry: MeasurementEntry): string {
       operatingProfile: c.operatingProfile,
       characteristics: [c.properties.diodeThresholdV,c.properties.diodeOnResistanceOhm,c.properties.sourceResistanceOhm],
       terminals: c.terminals.map((t) => [t.id, t.role]),
-      value: componentDefinitions[c.type].property
-        ? c.properties[componentDefinitions[c.type].property!]
+      value: componentDefinition(c).property
+        ? c.properties[componentDefinition(c).property!]
         : c.properties.state,
     })),
     junctions: sorted(doc.junctions).map((j) => j.id),
@@ -51,7 +51,7 @@ export function measurementConditions(entries: MeasurementEntry[]) {
 export function conditionValues(entry: MeasurementEntry): { label: string; value: string }[] {
   const doc = entry.record.documentSnapshot;
   return doc.components.flatMap((c) => {
-    const definition = componentDefinitions[c.type];
+    const definition = componentDefinition(c);
     if (definition.property)
       return [
         {

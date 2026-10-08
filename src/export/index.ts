@@ -40,7 +40,7 @@ export interface ExportOptions {
   margin?: number;
   highResolution?: boolean;
   showGround?: boolean;
-  showMeterPolarity?: boolean;
+  showSymbolPolarity?: boolean;
 }
 
 interface NormalizedExportOptions {
@@ -51,7 +51,7 @@ interface NormalizedExportOptions {
   margin: number;
   pngScale: number;
   showGround: boolean;
-  showMeterPolarity: boolean;
+  showSymbolPolarity: boolean;
 }
 
 interface Bounds {
@@ -86,7 +86,7 @@ function normalizeOptions(options: ExportOptions = {}): NormalizedExportOptions 
   if (background !== 'transparent' && background !== 'white') throw new TypeError('background must be transparent or white');
   if (typeof monochrome !== 'boolean') throw new TypeError('monochrome must be a boolean');
   if (!Number.isFinite(margin) || margin < 0) throw new RangeError('margin must be a finite non-negative number');
-  return { quantityFormat:options.quantityFormat??defaultQuantityFormat, circuitOnly, monochrome, background, margin, pngScale, showGround: circuitOnly || (options.showGround ?? false), showMeterPolarity: circuitOnly || (options.showMeterPolarity ?? false) };
+  return { quantityFormat:options.quantityFormat??defaultQuantityFormat, circuitOnly, monochrome, background, margin, pngScale, showGround: circuitOnly || (options.showGround ?? false), showSymbolPolarity: circuitOnly || (options.showSymbolPolarity ?? false) };
 }
 
 function xmlText(value: string): string {
@@ -289,7 +289,7 @@ export function createSvgExport(
   }
 
   for (const component of document.components) {
-    chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="body" transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component, { showMeterPolarity: options.showMeterPolarity })}</g>`);
+    chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="body" transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component, { showSymbolPolarity: options.showSymbolPolarity })}</g>`);
     for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale, options.quantityFormat)) {
       chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="${placement.tone}">${renderText(placement, colors, scale)}</g>`);
     }

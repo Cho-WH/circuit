@@ -21,9 +21,16 @@ export function parseParameterRange(
 ): ParameterRange | null {
   const min = parseQuantity(draft.min, parameter.unit)?.value;
   const max = parseQuantity(draft.max, parameter.unit)?.value;
-  return min !== undefined && max !== undefined && q.sign(min) > 0 && q.compare(max, min) > 0
+  return min !== undefined &&
+    max !== undefined &&
+    (parameter.allowZero ? q.sign(min) >= 0 : q.sign(min) > 0) &&
+    q.compare(max, min) > 0
     ? { min, max }
     : null;
+}
+
+export function parameterRangeError(parameter: AdjustableParameter) {
+  return `0 ${parameter.allowZero ? '≤' : '<'} 최솟값 < 최댓값으로 입력하세요.`;
 }
 
 export function parameterRangeProperties(parameter: AdjustableParameter, range: ParameterRange) {
@@ -98,7 +105,7 @@ export function ParameterRangeFields({
   function commit() {
     const range = parseParameterRange(draft, parameter);
     if (!range) {
-      setError('0 < 최솟값 < 최댓값으로 입력하세요.');
+      setError(parameterRangeError(parameter));
       return;
     }
     const properties = parameterRangeProperties(parameter, range);

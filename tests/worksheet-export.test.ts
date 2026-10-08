@@ -485,6 +485,24 @@ describe('free output layout', () => {
 
 
 describe('output ground and embedded math font',()=>{
+  it('uses the shared polarity option for battery marks while retaining DC supply symbols', () => {
+    const doc = fixture();
+    const battery = doc.components.find(component => component.type === 'dc-voltage-source')!;
+    const before = structuredClone(doc);
+    for (const rotation of [0, 90, 180, 270] as const) {
+      battery.rotation = rotation;
+      const live = symbolMarkup(battery);
+      expect(live).toContain('data-symbol="battery-polarity"');
+      expect(exportSvg(doc)).not.toContain('data-symbol="battery-polarity"');
+      expect(exportSvg(doc, { showSymbolPolarity: false })).not.toContain('data-symbol="battery-polarity"');
+      expect(exportSvg(doc, { showSymbolPolarity: true })).toContain(live);
+      expect(exportSvg(doc, { circuitOnly: true, showSymbolPolarity: false })).toContain(live);
+    }
+    battery.rotation = before.components.find(component => component.id === battery.id)!.rotation;
+    expect(doc).toEqual(before);
+    const supply = createComponent('adjustable-voltage-source', 'supply', { x: 600, y: 200 });
+    expect(symbolMarkup(supply, { showSymbolPolarity: false })).toBe(symbolMarkup(supply));
+  });
   it.each(['ammeter', 'voltmeter'] as const)('shares %s polarity in live and 3D symbols but hides it in output until enabled', kind => {
     const doc = fixture(), before = structuredClone(doc);
     const meter = createComponent(kind, 'meter', { x: 600, y: 200 });
@@ -497,9 +515,9 @@ describe('output ground and embedded math font',()=>{
       expect(live).toContain('>−</text>');
       expect(live).toContain('rotate(' + -rotation + ' -34 -10)');
       expect(exportSvg(doc)).not.toContain('data-symbol="meter-polarity"');
-      expect(exportSvg(doc, { showMeterPolarity: false })).not.toContain('data-symbol="meter-polarity"');
-      expect(exportSvg(doc, { showMeterPolarity: true })).toContain(live);
-      expect(exportSvg(doc, { circuitOnly: true, showMeterPolarity: false })).toContain(live);
+      expect(exportSvg(doc, { showSymbolPolarity: false })).not.toContain('data-symbol="meter-polarity"');
+      expect(exportSvg(doc, { showSymbolPolarity: true })).toContain(live);
+      expect(exportSvg(doc, { circuitOnly: true, showSymbolPolarity: false })).toContain(live);
     }
     expect(doc.components.slice(0, -1)).toEqual(before.components);
     expect(doc.wires).toEqual(before.wires);

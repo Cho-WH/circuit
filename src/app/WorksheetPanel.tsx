@@ -67,7 +67,7 @@ export function WorksheetPanel(props: Props) {
     {!props.compact&&doc.annotations.some(a=>a.visibility!=='hidden')&&<details className="output-decoration-list"><summary>출력 장식</summary><div className="annotation-list">{doc.annotations.filter(a=>a.visibility!=='hidden').map(a=><button key={a.id} className={annotation?.id===a.id?'active':''} onClick={()=>props.onSelect(a.id)}>{a.kind==='point'?'● ':a.kind==='arrow'?'→ ':''}<Notation symbol={a.kind==='point'||a.kind==='arrow'} text={String(a.presentation?.labelText??a.content)||'□'}/></button>)}</div></details>}
     <fieldset className="output-export-options"><legend>그림 설정</legend>
       <label className="check-label"><input type="checkbox" role="switch" checked={options.showGround??false} onChange={e=>props.onOptions({...options,showGround:e.target.checked})}/>접지 표시</label>
-      <label className="check-label"><input type="checkbox" role="switch" checked={options.showMeterPolarity??false} onChange={e=>props.onOptions({...options,showMeterPolarity:e.target.checked})}/>계기 +/− 표시</label>
+      <label className="check-label"><input type="checkbox" role="switch" checked={options.showSymbolPolarity??false} onChange={e=>props.onOptions({...options,showSymbolPolarity:e.target.checked})}/>기호 +/− 표시</label>
       <label className="check-label"><input type="checkbox" role="switch" checked={options.background==='transparent'} onChange={e=>props.onOptions({...options,background:e.target.checked?'transparent':'white'})}/>투명 배경</label>
       <label className="check-label"><input type="checkbox" role="switch" checked={options.highResolution??false} onChange={e=>props.onOptions({...options,highResolution:e.target.checked})}/>고해상도 출력</label>
     </fieldset>

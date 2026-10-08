@@ -32,6 +32,8 @@ interface ComponentDefinition<TProps> {
 
 현재 가변저항은 공통 부품 정의에서 이름·기호를 제공하고 저항의 두 단자 전기 모델을 공유한다. 파일 호환용 타입 `resistive-load`와 `resistanceOhm` 속성은 유지한다. 이후 새 전기 모델을 도입할 때도 편집기·해석기·출력기의 경계를 지킨다.
 
+분석 중 조절 가능한 부품에 공통 안내를 연결하려면 `componentDefinitions.hint`를 `analysis-control`로 등록한다. 부품 목록이 배치 버튼과 분리된 물음표를 표시하고 같은 `ControlHintDialog`를 연다. 안내 창은 빠른 시작과 `GuideDialog`를 공유하며, 예시 그림도 공통 부품 기호를 사용한다.
+
 ## 계산 엔진 확장
 
 전류·소자 상태의 표시 확장은 [ADR-020](../../decisions/ADR-020-current-visualization.md)을 따른다. 새 소자는 `hasCurrentBridge`의 명시적 표시 정책을 정의해야 한다. 축전기·다이오드에 저항의 연속 경로를 자동 적용하지 않는다. 과도 해석의 전류·전압·축적 전하는 같은 물리 시각의 결과이며 표시용 애니메이션에서 적분하지 않는다. 현재 구현에는 과도 엔진이나 미지원 소자 타입을 미리 추가하지 않는다.
@@ -66,7 +68,7 @@ interface SimulationEngine {
 
 스키마 변경은 다음 조건을 갖는다.
 
-1. 문서 `version`을 올린다.
+1. 문서 `version`을 올린다. 기존 문서의 의미를 유지하는 선택적 확장을 같은 버전에 추가할 때는 지원 범위와 이전 앱의 거부 동작을 ADR에 명시한다([직류 전원 확장](../../decisions/ADR-038-adjustable-dc-source.md)).
 2. 현재 지원 버전을 명시한다. 이전 형식의 변환·호환은 제공하지 않는다.
 3. 원본 입력을 직접 수정하지 않는다.
 4. 현재 fixture의 왕복과 지원 밖 입력의 거부를 확인한다.

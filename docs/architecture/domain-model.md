@@ -129,4 +129,6 @@ ComponentInstance.properties.quantityMode는 auto/scientific/plain 선택 속성
 
 resistive-load의 resistanceOhm은 현재 저항값이다. 선택적 resistanceMinOhm/resistanceMaxOhm이 있으면 0 < min < max와 min ≤ value ≤ max를 domain에서 검증한다. 새 부품은 10 Ω·1~100 Ω 범위다. v6의 정확값 필드를 사용한다. 범위 없는 문서의 기본 범위와 조절 계약은 [ADR-023](../../decisions/ADR-023-live-parameters.md)을 따른다. 자동 왕복·입력 초안·축척 기준은 UI 상태다.
 
+직류 전원은 전지와 같은 `dc-voltage-source`에 `sourceKind=adjustable`을 지정하고 `voltageMinV/voltageMaxV`를 정확값으로 저장한다. `0 ≤ min < max`와 현재 전압의 범위 포함을 저항과 공통 정의로 검증한다. 종류가 없는 기존 전지는 유지한다. [ADR-038](../../decisions/ADR-038-adjustable-dc-source.md)의 선택적 확장은 회로 v6·기록 v5를 유지한다.
+
 다이오드 종류는 별도 UI 상태가 아닌 operatingProfile의 edu-diode-signal@1 / edu-diode-power@1로 저장한다. 새 부품은 신호용이다. 기존 edu-diode@1과 참조 생략의 고정 의미는 유지한다. [ADR-028](../../decisions/ADR-028-diode-kinds.md).

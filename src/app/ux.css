@@ -47,8 +47,8 @@
 .wire-ink{transition:stroke-width 200ms ease,filter 200ms ease,fill 160ms ease}
 
 @media(hover:hover) and (pointer:fine){
-  .circuit-element:hover .component-lift{transform:translateY(-1.5px) scale(1.035)}
-  .circuit-element:hover .component-ink{stroke:#31547f;color:#31547f;stroke-width:3.1;filter:drop-shadow(0 2px 3px #25476f66)}
+  .circuit-element:hover .component-lift,.component-hint-button:hover .component-lift{transform:translateY(-1.5px) scale(1.035)}
+  .circuit-element:hover .component-ink,.component-hint-button:hover .component-ink{stroke:#31547f;color:#31547f;stroke-width:3.1;filter:drop-shadow(0 2px 3px #25476f66)}
   .circuit-element[data-selected=true]:hover .component-lift{transform:translateY(-2px) scale(1.055)}
   .circuit-element[data-selected=true]:hover .component-ink{stroke:#174895;color:#174895;stroke-width:3.5;filter:drop-shadow(0 3px 3px #193e7877) drop-shadow(0 0 1px #17489533)}
   .wire-element:hover .wire-ink{stroke-width:4;filter:drop-shadow(0 2px 2px #25476f80)}

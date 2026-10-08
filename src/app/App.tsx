@@ -29,6 +29,7 @@ import {
   Undo2,
   Redo2,
   Copy,
+  Printer,
   Plus,
   Check,
   AlertCircle,
@@ -72,7 +73,8 @@ import {
 } from './parameters';
 import { copySelection, insertionCandidates, type Command, type PastePayload } from '../editor';
 import { copyAt, copyOverlapsComponents, singleCopiedComponent } from './copy-placement';
-import { parseDocument, serializeDocument } from '../persistence';
+import { parseDocument, serializeDocument, type RecoverySource } from '../persistence';
+import { RecoveryDialog } from './RecoveryDialog';
 import { useCircuitSession, type WorkspaceMode } from './useCircuitSession';
 import { examples } from '../fixtures';
 import { analyze } from './analyze';
@@ -106,6 +108,7 @@ import { formatQuantity, quantityFormatFor, type QuantityMode } from '../quantit
 import { Notation } from './Notation';
 import { PotentialSettings, defaultPotentialSettings } from './PotentialSettings';
 import { QuickStartDialog } from './QuickStartDialog';
+import { ControlHintDialog } from './ControlHintDialog';
 import { useQuickStart } from './useQuickStart';
 import { FileMenu } from './FileMenu';
 import { FeedbackLoading } from './FeedbackLoading';
@@ -118,6 +121,7 @@ import { useCompactLayout } from './useCompactLayout';
 import { FloatingPanel } from './FloatingPanel';
 import './styles.css';
 import './ux.css';
+import './quick-start.css';
 import './mobile.css';
 import './operating.css';
 const FeedbackFeature = lazy(() => import('./FeedbackBoard'));
@@ -149,6 +153,8 @@ export function App() {
     history,
     documentEpoch,
     saveStatus,
+    recovery,
+    finishRecovery,
     analysisSession,
     changeWorkspace,
     canMeasure,
@@ -165,6 +171,7 @@ export function App() {
     saved: '이 브라우저에 저장됨',
     saving: '이 브라우저에 저장 중',
     failed: '이 브라우저에 자동 저장 실패',
+    paused: '원본 보관 중',
   }[saveStatus];
   const doc = history.present;
   const locked = analysisLocked(analysisSession);
@@ -189,6 +196,9 @@ export function App() {
   useEffect(() => { setCopyDraft(draft => draft?.source === doc ? draft : null); }, [doc]);
   const [valueDraft, setValueDraft] = useState('');
   const { help, firstVisit, showHelp, closeHelp } = useQuickStart();
+  const [controlHintOpen, setControlHintOpen] = useState(false);
+  const [fileRecovery, setFileRecovery] = useState<RecoverySource | null>(null);
+  const recoverySource = recovery ?? fileRecovery;
   const helpButton = useRef<HTMLButtonElement>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [potentialView, setPotentialView] = useState<'2d' | '3d'>('2d');
@@ -510,7 +520,7 @@ export function App() {
   }
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (feedbackOpen || help) return;
+      if (feedbackOpen || help || controlHintOpen || recoverySource) return;
       if ((event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')) return;
       if (compact && mode === 'worksheet') return;
       const modifier = event.ctrlKey || event.metaKey;
@@ -781,15 +791,12 @@ export function App() {
   async function openFile(file?: File) {
     if (!file) return;
     try {
-      const parsed = parseDocument(await file.text());
+      const raw = await file.text();
+      const parsed = parseDocument(raw);
       if (parsed.ok) {
         replace(parsed.document);
         setNotice('회로 파일을 열었습니다.');
-      } else
-        setNotice(
-          '이 파일을 열 수 없어요. 파일 형식이나 연결 정보가 올바르지 않습니다. 다른 회로 파일을 골라 주세요.',
-          'error',
-        );
+      } else setFileRecovery({ raw, filename: file.name });
     } catch {
       setNotice('파일을 읽지 못했어요. 다시 골라 주세요.', 'error');
     }
@@ -824,9 +831,9 @@ export function App() {
   );
   const modeNavigation = <nav className="modebar" aria-label="작업 모드">
     <div className="mode-tabs">
-      <button aria-pressed={mode === 'build'} className={mode === 'build' ? 'active' : ''} onClick={() => changeMode('build')}><MousePointer2 size={16} />회로 만들기</button>
+      <button aria-pressed={mode === 'build'} className={mode === 'build' ? 'active' : ''} onClick={() => changeMode('build')}><CircuitBoard size={16} />회로 만들기</button>
       <button aria-pressed={mode === 'analysis'} className={mode === 'analysis' ? 'active' : ''} onClick={() => changeMode('analysis')}><Zap size={16} />분석하기</button>
-      {!compact && <button aria-pressed={mode === 'worksheet'} className={mode === 'worksheet' ? 'active' : ''} onClick={() => changeMode('worksheet')}><Copy size={16} />회로도 출력</button>}
+      {!compact && <button aria-pressed={mode === 'worksheet'} className={mode === 'worksheet' ? 'active' : ''} onClick={() => changeMode('worksheet')}><Printer size={16} />회로도 출력</button>}
     </div>
     {!compact && <button className="presentation-toggle" onClick={() => setPresentation(v => !v)}>{presentation ? '편집 화면' : '수업 화면'}</button>}
   </nav>;
@@ -1008,7 +1015,7 @@ export function App() {
       <header className="topbar">
         <a className="brand" aria-label="회로 실험실" href="#" onClick={(e) => e.preventDefault()}>
           <span className="brand-mark">
-            <CircuitBoard size={23} />
+            <img src={`${import.meta.env.BASE_URL}favicon.svg`} width={26} height={26} alt="" />
           </span>
           <span>회로 실험실</span>
         </a>
@@ -1040,9 +1047,10 @@ export function App() {
         {compact && modeNavigation}
         <div className="top-actions">
           <FileMenu
+            onRecovery={setFileRecovery}
             compact={compact}
             extraItems={compact ? close => <>
-              <button role="menuitem" onClick={() => close(() => changeMode('worksheet'))}><Copy size={16} />회로도 출력</button>
+              <button role="menuitem" onClick={() => close(() => changeMode('worksheet'))}><Printer size={16} />회로도 출력</button>
             </> : undefined}
             document={doc}
             onNew={newCircuit}
@@ -1092,6 +1100,7 @@ export function App() {
               </div>
               <ComponentPalette
                 key={mode}
+                onShowHint={() => setControlHintOpen(true)}
                 resetKey={doc}
                 placement={placement}
                 onChoose={(type) => {
@@ -1184,7 +1193,7 @@ export function App() {
           <div className="editor-toolbar" hidden={mode !== 'build'}>
             {compact && <FloatingPanel label="부품 추가" contentLabel="부품 추가" trigger={<><Plus size={17} />부품</>} className="compact-parts" contentClassName="compact-parts-panel" align="start" width={330}>
               {close => <>
-                <ComponentPalette tapOnly resetKey={doc} placement={placement} onChoose={type => close(() => {setCopyDraft(null);setPlacement(type);setTool('select');setWiringResetKey(key => key + 1);})} onClear={() => close(() => setPlacement(null))} />
+                <ComponentPalette tapOnly resetKey={doc} placement={placement} onShowHint={() => close(() => setControlHintOpen(true))} onChoose={type => close(() => {setCopyDraft(null);setPlacement(type);setTool('select');setWiringResetKey(key => key + 1);})} onClear={() => close(() => setPlacement(null))} />
                 <details className="compact-examples"><summary>예제 회로</summary><ExampleChoices documentId={doc.documentId} onSelect={document => close(() => replace(document))} /></details>
               </>}
             </FloatingPanel>}
@@ -1746,7 +1755,20 @@ export function App() {
           </button>
         </div>
       )}
-      {help && <QuickStartDialog compact={compact} onClose={closeHelp} firstVisit={firstVisit} helpButton={helpButton} />}
+      {help && !recoverySource && <QuickStartDialog compact={compact} onClose={closeHelp} firstVisit={firstVisit} helpButton={helpButton} />}
+      {controlHintOpen && <ControlHintDialog onClose={() => setControlHintOpen(false)} />}
+      {recoverySource && <RecoveryDialog source={recoverySource} onResolve={document => {
+        if (!finishRecovery(document, recoverySource)) return false;
+        setFileRecovery(null);
+        setSelection([]);
+        cancelTool();
+        setCustomPathIds([]);
+        setActivePath(0);
+        changeMode('build');
+        setDetailsOpen(false);
+        setPresentation(false);
+        return true;
+      }} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { diagnostic, defaultOperatingProfileRef, type CircuitDocument, type ComponentInstance } from '../domain';
+import { diagnostic, defaultOperatingProfileRef, emptyDocument, type CircuitDocument, type ComponentInstance } from '../domain';
 import {
   createHistory,
   executeCommand,
@@ -10,7 +10,7 @@ import {
   type ExecuteCommandResult,
   type History,
 } from '../editor';
-import { loadLocal, saveLocal } from '../persistence';
+import { loadCircuitSession, saveLocal, saveRecoveredLocal, type RecoverySource } from '../persistence';
 import { examples } from '../fixtures';
 import { layoutExample } from './examples';
 import { analyze } from './analyze';
@@ -45,10 +45,11 @@ function allowedInMode(document: CircuitDocument, mode: WorkspaceMode, command: 
 
 /** Owns the committed document. Selection, gestures and panel drafts stay in the views. */
 export function useCircuitSession(mode: WorkspaceMode) {
-  const [history, setHistory] = useState(() => {
-    const saved = loadLocal();
-    return createHistory(saved?.ok ? saved.document : layoutExample(examples[1].document));
-  });
+  const [startup] = useState(loadCircuitSession);
+  const [recovery, setRecovery] = useState(startup.recovery);
+  const [readFailed, setReadFailed] = useState(startup.readFailed ?? false);
+  const [history, setHistory] = useState(() => createHistory(startup.document ??
+    (startup.recovery ? emptyDocument('recovery-pending') : layoutExample(examples[1].document))));
   const current = useRef(history);
   const [analysisSession, setAnalysisSession] = useState(freshAnalysisSession);
   const operating = useRef(analysisSession);
@@ -56,7 +57,7 @@ export function useCircuitSession(mode: WorkspaceMode) {
   workspace.current = mode;
   const group = useRef<{ token: object; base: History; past: History['past'] } | null>(null);
   const [documentEpoch, setDocumentEpoch] = useState(0);
-  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed'>('saving');
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed' | 'paused'>(startup.recovery ? 'paused' : 'saving');
 
   function updateOperating(next: typeof analysisSession) {
     operating.current = next;
@@ -90,6 +91,7 @@ export function useCircuitSession(mode: WorkspaceMode) {
   }
 
   function execute(command: Command | readonly Command[], token?: object): ExecuteCommandResult {
+    if (recovery) return { ok: false, diagnostics: [diagnostic('DOCUMENT_RECOVERY_REQUIRED')] };
     const commands: readonly Command[] = 'type' in command ? [command] : command;
     const denied = commands.find((item) => analysisLocked(operating.current) || !allowedInMode(current.current.present, workspace.current, item));
     if (denied)
@@ -132,13 +134,28 @@ export function useCircuitSession(mode: WorkspaceMode) {
   }
 
   useEffect(() => {
+    if (recovery) { setSaveStatus('paused'); return; }
+    if (readFailed) { setSaveStatus('failed'); return; }
     setSaveStatus('saving');
     const timer = window.setTimeout(() => {
       const saved = saveLocal(history.present);
       setSaveStatus(saved.ok ? 'saved' : 'failed');
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [history.present]);
+  }, [history.present, recovery, readFailed]);
+
+  function finishRecovery(document: CircuitDocument, source: RecoverySource): boolean {
+    const result = saveRecoveredLocal(document, source);
+    if (!result.ok) return false;
+    group.current = null;
+    updateOperating(freshAnalysisSession());
+    publish(createHistory(document));
+    setRecovery(undefined);
+    setReadFailed(false);
+    setDocumentEpoch(value => value + 1);
+    setSaveStatus('saved');
+    return true;
+  }
 
   function canRestore(document: CircuitDocument | undefined): boolean {
     if (!document || analysisLocked(operating.current)) return false;
@@ -158,6 +175,8 @@ export function useCircuitSession(mode: WorkspaceMode) {
     history,
     documentEpoch,
     saveStatus,
+    recovery,
+    finishRecovery,
     analysisSession,
     changeWorkspace,
     canMeasure: () => !analysisStopped(operating.current),

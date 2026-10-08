@@ -29,6 +29,7 @@ import {
   parseDocument,
   saveLocal,
   serializeDocument,
+  recoverDocument, readLocalSource, saveRecoveredLocal, originalBackups, recoveryReason,
 } from "../src/persistence";
 
 const root = resolve(process.cwd());
@@ -462,6 +463,16 @@ describe("value parsing and activity policy", () => {
 });
 
 describe("versioned JSON persistence", () => {
+  it.each([
+    ['{"format":"edu-circuit","version":5}', 'older-version'],
+    ['{"format":"edu-circuit","version":7}', 'newer-version'],
+    ['{"format":"edu-circuit","version":6}', 'invalid-data'],
+    ['{"format":"other","version":1}', 'invalid-data'],
+    ['null', 'invalid-data'],
+    ['{broken', 'invalid-data'],
+  ] as const)('identifies the recovery explanation without accepting the file: %s', (raw, reason) => {
+    expect(recoveryReason(raw)).toBe(reason);
+  });
   it("serializes and parses a current-format document without changing its meaning", () => {
     const document = fixture("FIX-03");
     const serialized = serializeDocument(document);
@@ -543,7 +554,7 @@ describe("versioned JSON persistence", () => {
     ]);
   });
 
-  it("recovers the last valid automatic backup when the primary value is corrupt", () => {
+  it("requires explicit recovery of a corrupt primary and preserves its original", () => {
     const storage = new MemoryStorage();
     const first = fixture("FIX-01");
     const second = fixture("FIX-02");
@@ -551,7 +562,13 @@ describe("versioned JSON persistence", () => {
     expect(saveLocal(second, "auto", storage)).toEqual({ ok: true });
     storage.values.set(channelStorageKey("edu-circuit:auto:v1"), "corrupt JSON");
 
-    expect(loadLocal("auto", storage)).toEqual({ ok: true, document: first });
+    expect(loadLocal("auto", storage)).toMatchObject({ ok: false });
+    const source = readLocalSource('auto', storage)!;
+    expect(saveLocal(second, 'auto', storage).ok).toBe(false);
+    expect(recoverDocument(source, storage)).toEqual({ ok: true, document: first });
+    expect(storage.getItem(source.storageKey!)).toBe('corrupt JSON');
+    expect(saveRecoveredLocal(first, source, storage).ok).toBe(true);
+    expect(originalBackups(storage)).toEqual(['corrupt JSON']);
     expect(loadLocal("manual", storage)).toBeNull();
   });
 
@@ -580,5 +597,27 @@ describe("versioned JSON persistence", () => {
       ok: false,
       diagnostics: [expect.objectContaining({ code: "STORAGE_READ_FAILED" })],
     });
+  });
+  it('migrates validated v5 explicitly without changing values, connections or layout', () => {
+    const raw = readFileSync(join(root, 'tests/data/circuit-v5.json'), 'utf8');
+    const current = { ...JSON.parse(raw), version: 6 };
+    expect(parseDocument(raw).ok).toBe(false);
+    expect(recoverDocument({ raw })).toEqual({ ok: true, document: current });
+    for (const version of [1, 4, 7, 999])
+      expect(recoverDocument({ raw: JSON.stringify({ ...current, version }) }).ok).toBe(false);
+    const broken = { ...current, version: 5, referenceNode: { kind: 'terminal', id: 'missing' } };
+    expect(recoverDocument({ raw: JSON.stringify(broken) }).ok).toBe(false);
+  });
+  it('does not replace originals when preservation fails or the pending source changed', () => {
+    const storage = new MemoryStorage(), key = channelStorageKey('edu-circuit:auto:v1');
+    storage.values.set(key, '{broken');
+    const source = readLocalSource('auto', storage)!;
+    storage.setFailure = new DOMException('quota', 'QuotaExceededError');
+    expect(saveRecoveredLocal(fixture('FIX-01'), source, storage).ok).toBe(false);
+    expect(storage.getItem(key)).toBe(source.raw);
+    storage.setFailure = null;
+    storage.values.set(key, serializeDocument(fixture('FIX-02')));
+    expect(saveRecoveredLocal(fixture('FIX-01'), source, storage).ok).toBe(false);
+    expect(loadLocal('auto', storage)).toEqual({ ok: true, document: fixture('FIX-02') });
   });
 });

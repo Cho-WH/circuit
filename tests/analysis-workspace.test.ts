@@ -143,7 +143,7 @@ it('keeps multiple meter displays open across selection, tools and views, update
   expect(reading('M_1')).toBe(value());
   await click('3D');
   expect(reading('A_1')).toBe('1 A'); expect(reading('M_1')).toBe('3 V');
-  await click('2D'); await click('등가저항'); await click('전지 분리하고 측정');
+  await click('2D'); await click('등가저항'); await click('전원 분리하고 측정');
   expect(reading('A_1')).toBe('— A'); expect(reading('M_1')).toBe('— V');
   await click('도구 종료');
   expect(reading('A_1')).toBe('1 A');
@@ -287,17 +287,25 @@ it.each(['activity', 'damage'] as const)('disables switch panel actions for %s r
   expect(button('B로 전환').disabled).toBe(true);
 });
 
-it('adjusts resistance beside the probes and records exact conditions without restarting 3D', async () => {
+it.each(['resistance', 'voltage'] as const)('adjusts %s beside the probes and records exact conditions without restarting 3D', async (kind) => {
   const doc = layoutExample(examples.find(e => e.id === 'FIX-02')!.document);
   const variable = doc.components.find(c => c.id === 'R1')!;
   variable.type = 'resistive-load'; variable.properties = { resistanceOhm: q.store(3), resistanceMinOhm: q.store(3), resistanceMaxOhm: q.store(6) };
   doc.components.find(c => c.id === 'R2')!.properties.resistanceOhm = q.store(3);
+  const source = doc.components.find(c => c.type === 'dc-voltage-source')!;
+  const adjusted = kind === 'voltage' ? source : variable;
+  const property = kind === 'voltage' ? 'voltageV' : 'resistanceOhm';
+  if (kind === 'voltage') {
+    variable.type = 'resistor';
+    variable.properties = {resistanceOhm:q.store(3)};
+    source.properties = createComponent('adjustable-voltage-source',source.id,source.position).properties;
+  }
   saveLocal(doc);
   await act(async () => root.render(createElement(App)));
   await click('분석하기');
   expect(host.querySelector('.parameter-panel:not([hidden])')).toBeNull();
   await click('전압 탐침'); await probeResistor();
-  await enter('[data-component-id="R1"] .component');
+  await enter(`[data-component-id="${adjusted.id}"] .component`);
   await click('3D');
   const scene = host.querySelector('[data-test-scene]');
   expect(value()).toBe('4.5 V'); await click('측정값 기록');
@@ -309,15 +317,15 @@ it('adjusts resistance beside the probes and records exact conditions without re
   });
   expect(value()).toBe('4.5 V');
   await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
-  expect(value()).toBe('6 V');
+  expect(value()).toBe(kind === 'voltage' ? '3 V' : '6 V');
   expect(observed.measurement?.label).toBe(value());
   expect(host.querySelector('[data-test-scene]')).toBe(scene);
   expect(host.querySelector('.potential-workspace')!.getAttribute('data-status')).toBe('ready');
   expect(observed.measurement?.red?.endpointId).toBe('R1.a');
   await click('측정값 기록');
   const records = loadMeasurementNotebook().entries;
-  expect(records.map(e => e.record.value === null ? null : q.toNumber(e.record.value))).toEqual([4.5, 6]);
-  expect(records.map(e => q.toNumber(e.record.documentSnapshot.components.find(c => c.id === 'R1')!.properties.resistanceOhm as q.Scalar))).toEqual([3, 6]);
+  expect(records.map(e => e.record.value === null ? null : q.toNumber(e.record.value))).toEqual([4.5, kind === 'voltage' ? 3 : 6]);
+  expect(records.map(e => q.toNumber(e.record.documentSnapshot.components.find(c => c.id === adjusted.id)!.properties[property] as q.Scalar))).toEqual([kind === 'voltage' ? 9 : 3, 6]);
 });
 
 it('shows only the selected adjustable component and clears it in both views without moving probes', async () => {
@@ -475,7 +483,7 @@ it('requires source detachment, suppresses operating results, and restores the p
   expect(host.querySelector('[data-source-isolated]')).toBeNull();
   expect(host.querySelector('.measurement-surface')).toBeNull();
   expect(button('측정값 기록')).toBeUndefined();
-  await click('전지 분리하고 측정');
+  await click('전원 분리하고 측정');
   expect(value()).toBe('3 Ω');
   expect(host.querySelectorAll('[data-source-isolated]')).toHaveLength(1);
   expect(toggle('색상').checked).toBe(false);
@@ -495,7 +503,7 @@ it('requires source detachment, suppresses operating results, and restores the p
   expect(host.querySelector('.measurement-surface')).toBeNull();
   expect(host.querySelector('.measure-console')).toBeNull();
   await click('등가저항');
-  await click('전지 분리하고 측정');
+  await click('전원 분리하고 측정');
   expect(host.querySelector('[data-test-scene]')).toBeNull();
   await click('도구 종료');
   expect(button('3D').getAttribute('aria-pressed')).toBe('true');
@@ -515,7 +523,7 @@ it('starts resistance measurement immediately on a source-free circuit', async (
   await act(async () => root.render(createElement(App)));
   await click('분석하기');
   await click('등가저항');
-  expect(button('전지 분리하고 측정')).toBeUndefined();
+  expect(button('전원 분리하고 측정')).toBeUndefined();
   await probeResistor();
   expect(value()).toBe('3 Ω');
 });

@@ -28,6 +28,8 @@ export function validApproximation(value: unknown): value is Approximation {
 export type ComponentProperties = Record<string, number | string | boolean | StoredScalar>;
 export const physicalProperties = [
   'voltageV',
+  'voltageMinV',
+  'voltageMaxV',
   'resistanceOhm',
   'resistanceMinOhm',
   'resistanceMaxOhm',
