@@ -1,10 +1,14 @@
 import type { ComponentKind } from '../component-library';
+import { copyAt, copyOverlapsComponents, copiedComponentKind, elementsInSelection, singleCopiedComponent } from './copy-placement';
+import { CopyPreview } from './CopyPreview';
+import { useMarqueeSelection } from './useMarqueeSelection';
 import { InlineComponentEditor, type ComponentEdit } from './InlineComponentEditor';
 import { SvgNotation } from './Notation';
 import { PlacementFailure } from './PlacementFailure';
+import { referenceCommands, referenceTargets } from './reference-editing';
 import { CanvasCurrentLayer } from './CanvasCurrentLayer';
 import { operatingMarkSvg, type CurrentDisplay, type ComponentOperatingMark, type ComponentLabelLayout } from '../visualization';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   useCanvasDragSession,
   dragPositions,
@@ -12,7 +16,7 @@ import {
   snapCanvasPoint as snap,
 } from './useCanvasDragSession';
 import type { CircuitDocument, EndpointRef, Point } from '../domain';
-import { insertionCandidates, previewCommand, type Command } from '../editor';
+import { insertionCandidates, previewCommand, type Command, type PastePayload } from '../editor';
 import {
   useContextWiring,
   WiringMarks,
@@ -51,7 +55,6 @@ export interface CanvasProps {
   onComponentLabelLayout?: (layout: ComponentLabelLayout) => void;
   paletteDrag?: PaletteDrag | null;
   initialView?: { x: number; y: number; width: number; height: number };
-  viewLabel?: ReactNode;
   onViewChange?: (view: { x: number; y: number; width: number; height: number }) => void;
   readOnly?: boolean;
   preserveViewOnResize?: boolean;
@@ -64,6 +67,10 @@ export interface CanvasProps {
   tool: string;
   placement: ComponentKind | null;
   onSelect: (id: string | null, additive?: boolean) => void;
+  onSelectMany?: (ids: string[]) => void;
+  copyPayload?: PastePayload | null;
+  copyTouch?: boolean;
+  onPlaceCopy?: (point: Point, target?: { wireId: string; segment: number }) => boolean;
   onMove: (positions: Record<string, Point>) => void;
   onPlace: (
     type: ComponentKind,
@@ -72,7 +79,7 @@ export interface CanvasProps {
   ) => void;
   onCommitComponent?: (id: string, edit: ComponentEdit) => boolean;
   onCancel?: () => void;
-  onAction?: (action: 'rotate' | 'copy' | 'delete') => void;
+  onAction?: (action: 'rotate' | 'delete') => void;
   focusIds?: string[];
   onEndpoint: (endpoint: EndpointRef) => void;
   onWire: (id: string, point: Point) => void;
@@ -92,8 +99,13 @@ export interface CanvasProps {
 }
 export function CircuitCanvas(props: CanvasProps) {
   const canEditValues = !props.readOnly || Boolean(props.allowValueEditing);
-  const { document, selected, tool, placement } = props;
+  const { document, selected, tool, copyPayload } = props;
+  const copiedSingle = singleCopiedComponent(copyPayload);
+  const placement = props.placement ?? (copiedSingle ? copiedComponentKind(copiedSingle) : null);
+  const [copyPinned, setCopyPinned] = useState(false);
+  const [copyHover, setCopyHover] = useState(false);
   const svg = useRef<SVGSVGElement>(null);
+  const marquee = useMarqueeSelection(svg);
   const [view, setView] = useState(() => props.initialView ?? documentBounds(document, 110));
   useEffect(() => {
     setView(props.initialView ?? documentBounds(document, 110));
@@ -111,8 +123,45 @@ export function CircuitCanvas(props: CanvasProps) {
     setTouchCandidates(null);
   }, [document, tool, placement]);
   const [touchInput, setTouchInput] = useState(false);
-  const [tapMove, setTapMove] = useState(false);
   const [componentChoices, setComponentChoices] = useState<string[]>([]);
+  const [referenceSelected, setReferenceSelected] = useState<string | null>(null);
+  const references = document.referenceNode
+    ? [{ id: document.referenceNode.id, endpoint: document.referenceNode, label: '' }] : [];
+  const selectedReference = references.find(reference => reference.id === referenceSelected);
+  const [referenceChoices, setReferenceChoices] = useState<ReturnType<typeof referenceTargets>>([]);
+  const [referenceMessage, setReferenceMessage] = useState('');
+  useEffect(() => {
+    if (!referenceMessage) return;
+    const timer = window.setTimeout(() => setReferenceMessage(''), 3000);
+    return () => window.clearTimeout(timer);
+  }, [referenceMessage]);
+  const canEditReference = !props.readOnly && !placement && !copyPayload && Boolean(props.onWiringCommit);
+  useEffect(() => {
+    setReferenceSelected(null);
+    setReferenceChoices([]);
+  }, [document, tool, placement, props.readOnly]);
+  useEffect(() => { if (selected.length) setReferenceSelected(null); }, [selected.join('|')]);
+  function commitReference(target: ReturnType<typeof referenceTargets>[number]) {
+    if (props.onWiringCommit?.(referenceCommands(document, target))) {
+      setReferenceSelected(null);
+      setReferenceChoices([]);
+      setReferenceMessage('');
+      if (tool === 'reference') props.onCancel?.();
+    }
+  }
+  function placeReference(p: Point) {
+    const targets = referenceTargets(document, p, drawingScale);
+    if (targets.length === 1) commitReference(targets[0]);
+    else if (targets.length) setReferenceChoices(targets);
+    else setReferenceMessage('단자나 도선 위에 놓아 주세요.');
+  }
+  function deleteReference() {
+    const commands: Command[] = selectedReference?.endpoint.id === document.referenceNode?.id ? [{ type: 'SetReference', endpoint: null }] : [];
+    if (props.onWiringCommit?.(commands)) {
+      setReferenceSelected(null);
+      setReferenceMessage('');
+    }
+  }
   const [measurementCancel, setMeasurementCancel] = useState(0);
   const placementPointer = useRef<number | null>(null);
   const [placementMessage, setPlacementMessage] = useState('');
@@ -133,10 +182,12 @@ export function CircuitCanvas(props: CanvasProps) {
     setPlacementFailure(null);
   }, [document, tool, placement, props.readOnly]);
   const dragSession = useCanvasDragSession(document, tool, placement, props.readOnly, svg);
-  const { drag, activeDrag, activeWireDrag, pan, capturedPointer, movedDocument } = dragSession;
+  const { activeDrag, activeWireDrag, activeReferenceDrag, pan, capturedPointer, movedDocument } = dragSession;
   function cancelGesture() {
     dragSession.cancel();
-    setTapMove(false);
+    marquee.cancel();
+    setCopyPinned(false);
+    setReferenceChoices([]);
     placementPointer.current = null;
     setMeasurementCancel((n) => n + 1);
   }
@@ -147,6 +198,7 @@ export function CircuitCanvas(props: CanvasProps) {
     const cancel = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         cancelGesture();
+        setReferenceSelected(null);
         touchNavigation.reset();
         setComponentChoices([]);
       }
@@ -185,6 +237,10 @@ export function CircuitCanvas(props: CanvasProps) {
     props.onComponentLabelLayout({
       bounds: rect(root),
       labels: [...root.querySelectorAll('[data-component-label]')].map(node => ({ ...rect(node), componentId: node.getAttribute('data-component-label')! })),
+      symbolAnchors: [...root.querySelectorAll('[data-meter-symbol] circle')].map(node => {
+        const r = rect(node);
+        return { componentId: node.closest('[data-meter-symbol]')!.getAttribute('data-meter-symbol')!, x: r.x + r.width, y: r.y };
+      }),
       obstacles: [...root.querySelectorAll('.component-ink,text,[data-endpoint-id],.component-operating-mark,.measurement-handle')].map(rect).filter(r => r.width > 0 && r.height > 0),
     });
   });
@@ -194,7 +250,7 @@ export function CircuitCanvas(props: CanvasProps) {
       Boolean(props.onWiringCommit) &&
       !props.readOnly &&
       !placement &&
-      !tapMove &&
+      !copyPayload &&
       (tool === 'select' || tool === 'wire'),
     tool,
     selected,
@@ -277,10 +333,20 @@ export function CircuitCanvas(props: CanvasProps) {
   }
   function beginDrag(id: string, start: Point, pointerId: number) {
     const ids = selected.includes(id) ? selected : [id];
-    props.onSelect(id);
+    if (!selected.includes(id)) props.onSelect(id);
     wiring.clearHint();
     dragSession.beginComponents(ids, start, pointerId);
   }
+  useEffect(() => {
+    cancelGesture();
+    setCopyHover(false);
+    setTouchInput(Boolean(props.copyTouch));
+    setTouchCandidates(null);
+    setChoosingInsertion(false);
+    setInsertionWire(undefined);
+    setPlacementMessage('');
+    setEditingId(null);
+  }, [copyPayload]);
   const candidates = placement
     ? (touchCandidates ?? insertionCandidates(document, snap(pointer)))
     : [];
@@ -304,21 +370,42 @@ export function CircuitCanvas(props: CanvasProps) {
     )
   )
     previewId += '_';
-  const previewComponent = placement
-    ? createComponent(placement, previewId, candidate?.position ?? snap(pointer))
-    : null;
+  if (copiedSingle) previewId = copiedSingle.id;
+  let previewWireId = previewId + '.wire';
+  while (usedIds.has(previewWireId)) previewWireId += '_';
+  const previewComponent = copiedSingle
+    ? { ...copiedSingle, position: candidate?.position ?? snap(pointer) }
+    : placement ? createComponent(placement, previewId, candidate?.position ?? snap(pointer)) : null;
   if (previewComponent && candidate) previewComponent.rotation = candidate.rotation;
   const insertionPreview =
-    previewComponent && candidate && !candidate.reason && placement !== 'voltmeter' && placement !== 'changeover-switch'
+    previewComponent && candidate && !candidate.reason && placement !== 'changeover-switch'
       ? previewCommand(document, {
           type: 'InsertComponentOnWire',
           component: previewComponent,
           wireId: candidate.wireId,
           segment: candidate.segment,
-          newWireId: previewId + '.wire',
+          newWireId: previewWireId,
         })
       : null;
-  const effective = insertionPreview?.ok ? insertionPreview.document : movedDocument;
+  const effective = insertionPreview?.ok && (!copyPayload || copyHover || copyPinned) ? insertionPreview.document : movedDocument;
+  const copyPreview = copyPayload ? copyAt(copyPayload, previewComponent?.position ?? snap(pointer)) : null;
+  if (copyPreview && previewComponent) copyPreview.components[0] = previewComponent;
+  function commitPlace(type: ComponentKind, p: Point, target?: { wireId: string; segment: number }) {
+    if (copyPayload) {
+      const payload = copyAt(copyPayload, p);
+      if (target && payload.components[0]) {
+        const chosen = insertionCandidates(document, p, target.wireId).find(c => c.segment === target.segment);
+        if (chosen) payload.components[0].rotation = chosen.rotation;
+      }
+      if (copyOverlapsComponents(document, payload)) { setPlacementMessage('빈 공간에 놓아 주세요.'); return; }
+      if (!props.onPlaceCopy?.(p, target)) setPlacementMessage('이 회로에는 붙여넣을 수 없어요.');
+    } else props.onPlace(type, p, target);
+  }
+  function placeCopiedGroup(p: Point) {
+    if (!copyPayload) return;
+    if (copyOverlapsComponents(document, copyAt(copyPayload, p))) { setPlacementMessage('빈 공간에 놓아 주세요.'); return; }
+    if (!props.onPlaceCopy?.(p)) setPlacementMessage('이 회로에는 붙여넣을 수 없어요.');
+  }
   const crossings = wireCrossings(effective);
   function placeAt(type: ComponentKind, p: Point, touchConfirm = false) {
     const all =
@@ -327,7 +414,7 @@ export function CircuitCanvas(props: CanvasProps) {
       ? all.filter((c) => `${c.wireId}:${c.segment}` === insertionWire)
       : all;
     if (all.length) {
-      if (all.every(c => c.reason) || type === 'voltmeter' || type === 'changeover-switch') { rejectPlacement(p); return; }
+      if (all.every(c => c.reason) || type === 'changeover-switch') { rejectPlacement(p); return; }
       if (options.length !== 1) {
         setPointer(p);
         setChoosingInsertion(true);
@@ -339,9 +426,9 @@ export function CircuitCanvas(props: CanvasProps) {
         rejectPlacement(p);
         return;
       }
-      props.onPlace(type, target.position, { wireId: target.wireId, segment: target.segment });
+      commitPlace(type, target.position, { wireId: target.wireId, segment: target.segment });
     } else if (document.junctions.some(j => Math.hypot(j.position.x-p.x, j.position.y-p.y) < 56)) rejectPlacement(p);
-    else props.onPlace(type, p);
+    else commitPlace(type, p);
   }
   function touchInsertionOptions(p: Point): ReturnType<typeof insertionCandidates> {
     // Use the same normalized routes as mouse preview and the insertion command.
@@ -364,7 +451,7 @@ export function CircuitCanvas(props: CanvasProps) {
     setInsertionWire(undefined);
     setPlacementMessage('');
     if (options.length) {
-      if (options.every(c => c.reason) || type === 'voltmeter' || type === 'changeover-switch') { rejectPlacement(target); return; }
+      if (options.every(c => c.reason) || type === 'changeover-switch') { rejectPlacement(target); return; }
       setChoosingInsertion(true);
       return;
     }
@@ -423,6 +510,8 @@ export function CircuitCanvas(props: CanvasProps) {
     x: (viewport.width - view.width * drawingScale) / 2 + (p.x - view.x) * drawingScale,
     y: (viewport.height - view.height * drawingScale) / 2 + (p.y - view.y) * drawingScale,
   });
+  const copyBubblePoint = screenPoint(pointer);
+  const copyBubbleTop = Math.max(8, Math.min(viewport.height - Math.min(260, 56 + (candidates.length > 1 ? candidates.length * 48 : 0)), copyBubblePoint.y + 38));
   const editorPoint = editingComponent ? screenPoint(editingComponent.position) : { x: 0, y: 0 };
   const selectedComponent = document.components.find((c) => c.id === selected[0]);
   const selectionPoint = selectedComponent
@@ -501,7 +590,7 @@ export function CircuitCanvas(props: CanvasProps) {
     <div
       data-touch={touchInput || undefined}
       data-gesture={activeDrag ? 'dragging' : touchNavigation.state}
-      className={`canvas-shell ${editingId ? 'is-editing ' : ''}${placement ? 'placing' : ''} ${wiring.active ? 'smart-wiring' : ''}`}
+      className={`canvas-shell ${editingId ? 'is-editing ' : ''}${placement || copyPayload ? 'placing' : ''} ${wiring.active ? 'smart-wiring' : ''}`}
       onKeyDownCapture={(e) => {
         if (!wiring.start || e.ctrlKey || e.metaKey || e.altKey) return;
         if (
@@ -537,16 +626,22 @@ export function CircuitCanvas(props: CanvasProps) {
         role="group"
         viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
         tabIndex={0}
-        onPointerDownCapture={(e) => {
-          if (tapMove && e.pointerType !== 'touch') {
-            touchNavigation.down(e, false);
-            e.stopPropagation();
-            return;
+        onKeyDownCapture={e => {
+          if (canEditReference && referenceSelected && (e.key === 'Delete' || e.key === 'Backspace')) {
+            e.preventDefault(); e.stopPropagation(); deleteReference();
           }
+        }}
+        onPointerDownCapture={(e) => {
           if (e.pointerType !== 'touch') setTouchCandidates(null);
           inputType.current = e.pointerType;
           setTouchInput(e.pointerType === 'touch');
           wiring.setTouch(e.pointerType === 'touch');
+          if (copyPayload) {
+            touchNavigation.down(e, true);
+            if (e.pointerType !== 'touch') { setPointer(point(e.clientX, e.clientY)); setCopyHover(true); }
+            e.stopPropagation();
+            return;
+          }
           const target = e.target as Element;
           if (target.closest('[data-wiring-ui]')) return;
           const componentId = target
@@ -562,10 +657,12 @@ export function CircuitCanvas(props: CanvasProps) {
               )
             : [];
           const wireHandle = target.closest('[data-wire-handle]');
-          const handle = wireHandle || target.closest('[data-measurement-handle]');
+          const referenceHandle = target.closest('[data-reference-handle]');
+          const handle = wireHandle || referenceHandle || target.closest('[data-measurement-handle]');
+          if (!referenceHandle) setReferenceSelected(null);
           const selectedBody =
             !placement &&
-            !tapMove &&
+            !copyPayload &&
             (handle ||
               target.closest('.editable-value') ||
               (componentId && selected.includes(componentId) && !hits.length));
@@ -587,12 +684,14 @@ export function CircuitCanvas(props: CanvasProps) {
                   !selectedBody &&
                   !hits.length &&
                   !props.readOnly &&
-                  !tapMove &&
+                  !copyPayload &&
                   tool === 'select' &&
                   !target.closest('.editable-value')
                 ? () => beginDrag(componentId, p, id)
                 : undefined;
-          if (touchNavigation.down(e, !selectedBody, hold)) {
+          const blankSelection = !props.readOnly && !placement && !editingId && tool === 'select' && !wiring.start
+            && !hits.length && !bodies.length && (target === e.currentTarget || target.classList.contains('canvas-background'));
+          if (touchNavigation.down(e, !selectedBody && !blankSelection, hold)) {
             e.stopPropagation();
             return;
           }
@@ -600,6 +699,7 @@ export function CircuitCanvas(props: CanvasProps) {
             wiring.active &&
             (hits.length || wiring.start) &&
             !wireHandle &&
+            !referenceHandle &&
             !target.closest('.editable-value')
           )
             e.stopPropagation();
@@ -610,9 +710,18 @@ export function CircuitCanvas(props: CanvasProps) {
             e.stopPropagation();
             return;
           }
+          if (marquee.move(e.pointerId, point(e.clientX, e.clientY))) { e.stopPropagation(); return; }
+          if (copyPayload) {
+            if (e.pointerType !== 'touch' && !choosingInsertion) {
+              setTouchInput(false); setTouchCandidates(null);
+              setCopyPinned(false); setCopyHover(true); setPointer(point(e.clientX, e.clientY)); setPlacementMessage('');
+            }
+            e.stopPropagation(); return;
+          }
           if (
             !activeDrag &&
             !activeWireDrag &&
+            !activeReferenceDrag &&
             !pan &&
             (e.pointerType !== 'touch' || wiring.start)
           ) {
@@ -621,9 +730,22 @@ export function CircuitCanvas(props: CanvasProps) {
           }
         }}
         onPointerUpCapture={(e) => {
+          const area = marquee.finish(e.pointerId, point(e.clientX, e.clientY));
+          if (area) {
+            const moved = Math.hypot(area.end.x - area.start.x, area.end.y - area.start.y) * drawingScale > 3;
+            if (moved) {
+              touchNavigation.suppress();
+              const ids = elementsInSelection(document, area.start, area.end);
+              props.onSelectMany?.(area.additive ? [...new Set([...selected, ...ids])] : ids);
+            } else if (!area.additive) props.onSelect(null);
+            touchNavigation.up(e);
+            e.stopPropagation(); return;
+          }
           if (touchNavigation.up(e)) e.stopPropagation();
         }}
         onPointerCancelCapture={(e) => {
+          marquee.cancel();
+          setCopyPinned(false);
           touchNavigation.up(e, true);
         }}
         onClickCapture={(e) => {
@@ -632,15 +754,25 @@ export function CircuitCanvas(props: CanvasProps) {
             e.preventDefault();
             return;
           }
+          if (copyPayload && !props.readOnly) {
+            e.stopPropagation();
+            const p = point(e.clientX, e.clientY);
+            if (inputType.current === 'touch') {
+              setPointer(placement ? touchPlacementPoint(p) : snap(p));
+              setCopyPinned(true); setChoosingInsertion(false); setInsertionWire(undefined); setPlacementMessage('');
+            } else if (placement) placeAt(placement, snap(p));
+            else placeCopiedGroup(snap(p));
+            return;
+          }
           const target = (
             inputType.current === 'touch'
               ? (svg.current?.ownerDocument.elementFromPoint?.(e.clientX, e.clientY) ?? e.target)
               : e.target
           ) as Element | null;
-          if (target?.closest('[data-wiring-ui],[data-wire-handle]')) return;
-          if (tapMove && drag) {
+          if (target?.closest('[data-wiring-ui],[data-wire-handle],[data-reference-handle]')) return;
+          if (canEditReference && tool === 'reference') {
             e.stopPropagation();
-            dragSession.moveTo(snap(point(e.clientX, e.clientY)));
+            placeReference(point(e.clientX, e.clientY));
             return;
           }
           if (inputType.current === 'touch' && placement && !props.readOnly) {
@@ -720,17 +852,7 @@ export function CircuitCanvas(props: CanvasProps) {
           e.preventDefault();
           if (props.readOnly) return;
           const type = e.dataTransfer.getData('component') as ComponentKind;
-          if (
-            [
-              'dc-voltage-source',
-              'resistor',
-              'switch',
-              'changeover-switch',
-              'ammeter',
-              'voltmeter',
-              'resistive-load',
-            ].includes(type)
-          )
+          if (Object.hasOwn(componentDefinitions, type))
             placeAt(type, snap(point(e.clientX, e.clientY)));
         }}
         onKeyDown={(e) => {
@@ -762,7 +884,6 @@ export function CircuitCanvas(props: CanvasProps) {
           }
         }}
         onPointerDown={(e) => {
-          if (tapMove) return;
           if (capturedPointer.current !== null) return;
           if (e.button === 1) {
             e.preventDefault();
@@ -783,6 +904,11 @@ export function CircuitCanvas(props: CanvasProps) {
             return;
           const p = snap(point(e.clientX, e.clientY));
           wiring.clearHint();
+          if (tool === 'select' && !props.readOnly && !copyPayload && !editingId) {
+            e.preventDefault();
+            marquee.begin(point(e.clientX, e.clientY), e.pointerId, e.shiftKey);
+            return;
+          }
           props.onSelect(null);
           props.onBackground(p);
           if (tool === 'select' && e.pointerType !== 'touch') {
@@ -792,7 +918,7 @@ export function CircuitCanvas(props: CanvasProps) {
         }}
         onPointerMove={(e) => {
           const p = point(e.clientX, e.clientY);
-          if (!choosingInsertion && !tapMove) {
+          if (!choosingInsertion && !copyPinned) {
             setPointer(placement && e.pointerType === 'touch' ? touchPlacementPoint(p) : p);
             setPlacementMessage('');
           }
@@ -820,6 +946,19 @@ export function CircuitCanvas(props: CanvasProps) {
             return;
           }
           if (capturedPointer.current !== e.pointerId) return;
+          if (activeReferenceDrag?.pointerId === e.pointerId) {
+            const p = point(e.clientX, e.clientY);
+            const moved = Math.hypot(p.x - activeReferenceDrag.start.x, p.y - activeReferenceDrag.start.y) * drawingScale > 4;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const inside = !rect.width || (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom);
+            // Pointer capture retargets the follow-up click to the SVG, where wiring would start.
+            touchNavigation.suppress();
+            cancelGesture();
+            if (moved) {
+              if (inside) placeReference(p);
+            }
+            return;
+          }
           if (activeWireDrag?.pointerId === e.pointerId) {
             const command = wireDragCommand(activeWireDrag, point(e.clientX, e.clientY));
             const rect = e.currentTarget.getBoundingClientRect();
@@ -854,7 +993,9 @@ export function CircuitCanvas(props: CanvasProps) {
         onPointerCancel={(e) => {
           if (capturedPointer.current === e.pointerId) cancelGesture();
         }}
+        onPointerLeave={() => { if (!copyPinned) setCopyHover(false); }}
         onLostPointerCapture={(e) => {
+          marquee.cancel();
           touchNavigation.lost(e);
           if (capturedPointer.current === e.pointerId) cancelGesture();
         }}
@@ -872,7 +1013,7 @@ export function CircuitCanvas(props: CanvasProps) {
           height={view.height}
           fill="url(#grid)"
         />
-        {!document.components.length && (
+        {!document.components.length && !document.wires.length && !document.junctions.length && !wiring.start && (
           <g pointerEvents="none">
             <text x="500" y="270" textAnchor="middle" fontSize="24" fill="#5c6978">
               {props.readOnly ? '측정할 회로가 없습니다' : '첫 번째 회로를 그려볼까요?'}
@@ -1033,6 +1174,7 @@ export function CircuitCanvas(props: CanvasProps) {
                 >
                   <g
                     className="component-ink"
+                    data-meter-symbol={c.type === 'ammeter' || c.type === 'voltmeter' ? c.id : undefined}
                     transform={`translate(${c.position.x},${c.position.y}) rotate(${c.rotation})`}
                     stroke="#263548"
                     fill="white"
@@ -1165,6 +1307,7 @@ export function CircuitCanvas(props: CanvasProps) {
             aria-label={endpointName(document, j.id)}
             data-endpoint-id={j.id}
             data-endpoint-kind="junction"
+            data-selected={selected.includes(j.id)}
             className="terminal"
             data-active={wiring.hint?.kind === 'endpoint' && wiring.hint.ref.id === j.id}
             onFocus={() => {
@@ -1197,20 +1340,53 @@ export function CircuitCanvas(props: CanvasProps) {
               cy={j.position.y}
               r="5"
               fill={highlighted(j.id) ? '#f5a623' : endColor(j.id)}
+              stroke={selected.includes(j.id) ? '#174895' : undefined}
+              strokeWidth={selected.includes(j.id) ? 3 : undefined}
             />
             <title>{props.endpointLabels?.[j.id]}</title>
           </g>
         ))}
-        {document.referenceNode &&
-          (() => {
-            const p = endpointPosition(effective, document.referenceNode!);
+        {references.map(reference => {
+            const isSelected = referenceSelected === reference.id;
+            const targets = activeReferenceDrag ? referenceTargets(document, activeReferenceDrag.current, drawingScale) : [];
+            const moved = isSelected && activeReferenceDrag && Math.hypot(activeReferenceDrag.current.x - activeReferenceDrag.start.x, activeReferenceDrag.current.y - activeReferenceDrag.start.y) * drawingScale > 4;
+            const p = moved ? (targets.length === 1 ? targets[0].point : activeReferenceDrag!.current) : endpointPosition(effective, reference.endpoint);
             return (
               <g
+                key={reference.id}
                 transform={`translate(${p.x},${p.y + 9})`}
-                pointerEvents="none"
-                stroke="#8694a5"
+                pointerEvents={canEditReference && tool === 'select' ? 'all' : 'none'}
+                data-reference-handle="true"
+                role={canEditReference ? 'button' : undefined}
+                aria-label={`접지${reference.label ? ` ${reference.label}` : ''} 선택·이동`}
+                aria-pressed={isSelected}
+                tabIndex={canEditReference ? 0 : undefined}
+                style={{ cursor: activeReferenceDrag ? 'grabbing' : 'grab' }}
+                onPointerDown={e => {
+                  if (!canEditReference || tool !== 'select' || e.button !== 0) return;
+                  e.stopPropagation();
+                  wiring.cancel();
+                  e.currentTarget.focus();
+                  props.onSelect(null);
+                  setReferenceSelected(reference.id);
+                  setReferenceMessage('');
+                  dragSession.beginReference(point(e.clientX, e.clientY), e.pointerId);
+                }}
+                onClick={e => { e.stopPropagation(); if (canEditReference) setReferenceSelected(reference.id); }}
+                onKeyDown={e => {
+                  if (!canEditReference) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault(); e.stopPropagation(); props.onSelect(null); setReferenceSelected(reference.id);
+                  }
+                  if (e.key === 'Delete' || e.key === 'Backspace') {
+                    e.preventDefault(); e.stopPropagation(); deleteReference();
+                  }
+                }}
+                stroke={isSelected ? '#287ac2' : '#8694a5'}
                 strokeWidth="1.5"
               >
+                <rect x={-22 / drawingScale} y={9 - 22 / drawingScale} width={44 / drawingScale} height={44 / drawingScale} fill="transparent" stroke="none" />
+                {isSelected && <circle cx="0" cy="9" r={22 / drawingScale} fill="none" strokeDasharray="3 3" />}
                 <path d="M0 0V10 M-10 10H10 M-6 14H6 M-2 18H2" />
                 <text
                   x={16 * labelScale}
@@ -1219,11 +1395,11 @@ export function CircuitCanvas(props: CanvasProps) {
                   stroke="none"
                   fontSize={11 * labelScale}
                 >
-                  0 V
+                  0 V{reference.label ? ` · ${reference.label}` : ''}
                 </text>
               </g>
             );
-          })()}
+          })}
 
         {callouts.map((label) => (
           <g key={label.id} pointerEvents="none">
@@ -1315,7 +1491,11 @@ export function CircuitCanvas(props: CanvasProps) {
               <circle cx={c.point.x} cy={c.point.y} r={22 / drawingScale} fill="transparent" />
             </g>
           ))}
-        {previewComponent && (
+        {marquee.rectangle && <rect className="selection-marquee" pointerEvents="none"
+          x={Math.min(marquee.rectangle.start.x, marquee.rectangle.end.x)} y={Math.min(marquee.rectangle.start.y, marquee.rectangle.end.y)}
+          width={Math.abs(marquee.rectangle.end.x - marquee.rectangle.start.x)} height={Math.abs(marquee.rectangle.end.y - marquee.rectangle.start.y)} />}
+        {copyPreview && (copyPinned || (!touchInput && copyHover)) && <CopyPreview payload={copyPreview} labelScale={labelScale} />}
+        {previewComponent && !copyPayload && (
           <g opacity=".6" pointerEvents="none" aria-label="부품 배치 미리보기">
             <g
               transform={`translate(${previewComponent.position.x},${previewComponent.position.y}) rotate(${previewComponent.rotation})`}
@@ -1351,7 +1531,17 @@ export function CircuitCanvas(props: CanvasProps) {
           <button onClick={() => setComponentChoices([])}>취소</button>
         </div>
       )}
-      {placement && (
+      {copyPayload && <div className="placement-status copy-status" role="status">
+        <span>{placementMessage || (touchInput ? '복사했어요. 놓을 곳을 터치하세요.' : '복사했어요. 놓을 곳을 클릭하세요.')}</span>
+        <button onClick={props.onCancel}>취소</button>
+      </div>}
+      {copyPayload && (copyPinned || choosingInsertion) && <div className="copy-confirm-bubble" aria-label="복사 배치 확인"
+        style={{ left: Math.max(8, Math.min(viewport.width - 164, copyBubblePoint.x - 78)), top: copyBubbleTop, maxHeight: Math.max(56, viewport.height - copyBubbleTop - 8) }}>
+        {candidates.length > 1 && candidates.map(c => <button key={`${c.wireId}:${c.segment}`} aria-pressed={insertionWire === `${c.wireId}:${c.segment}`}
+          onClick={() => { setInsertionWire(`${c.wireId}:${c.segment}`); setPlacementMessage(''); }}>{wireName(document, c.wireId)} · 구간 {c.segment + 1}</button>)}
+        <button className="primary" onClick={() => placement ? placeAt(placement, snap(pointer), true) : placeCopiedGroup(snap(pointer))}>붙여넣기</button>
+      </div>}
+      {placement && !copyPayload && (
         <div className="placement-status" role="status">
           <span>
             {placementMessage ||
@@ -1382,21 +1572,6 @@ export function CircuitCanvas(props: CanvasProps) {
           <button onClick={props.onCancel}>취소</button>
         </div>
       )}
-      {tapMove && drag && (
-        <div className="placement-status">
-          <span>옮길 곳을 누르고 배선을 확인하세요</span>
-          <button
-            onClick={() => {
-              const positions = dragPositions(drag, drag.current);
-              if (Object.keys(positions).length) props.onMove(positions);
-              cancelGesture();
-            }}
-          >
-            놓기
-          </button>
-          <button onClick={cancelGesture}>취소</button>
-        </div>
-      )}
       <WiringOverlay
         wiring={wiring}
         screenPoint={screenPoint}
@@ -1422,8 +1597,9 @@ export function CircuitCanvas(props: CanvasProps) {
       {!props.readOnly &&
         !placement &&
         !editingId &&
-        !tapMove &&
+        !copyPayload &&
         props.onAction &&
+        selected.length === 1 &&
         selectedComponent && (
           <div
             className="canvas-selection-tools"
@@ -1435,19 +1611,26 @@ export function CircuitCanvas(props: CanvasProps) {
             aria-label="선택 부품 도구"
           >
             <button onClick={() => editValue(selected[0], true)}>이름·값</button>
-            <button
-              onClick={() => {
-                beginDrag(selectedComponent.id, selectedComponent.position, -1);
-                setTapMove(true);
-              }}
-            >
-              이동
-            </button>
             <button onClick={() => props.onAction?.('rotate')}>회전</button>
-            <button onClick={() => props.onAction?.('copy')}>복사</button>
             <button onClick={() => props.onAction?.('delete')}>삭제</button>
           </div>
         )}
+      {canEditReference && selectedReference && !activeReferenceDrag && !referenceChoices.length && (
+        <div className="canvas-selection-tools" aria-label="선택 접지 도구"
+          style={{ left: Math.max(8, Math.min(viewport.width - 120, screenPoint(endpointPosition(document, selectedReference.endpoint)).x - 50)), right: 'auto', top: Math.max(10, screenPoint(endpointPosition(document, selectedReference.endpoint)).y - 65) }}>
+          <button onClick={deleteReference}>삭제</button>
+        </div>
+      )}
+      {canEditReference && referenceChoices.length > 0 && (
+        <div className="touch-choice-list" aria-label="접지 연결 위치 선택">
+          <strong>접지을 붙일 위치</strong>
+          {referenceChoices.map((target, i) => <button key={i} onClick={() => commitReference(target)}>
+            {target.kind === 'endpoint' ? endpointName(document, target.ref.id) : wireName(document, target.wireId)}
+          </button>)}
+          <button onClick={() => setReferenceChoices([])}>취소</button>
+        </div>
+      )}
+      {referenceMessage && <span className="placement-status" role="status">{referenceMessage}</span>}
       <span className="wiring-sr-only" role="status">
         {activeDrag
           ? '부품 이동 중'
@@ -1458,7 +1641,6 @@ export function CircuitCanvas(props: CanvasProps) {
               : ''}
       </span>
       <div className="canvas-bottom-bar">
-        {props.viewLabel}
         <div className="canvas-view-tools">
           <button onClick={() => zoom(0.8)} aria-label="확대">
             ＋

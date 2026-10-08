@@ -46,7 +46,7 @@ const empty = (): SimulationResult => ({
 const connects = (e: CompiledElement) =>
   resistive(e) || idealLink(e) || e.type === 'dc-voltage-source' || e.type === 'diode';
 
-export function profileRevision(circuit: CompiledCircuit): string {
+export function profileRevision(circuit: CompiledCircuit, options: SolveOptions = {}): string {
   const profiles = ordered(circuit.elements)
     .filter((e) => e.operatingProfile)
     .map((e) => {
@@ -64,12 +64,13 @@ export function profileRevision(circuit: CompiledCircuit): string {
       return `${e.id}:${p.id}@${p.revision}:${values}:${boundaries}`;
     })
     .join('|');
-  return circuit.elements.some((e) => e.type === 'diode')
+  const revision = circuit.elements.some((e) => e.type === 'diode')
     ? `diode-equilibrium-1|${profiles}`
     : profiles;
+  return options.referencePolicy === 'independent' ? `${revision}|references:independent-1` : revision;
 }
 
-function split(circuit: CompiledCircuit): Island[] {
+function split(circuit: CompiledCircuit, options: SolveOptions): Island[] {
   const remaining = new Set(ordered(circuit.nets).map((n) => n.id)),
     elements = ordered(circuit.elements),
     islands: Island[] = [];
@@ -93,7 +94,9 @@ function split(circuit: CompiledCircuit): Island[] {
     const reference =
       circuit.referenceNetId && ids.includes(circuit.referenceNetId)
         ? circuit.referenceNetId
-        : undefined;
+        : options.referencePolicy === 'independent'
+          ? elements.find(e => e.type === 'dc-voltage-source' && ids.includes(e.b))?.b ?? ids[0]
+          : undefined;
     const island: Island = {
       nets: ids,
       elements: [],
@@ -201,7 +204,15 @@ function queryIsland(island: Island, weights: Rational[], work: Work): QuantityQ
   };
 }
 
+export function independentReferences(result: SimulationResult, a: string, b: string): boolean {
+  const left = result.referenceGroups?.find(group => group.netIds.includes(a));
+  const right = result.referenceGroups?.find(group => group.netIds.includes(b));
+  return !!left && !!right && left.id !== right.id;
+}
+
 export function queryVoltage(result: SimulationResult, a: string, b: string): QuantityQuery {
+  // Also guard copied/serialized results whose private affine context is no longer present.
+  if (independentReferences(result, a, b)) return { status: 'nonunique' };
   const context = contexts.get(result.nodeVoltages);
   if (!context) {
     const va = result.nodeVoltages[a],
@@ -277,7 +288,7 @@ export function solvePiecewise(circuit: CompiledCircuit, options: SolveOptions):
   const physicalModel = options.physicalModel ?? 'textbook';
   result.provenance = {
     physicalModel,
-    profileRevision: profileRevision(circuit),
+    profileRevision: profileRevision(circuit, options),
     arithmeticQuality: 'exact',
   };
   const netIds = new Set(circuit.nets.map((n) => n.id));
@@ -316,7 +327,7 @@ export function solvePiecewise(circuit: CompiledCircuit, options: SolveOptions):
       result.diagnostics.push(diagnostic('EMPTY_CIRCUIT', [], 'info'));
       return result;
     }
-    const islands = split(circuit);
+    const islands = split(circuit, options);
     contexts.set(result.nodeVoltages, { islands, work });
     let unverified = false,
       infeasible = false,
@@ -448,6 +459,10 @@ export function solvePiecewise(circuit: CompiledCircuit, options: SolveOptions):
           ? 'nonunique'
           : 'unique';
     const hasValid = islands.some((i) => i.valid);
+    if (options.referencePolicy === 'independent')
+      result.referenceGroups = islands.filter(i => i.valid && i.reference !== undefined).map(i => ({
+        id: i.nets[0], referenceNetId: i.reference!, netIds: [...i.nets],
+      }));
     result.status = !hasValid
       ? 'error'
       : unverified || infeasible || nonunique

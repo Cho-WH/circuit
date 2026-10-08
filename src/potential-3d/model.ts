@@ -87,6 +87,9 @@ export function sceneExtent(document: CircuitDocument, potential: PotentialModel
 export function selectedVoltage(document: CircuitDocument, potential: PotentialModel, id?: string) {
   const component = document.components.find(c => c.id === id);
   if (!component || component.terminals.length < 2) return null;
+  const refs = (isChangeoverSwitch(component) ? switchTerminals(component) : component.terminals.slice(0, 2))
+    .map(t => t && potential.endpoints[t.id]?.referenceId);
+  if (refs[0] && refs[1] && refs[0] !== refs[1]) return null;
   const ends = (isChangeoverSwitch(component) ? switchTerminals(component) : component.terminals.slice(0, 2)).map(t => {
     if (!t) return null;
     const net = potential.endpoints[t.id];

@@ -299,7 +299,8 @@ export function solveCircuit(
   options: SolveOptions = {},
 ): SimulationResult {
   if (
-    Object.keys(options).some((key) => key !== 'physicalModel') ||
+    Object.keys(options).some((key) => key !== 'physicalModel' && key !== 'referencePolicy') ||
+    (options.referencePolicy !== undefined && options.referencePolicy !== 'explicit' && options.referencePolicy !== 'independent') ||
     (options.physicalModel !== undefined &&
       options.physicalModel !== 'textbook' &&
       options.physicalModel !== 'component')
@@ -315,9 +316,11 @@ export function solveCircuit(
   if (result.quality)
     result.provenance = {
       physicalModel: 'textbook',
-      profileRevision: profileRevision(circuit),
+      profileRevision: profileRevision(circuit, options),
       arithmeticQuality: result.quality.mode,
     };
+  if (result.status !== 'error' && options.referencePolicy === 'independent' && circuit.referenceNetId)
+    result.referenceGroups = [{ id: circuit.nets.map(n => n.id).sort()[0], referenceNetId: circuit.referenceNetId, netIds: circuit.nets.map(n => n.id).sort() }];
   return result;
 }
 export const dcEngine: SimulationEngine = { solve: solveCircuit };

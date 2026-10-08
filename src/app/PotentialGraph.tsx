@@ -8,8 +8,9 @@ import { pathVoltages } from '../visualization';
 import type { SimulationResult } from '../domain';
 export function PotentialGraph({ path, result, hovered, onHover, document }: { document: CircuitDocument; path: CircuitPath | null; result: SimulationResult; hovered: string | null; onHover: (id: string | null) => void }) {
   if (!path) return <div className="graph-empty">전원을 포함한 회로를 연결하거나 경로를 직접 선택하세요.</div>;
-  const steps = pathVoltages(path, result);
-  if (steps.some(s => s.fromVoltage === undefined || s.toVoltage === undefined)) return <div className="graph-empty">전위가 정해지지 않아 그래프를 그릴 수 없습니다. 기준점과 회로 연결을 확인하세요.</div>;
+  const queried = pathVoltages(path, result);
+  const steps = queried.flatMap(s => s.fromVoltage !== undefined && s.toVoltage !== undefined ? [{ ...s, fromVoltage: s.fromVoltage, toVoltage: s.toVoltage }] : []);
+  if (steps.length !== queried.length) return <div className="graph-empty">전위가 정해지지 않았거나 서로 다른 기준이라 그래프를 그릴 수 없습니다.</div>;
   const values = steps.flatMap(s => [s.fromVoltage, s.toVoltage]); const min = values.reduce<q.Scalar>((a,b)=>q.compare(a,b)<0?a:b,0), max = values.reduce<q.Scalar>((a,b)=>q.compare(a,b)>0?a:b,0);
   const scale=createQuantityScale(values,'V',{modelApproximation:result.provenance?.physicalModel==='component'});
   const left=Math.max(50,Math.ceil(Math.max(notationWidth(scale.format(min),12),notationWidth(scale.format(max),12)))+20);

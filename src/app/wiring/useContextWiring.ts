@@ -4,7 +4,7 @@ import type { CircuitDocument, Point } from '../../domain';
 import { compactWirePoints, endpointName, wireName, wireCrossings } from '../../component-library';
 import { previewCommand, type Command } from '../../editor';
 import { orthogonalRoute, type WirePosture } from '../../wire-geometry';
-import { branchHintEnd, connectionCommands, crossingCommand, endpointTarget, targetKey, wiringTargets, type WireAnchor, type WiringTarget } from './model';
+import { branchHintEnd, connectionCommands, crossingCommand, endpointTarget, targetKey, wiringTargets, type DraftWireAnchor, type WiringTarget } from './model';
 
 export interface WiringOptions {
   document: CircuitDocument; enabled: boolean; tool: string; selected: string[]; resetKey?: number;
@@ -14,7 +14,7 @@ export interface WiringOptions {
 }
 export function useContextWiring(options: WiringOptions) {
   const { document: doc, enabled } = options;
-  const [start, setStart] = useState<WireAnchor | null>(null);
+  const [start, setStart] = useState<DraftWireAnchor | null>(null);
   // Each click fixes one leg. Keep click boundaries only in the draft for Backspace.
   const [legs, setLegs] = useState<Point[][]>([]);
   const [posture, setPosture] = useState<WirePosture>('VH');
@@ -52,7 +52,7 @@ export function useContextWiring(options: WiringOptions) {
     if (!options.commit?.(commands)) { beforeCommit.current = null; setError('이 연결을 만들 수 없습니다. 다른 지점이나 편집 권한을 확인하세요.'); return false; }
     cancel(); options.onFinish?.(); return true;
   }
-  function finish(end: WireAnchor) {
+  function finish(end: DraftWireAnchor) {
     if (!start) return;
     const commands = connectionCommands(doc, start, end, routeTo(end.point).slice(1, -1));
     if (!commands.length) { cancel(); return; }
@@ -83,6 +83,11 @@ export function useContextWiring(options: WiringOptions) {
   function tap(p: Point, scale: number, coarse: boolean) {
     if (!enabled) return false;
     setPointer(p); setScale(scale);
+    const fixedEnd = legs.at(-1)?.at(-1), snapped = snap(p);
+    if (options.tool === 'wire' && start && fixedEnd && snapped.x === fixedEnd.x && snapped.y === fixedEnd.y) {
+      finish({ kind: 'point', point: fixedEnd });
+      return true;
+    }
     const targets = wiringTargets(doc, p, scale, Boolean(start));
     recent.current = false; setTouch(coarse);
     if (coarse && targets.length > 1) { setChoices(targets); setHint(null); return true; }
@@ -92,6 +97,11 @@ export function useContextWiring(options: WiringOptions) {
       const end = snap(p), origin = legs.at(-1)?.at(-1) ?? start.point;
       const leg = orthogonalRoute(origin, end, posture).slice(1);
       if (leg.length) setLegs([...legs, leg]);
+      return true;
+    }
+    if (options.tool === 'wire') {
+      setStart({ kind: 'point', point: snapped }); setPointer(snapped); setLegs([]);
+      options.onSelect(null);
       return true;
     }
     return false;

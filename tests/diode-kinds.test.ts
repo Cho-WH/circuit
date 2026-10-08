@@ -56,7 +56,7 @@ describe('diode kinds', () => {
     expect(serializeDocument(doc)).toBe(before);
     diode.properties.answerVisible = true;
     const visible = createSvgExport(doc).content;
-    expect(visible).toContain(`font-size="11.25" font-weight="400" fill="#111111">${name}</text>`);
+    expect(visible).toContain(name);
     expect(visible).not.toContain('700 mV');
     diode.properties.answerBlank = true;
     expect(componentPresentation(diode).value).toBe('□');

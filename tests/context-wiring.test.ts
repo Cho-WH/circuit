@@ -7,24 +7,81 @@ import { requireDocument, emptyDocument, type CircuitDocument } from '../src/dom
 import { createHistory, executeCommands, undo, redo, type Command } from '../src/editor';
 import { compactWirePoints, wirePoints, wireCrossings } from '../src/component-library';
 import { compileCircuit } from '../src/connectivity';
+import { parseDocument, serializeDocument } from '../src/persistence';
 import { branchHintEnd, connectionCommands, endpointTarget, useContextWiring, wiringTargets } from '../src/app/wiring';
 
 const fixture = () => requireDocument(source);
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 afterEach(() => { if(root)act(()=>root!.unmount());host?.remove();root=undefined;vi.unstubAllGlobals(); });
-function setup(doc=fixture()) {
+function setup(doc=fixture(), tool='select') {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
   host=window.document.createElement('div');window.document.body.append(host);root=createRoot(host);
   let history=createHistory(doc),selected:string[]=[],enabled=true,resetKey=0;
   let api!:ReturnType<typeof useContextWiring>;
   const commit=vi.fn((commands:readonly Command[])=>{const result=executeCommands(history,commands);if(!result.ok)return false;history=result.history;render();return true;});
-  function Harness(){api=useContextWiring({document:history.present,enabled,tool:'select',selected,resetKey,commit,onSelect:id=>{selected=id?[id]:[];render();}});return null;}
+  function Harness(){api=useContextWiring({document:history.present,enabled,tool,selected,resetKey,commit,onSelect:id=>{selected=id?[id]:[];render();}});return null;}
   function render(){root!.render(createElement(Harness));}
   act(render);
   return {api:()=>api,history:()=>history,commit,run:(f:(state:typeof api)=>void)=>act(()=>f(api)),disable:()=>act(()=>{enabled=false;render();}),reset:()=>act(()=>{resetKey++;render();})};
 }
 describe('context wiring commands and state',()=>{
+  it.each([false,true])('commits a free wire only on a repeated final point, with atomic undo and persistence (touch=%s)',coarse=>{
+    const doc=emptyDocument('free-wire'),c=setup(doc,'wire');
+    c.run(a=>a.tap({x:102,y:99},1,coarse));
+    expect(c.api().start).toEqual({kind:'point',point:{x:100,y:100}});
+    c.run(a=>a.tap({x:100,y:100},1,coarse));
+    expect(c.commit).not.toHaveBeenCalled();
+    c.run(a=>a.tap({x:300,y:200},1,coarse));
+    c.run(a=>a.tap({x:500,y:300},1,coarse));
+    c.run(a=>a.back());
+    expect(c.history().present).toEqual(doc);
+    c.run(a=>a.hover({x:600,y:600},1));
+    c.run(a=>a.tap({x:301,y:199},1,coarse));
+    const next=c.history().present;
+    expect(next.junctions.map(j=>j.position)).toEqual([{x:100,y:100},{x:300,y:200}]);
+    expect(next.wires).toHaveLength(1);
+    expect(wirePoints(next,next.wires[0])).toEqual([{x:100,y:100},{x:100,y:200},{x:300,y:200}]);
+    expect(c.api().start).toBeNull();expect(c.history().past).toHaveLength(1);
+    expect(undo(c.history()).present).toEqual(doc);
+    expect(redo(undo(c.history())).present).toEqual(next);
+    expect(parseDocument(serializeDocument(next))).toMatchObject({ok:true,document:next});
+  });
+  it('keeps blank selection clicks inert',()=>{
+    const c=setup(emptyDocument('select'));
+    c.run(a=>expect(a.tap({x:100,y:100},1,false)).toBe(false));
+    expect(c.api().start).toBeNull();
+  });
+  it.each(['cancel','reset','disable'] as const)('discards free endpoints on %s without orphan junctions',action=>{
+    const c=setup(emptyDocument('draft'),'wire');
+    c.run(a=>a.tap({x:100,y:100},1,false));c.run(a=>a.tap({x:300,y:200},1,false));
+    if(action==='cancel')c.run(a=>a.cancel());else c[action]();
+    expect(c.api().start).toBeNull();expect(c.history().present.junctions).toEqual([]);
+    expect(c.commit).not.toHaveBeenCalled();
+  });
+  it.each(['endpoint','wire'] as const)('connects a free endpoint to an existing %s in either direction',kind=>{
+    const doc=emptyDocument('free-to-existing');
+    doc.junctions=[{id:'A',position:{x:0,y:0}},{id:'B',position:{x:400,y:0}}];
+    doc.wires=[{id:'W',start:{kind:'junction',id:'A'},end:{kind:'junction',id:'B'},waypoints:[]}];
+    const fixed=kind==='endpoint'?endpointTarget(doc,{kind:'junction',id:'A'}):{kind:'wire' as const,wireId:'W',point:{x:200,y:0}};
+    const free={kind:'point' as const,point:{x:200,y:200}};
+    for(const [start,end] of [[fixed,free],[free,fixed]]){
+      const result=executeCommands(createHistory(doc),connectionCommands(doc,start,end));
+      expect(result.ok).toBe(true);if(!result.ok)continue;
+      const next=result.history.present,nets=compileCircuit(next).circuit.endpointToNet;
+      const junction=next.junctions.find(j=>j.position.y===200)!;
+      expect(nets[junction.id]).toBe(nets.A);
+      expect(next.junctions).toHaveLength(kind==='endpoint'?3:4);
+      expect(undo(result.history).present).toEqual(doc);
+    }
+  });
+  it.each(['AddJunction','ConnectWire'])('rolls back all free endpoints when permissions allow only %s',allowedCommand=>{
+    const doc=emptyDocument('denied');doc.activity={allowedCommands:[allowedCommand],revealSteps:[]};
+    const c=setup(doc,'wire');c.run(a=>a.tap({x:100,y:100},1,false));
+    c.run(a=>a.tap({x:300,y:200},1,false));c.run(a=>a.tap({x:300,y:200},1,false));
+    expect(c.history().present).toEqual(doc);expect(c.history().past).toEqual([]);
+    expect(c.api().start).not.toBeNull();expect(c.api().error).not.toBe('');
+  });
   it.each([false,true])('fixes legs in empty space, changes only the last preview and commits one undo step (touch=%s)',coarse=>{
     const doc=emptyDocument('waypoints');doc.junctions=[{id:'A',position:{x:0,y:0}},{id:'B',position:{x:400,y:0}}];
     const c=setup(doc);

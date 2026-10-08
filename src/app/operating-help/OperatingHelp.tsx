@@ -114,7 +114,7 @@ export const OperatingHelpOverlay = forwardRef<OperatingHelpOverlayHandle, Overl
       const stage = root.parentElement;
       const extra: ScreenRectangle[] = [
         ...(stage?.querySelectorAll(
-          '.canvas-status-actions,.canvas-view-tools,.current-controls,.potential-reference',
+          '.canvas-status-actions,.canvas-view-tools,.current-controls',
         ) ?? []),
       ].map((el) => {
         const r = el.getBoundingClientRect();

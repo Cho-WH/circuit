@@ -10,6 +10,20 @@
 
 rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v5가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다.
 
+## 선택과 복사 배치
+
+[ADR-034](../../decisions/ADR-034-component-names.md): `component-library.createComponentLabelAllocator(existingLabels)`는 `{ short }` 부품 정의를 받아 중복되지 않는 `접두어_번호`를 생성·예약하는 함수를 반환한다. 한 배치/복사 묶음마다 새로 만들고 `componentDefinitions`/`componentDefinition`의 접두어만 사용한다. App은 새 배치 이름을 `createComponent(kind, id, position, label)`에 전달하며 `editor.copySelection`은 원본 이름을 포함해 묶음 전체의 새 이름을 배정한다. ID 발급과 저장 스키마는 독립이며 기존·수동 이름은 변경하지 않는다.
+
+[ADR-032](../../decisions/ADR-032-selection-copy.md)에 따라 `editor.copySelection`은 새 ID와 독립 연결을 만들며 명시적으로 선택한 도선의 외부 끝을 독립 연결점으로 복사한다. `MoveComponents.positions`는 선택한 부품·연결점 ID를 받으며 같은 변위의 양 끝을 가진 도선은 경로 전체를 평행 이동한다. 연결점 직접 삭제 금지는 유지한다.
+
+`app/copy-placement`는 선택 영역·위치 변환·기존 부품과의 겹침을 판정하고 `useMarqueeSelection`은 포인터 캡처와 프레임 단위 선택 상자만 관리한다. `CopyPreview`는 공통 기호를 그리며 UI 초안을 문서에 넣지 않는다. 확정은 기존 `Paste` 또는 `InsertComponentOnWire`와 주석 명령을 `useCircuitSession`에서 한 번에 실행해 권한·검증·Undo를 공유한다. 단일 부품의 삽입 후보와 실패 표시는 기존 배치와 같다.
+
+## 독립 기준의 공개 계약
+
+[ADR-033](../../decisions/ADR-033-independent-references.md)에 따라 `SolveOptions.referencePolicy`는 `explicit`(기본) 또는 `independent`이며 `analyzeOperatingCircuit`도 같은 옵션을 두 모델에 전달한다. 앱의 공통 해석은 `independent`를 사용한다. `SimulationResult.referenceGroups`는 `{ id, referenceNetId, netIds }[]`이며 각 `nodeVoltages`의 기준을 규정한다. 기준만 다른 영역을 묶지 않고 기존 piecewise 분할·평형·공통 계산 예산을 재사용한다.
+
+`simulation.independentReferences`와 `queryVoltage`가 기준 간 비교를 막고 `measurement.probeVoltage`는 전용 진단을 반환한다. `visualization`은 이 메타데이터를 `PotentialModel.references`와 `PotentialValue.referenceId`로 전달하고 공통 `referenceGroupLabel`로 A/B 표기를 만든다. Canvas·탐침 패널·3D는 같은 결과를 표시하며 3D 차이 눈금과 경로 그래프도 기준을 검사한다. 자동 기준은 문서·스키마에 추가하지 않는다. 출처 지문 `references:independent-1`은 기존 기록과 현재 해석을 구분한다.
+
 ## 모듈 책임
 
 | 모듈 | 책임 | 금지되는 결합 |
@@ -129,6 +143,7 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 ### 화면 내부의 책임
 
+- `app/MeasurementDisplay`는 기존 측정 도구와 회로 위 계기창의 LCD 타이포그래피를 공유한다. `app/MeterReadouts`는 공개 측정 질의로 값을 읽고 기존 2D/3D `ComponentLabelLayout` 콜백의 선택적 `symbolAnchors`(계기 기호 우측 상단 화면 좌표)를 따라 배치한다. App이 열림 상태와 전원 분리·측정 중단 조건을 소유하며 값·UI 상태를 회로 문서에 저장하지 않는다. [ADR-035](../../decisions/ADR-035-inline-meter-readouts.md).
 - `app/useCircuitSession`: 확정 문서·이력·단일/묶음 명령의 화면 모드 제한·자동 저장을 소유한다. App은 공개 실행 함수와 undo/redo만 호출한다. 학생 활동 권한과 문서 무결성은 계속 editor가 검사한다.
 - `app/useCanvasDragSession`: 부품/도선 이동의 시작 문서·좌표·포인터 캡처·미리보기와 화면 이동 세션을 소유한다. Canvas는 실제 이벤트를 연결하고 터치·배선·측정 등 여러 조작의 취소를 함께 지시한다. 확정에는 미리보기와 같은 명령 구성 함수를 사용한다.
 - `app/InlineComponentEditor`: 이름·값 초안, 파싱 오류, 입력 초점과 입력창 배치를 소유한다. Canvas에는 편집 대상 ID만 남긴다. 화면 크기 변화는 초안을 초기화하지 않는다.

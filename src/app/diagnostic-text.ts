@@ -1,4 +1,5 @@
 export const diagnosticText: Record<string, { title: string; detail: string; action: string }> = {
+  INDEPENDENT_VOLTAGE_REFERENCES: { title: '서로 독립된 기준이라 전압을 비교할 수 없어요', detail: '각 회로의 0 V는 별도의 기준입니다.', action: '같은 회로 안의 두 점을 선택하세요.' },
   WIRE_EDIT_UNAVAILABLE: { title: '이 위치에서는 연결을 바꿀 수 없어요', detail: '삽입 공간이 부족하거나 연결 경로·참조가 모호합니다.', action: '꺾임과 교차에서 떨어진 구간을 선택하세요. 교차 분리는 주석·기준점이 없는 네 갈래에서 사용할 수 있습니다.' },
   WIRE_CURRENT_UNDEFINED: { title: '이 도선의 전류는 하나로 정해지지 않아요', detail: '저항이 없는 도선끼리 고리를 이루고 있습니다.', action: '연결된 부품에서 측정해 주세요.' },
   INCOMPLETE_PROBE: { title: '두 탐침을 연결해 주세요', detail: '빨강과 검정 탐침이 모두 연결되어야 전위차를 구합니다.', action: '탐침 위치를 각각 선택하세요.' },

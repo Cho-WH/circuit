@@ -1,0 +1,47 @@
+.meter-readouts {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+}
+.meter-readout {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.meter-readout-toggle {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent, #53694b);
+  border-radius: 50%;
+}
+.meter-readout-toggle svg {
+  opacity: 0.48;
+  fill: #fff9;
+  transition: opacity 0.12s;
+}
+.meter-readout-toggle:hover svg,
+.meter-readout-toggle:focus-visible svg,
+.meter-readout-toggle[aria-expanded='true'] svg {
+  opacity: 0.9;
+}
+.meter-readout-toggle:hover {
+  background: transparent;
+}
+.meter-readout-toggle:focus-visible {
+  outline: 2px solid var(--accent, #53694b);
+  outline-offset: -6px;
+}
+.meter-readout > .measure-lcd,
+.meter-readout > div {
+  pointer-events: auto;
+}

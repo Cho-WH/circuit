@@ -8,7 +8,7 @@ import { ComponentPalette, type PaletteDrag } from '../src/app/ComponentPalette'
 import { OutputCanvas } from '../src/app/OutputCanvas';
 import { emptyDocument } from '../src/domain';
 import { createComponent } from '../src/component-library';
-import { createHistory, executeCommand, undo, redo } from '../src/editor';
+import { copySelection, createHistory, executeCommand, undo, redo } from '../src/editor';
 
 let host:HTMLDivElement,root:Root,resize:ResizeObserverCallback;
 beforeEach(()=>{
@@ -19,7 +19,7 @@ beforeEach(()=>{
 });
 afterEach(()=>{act(()=>root.unmount());host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();delete (document as unknown as Record<string,unknown>).elementFromPoint;});
 function fixture(){const doc=emptyDocument('touch');doc.components=[createComponent('resistor','A',{x:200,y:400}),createComponent('resistor','B',{x:800,y:400})];doc.wires=[{id:'W',start:{kind:'terminal',id:'A.b'},end:{kind:'terminal',id:'B.a'},waypoints:[]}];return doc;}
-function pointer(el:Element,type:string,x:number,y:number,id=1,kind='touch'){act(()=>el.dispatchEvent(new PointerEvent(type,{bubbles:true,clientX:x,clientY:y,pointerId:id,pointerType:kind,button:0})));}
+function pointer(el:Element,type:string,x:number,y:number,id=1,kind='touch',button=0){act(()=>el.dispatchEvent(new PointerEvent(type,{bubbles:true,clientX:x,clientY:y,pointerId:id,pointerType:kind,button})));}
 function capture(el:Element){Object.assign(el,{setPointerCapture:vi.fn(),hasPointerCapture:()=>false});}
 function mockSvg(){const svg=host.querySelector('svg')!;capture(svg);Object.assign(svg,{getScreenCTM:()=>({a:1,inverse:()=>({})}),getBoundingClientRect:()=>({left:0,top:0,right:1000,bottom:620,width:1000,height:620})});return svg;}
 function canvas(overrides:Partial<CanvasProps>={}){
@@ -57,11 +57,11 @@ it.each(['circuit','output'])('zooms %s with an ordinary wheel around the pointe
   expect(JSON.stringify(doc)).toBe(original);expect(dispatch).not.toHaveBeenCalled();
 });
 
-it.each([620,310])('pans the empty canvas at height %s without a separate tool or document edits',height=>{
+it.each([620,310])('pans the empty canvas at height %s with the middle mouse button without document edits',height=>{
   const c=canvas(),original=JSON.stringify(c.props.document);
   act(()=>resize([{contentRect:{width:1000,height}}] as ResizeObserverEntry[],{} as ResizeObserver));
   const scale=620/height;
-  pointer(c.svg,'pointerdown',400,100,1,'mouse');
+  pointer(c.svg,'pointerdown',400,100,1,'mouse',1);
   pointer(c.svg,'pointermove',480,140,1,'mouse');
   pointer(c.svg,'pointerup',480,140,1,'mouse');
   expect(c.svg.getAttribute('viewBox')).toBe(`${-80*scale} ${-40*scale} 1000 620`);
@@ -124,7 +124,7 @@ it.each([false,true])('restores an automatic edit shift only if the user has not
   const c=canvas({document:doc,selected:['A'],onCommitComponent:()=>true});
   const size=(height:number)=>act(()=>resize([{contentRect:{width:1000,height}}] as ResizeObserverEntry[],{} as ResizeObserver));
   size(620);click(host.querySelector('[data-value-id="A"]')!);size(300);
-  if(pan){pointer(c.svg,'pointerdown',600,100);pointer(c.svg,'pointermove',700,100);pointer(c.svg,'pointerup',700,100);}
+  if(pan){pointer(c.svg,'pointerdown',600,100,1,'mouse',1);pointer(c.svg,'pointermove',700,100,1,'mouse',1);pointer(c.svg,'pointerup',700,100,1,'mouse',1);}
   const before=c.svg.getAttribute('viewBox')!.split(' ').map(Number);size(620);
   const after=c.svg.getAttribute('viewBox')!.split(' ').map(Number);
   if(pan){expect(after[0]).toBe(before[0]);expect(after[1]+after[3]/2).toBe(before[1]+before[3]/2);}else expect(after).toEqual([0,0,1000,620]);
@@ -186,11 +186,15 @@ it.each([true,false])('cancels a sensor drag when the second touch starts on han
   pointer(handle,'pointerup',500,400,1);pointer(c.svg,'pointerup',750,100,2);click(c.svg,500,400);click(c.svg,500,400);
   expect(onPlace).not.toHaveBeenCalled();tap(c.svg,c.svg,500,400);expect(onPlace).toHaveBeenCalledOnce();
 });
-it('supports tap-based component movement with a preview and explicit commit',()=>{
+it('moves a selected component by drag and has no move/copy popup actions',()=>{
   const c=canvas({selected:['A'],onAction:()=>{}});
-  click([...host.querySelectorAll('button')].find(b=>b.textContent==='이동')!);tap(c.svg,c.svg,300,300);
-  expect(c.props.onMove).not.toHaveBeenCalled();expect(host.querySelector('[data-component-id="A"] .component-hit')?.getAttribute('transform')).toContain('translate(300,300)');
-  click([...host.querySelectorAll('button')].find(b=>b.textContent==='놓기')!);expect(c.props.onMove).toHaveBeenCalledExactlyOnceWith({A:{x:300,y:300}});
+  expect([...host.querySelectorAll('.canvas-selection-tools button')].map(b=>b.textContent)).toEqual(['이름·값','회전','삭제']);
+  pointer(host.querySelector('[data-component-id="A"] .component')!,'pointerdown',200,400);
+  pointer(c.svg,'pointermove',300,300);
+  expect(c.props.onMove).not.toHaveBeenCalled();
+  expect(host.querySelector('[data-component-id="A"] .component-hit')?.getAttribute('transform')).toContain('translate(300,300)');
+  pointer(c.svg,'pointerup',300,300);
+  expect(c.props.onMove).toHaveBeenCalledExactlyOnceWith({A:{x:300,y:300}});
 });
 it('receives palette preview coordinates and requires insertion confirmation after a drop',()=>{
   const c=canvas({placement:'resistor'});
@@ -227,4 +231,86 @@ it('output pinch cancels label movement and does not create edits from residual 
   const svg=mockSvg(),label=host.querySelector('[data-output-id="A"][data-output-part="label"]')!,view=svg.getAttribute('viewBox');
   pointer(label,'pointerdown',400,200,1);pointer(svg,'pointermove',450,200,1);pointer(svg,'pointerdown',600,200,2);pointer(svg,'pointermove',700,200,2);
   pointer(svg,'pointerup',700,200,2);pointer(svg,'pointerup',450,200,1);click(svg);expect(svg.getAttribute('viewBox')).not.toBe(view);expect(dispatch).not.toHaveBeenCalled();
+});
+
+
+it.each(['mouse','touch'])('starts a %s marquee immediately and selects from final release coordinates once',kind=>{
+  let frame:FrameRequestCallback=()=>{};
+  vi.stubGlobal('requestAnimationFrame',vi.fn((f:FrameRequestCallback)=>{frame=f;return 1;}));
+  vi.stubGlobal('cancelAnimationFrame',vi.fn());
+  const onSelectMany=vi.fn(),c=canvas({onSelectMany}),before=JSON.stringify(c.props.document),view=c.svg.getAttribute('viewBox');
+  pointer(c.svg,'pointerdown',900,500,1,kind);
+  expect(host.querySelector('.selection-marquee')).not.toBeNull();
+  expect(c.svg.setPointerCapture).toHaveBeenCalledWith(1);
+  pointer(c.svg,'pointermove',300,350,1,kind);
+  pointer(c.svg,'pointermove',250,320,1,kind);
+  expect(requestAnimationFrame).toHaveBeenCalledOnce();
+  act(()=>frame(0));
+  expect(host.querySelector('.selection-marquee')?.getAttribute('width')).toBe('650');
+  expect(onSelectMany).not.toHaveBeenCalled();
+  pointer(c.svg,'pointerup',100,300,1,kind);click(c.svg,100,300);
+  expect(onSelectMany).toHaveBeenCalledExactlyOnceWith(['A','B','W']);
+  expect(c.props.onSelect).not.toHaveBeenCalled();
+  expect(host.querySelector('.selection-marquee')).toBeNull();
+  expect(c.svg.getAttribute('viewBox')).toBe(view);expect(JSON.stringify(c.props.document)).toBe(before);
+});
+it.each(['pointercancel','lostpointercapture','escape','blur','resize','pinch'])('cancels marquee selection on %s without committing',reason=>{
+  const onSelectMany=vi.fn(),c=canvas({onSelectMany});
+  if(reason==='resize')act(()=>resize([{contentRect:{width:1000,height:620}}] as ResizeObserverEntry[],{} as ResizeObserver));
+  pointer(c.svg,'pointerdown',100,300);pointer(c.svg,'pointermove',900,500);
+  if(reason==='pointercancel'||reason==='lostpointercapture')pointer(c.svg,reason,900,500);
+  if(reason==='escape')act(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})));
+  if(reason==='blur')act(()=>window.dispatchEvent(new Event('blur')));
+  if(reason==='resize')act(()=>resize([{contentRect:{width:600,height:400}}] as ResizeObserverEntry[],{} as ResizeObserver));
+  if(reason==='pinch')pointer(c.svg,'pointerdown',400,100,2);
+  expect(host.querySelector('.selection-marquee')).toBeNull();
+  pointer(c.svg,'pointerup',900,500);click(c.svg,900,500);
+  expect(onSelectMany).not.toHaveBeenCalled();expect(c.props.onMove).not.toHaveBeenCalled();
+});
+function copied(ids:string[]){let n=0;return copySelection(fixture(),ids,p=>p+'copy'+(++n),{x:0,y:0});}
+const confirmCopy=()=>click(host.querySelector<HTMLButtonElement>('.copy-confirm-bubble .primary')!);
+it('pins a touch copy, allows repositioning, and confirms only with the paste bubble',()=>{
+  const onPlaceCopy=vi.fn(()=>true),c=canvas({copyPayload:copied(['A']),copyTouch:true,onPlaceCopy});
+  expect(host.querySelector('.copy-preview')).toBeNull();
+  tap(c.svg,c.svg,400,100);
+  expect(host.querySelector('.copy-preview')).not.toBeNull();
+  expect(host.querySelector('.copy-confirm-bubble')).not.toBeNull();
+  expect(onPlaceCopy).not.toHaveBeenCalled();expect(c.props.onPlace).not.toHaveBeenCalled();
+  tap(c.svg,c.svg,600,100);confirmCopy();
+  expect(onPlaceCopy).toHaveBeenCalledExactlyOnceWith({x:600,y:100},undefined);
+  expect(c.props.onSelect).not.toHaveBeenCalled();
+});
+it('uses the existing wire insertion candidate for a copied component on touch',()=>{
+  const onPlaceCopy=vi.fn(()=>true),c=canvas({copyPayload:copied(['A']),copyTouch:true,onPlaceCopy});
+  tap(c.svg,host.querySelector('[data-wire-id="W"]')!,500,400);
+  expect(onPlaceCopy).not.toHaveBeenCalled();confirmCopy();
+  expect(onPlaceCopy).toHaveBeenCalledExactlyOnceWith({x:500,y:400},{wireId:'W',segment:0});
+  expect(c.props.onPlace).not.toHaveBeenCalled();expect(c.props.onWire).not.toHaveBeenCalled();
+});
+it('follows mouse movement and places on click without a confirmation bubble',()=>{
+  const onPlaceCopy=vi.fn(()=>true),c=canvas({copyPayload:copied(['A']),onPlaceCopy});
+  pointer(c.svg,'pointermove',420,100,1,'mouse');
+  expect(host.querySelector('.copy-preview')).not.toBeNull();
+  expect(host.querySelector('.copy-confirm-bubble')).toBeNull();
+  pointer(c.svg,'pointerdown',420,100,1,'mouse');expect(onPlaceCopy).not.toHaveBeenCalled();
+  pointer(c.svg,'pointerup',420,100,1,'mouse');click(c.svg,420,100);
+  expect(onPlaceCopy).toHaveBeenCalledExactlyOnceWith({x:420,y:100},undefined);
+});
+it('keeps a rejected group preview for moving to free space without inserting or connecting',()=>{
+  const onPlaceCopy=vi.fn(()=>true),c=canvas({copyPayload:copied(['A','B','W']),copyTouch:true,onPlaceCopy});
+  tap(c.svg,c.svg,500,400);confirmCopy();
+  expect(onPlaceCopy).not.toHaveBeenCalled();expect(host.textContent).toContain('빈 공간에 놓아 주세요.');
+  expect(host.querySelector('.copy-preview')).not.toBeNull();
+  tap(c.svg,c.svg,800,100);confirmCopy();
+  expect(onPlaceCopy).toHaveBeenCalledExactlyOnceWith({x:800,y:100});
+  expect(c.props.onPlace).not.toHaveBeenCalled();expect(c.props.onWire).not.toHaveBeenCalled();
+});
+it('does not pin a touch copy after panning or pinching',()=>{
+  const c=canvas({copyPayload:copied(['A']),copyTouch:true,onPlaceCopy:vi.fn(()=>true)});
+  pointer(c.svg,'pointerdown',400,100);pointer(c.svg,'pointermove',500,200);pointer(c.svg,'pointerup',500,200);click(c.svg,500,200);
+  expect(host.querySelector('.copy-confirm-bubble')).toBeNull();
+  tap(c.svg,c.svg,500,100);expect(host.querySelector('.copy-confirm-bubble')).not.toBeNull();
+  pointer(c.svg,'pointerdown',400,100);pointer(c.svg,'pointerdown',600,100,2);
+  pointer(c.svg,'pointerup',400,100);pointer(c.svg,'pointerup',600,100,2);click(c.svg,600,100);
+  expect(host.querySelector('.copy-confirm-bubble')).toBeNull();expect(c.props.onPlaceCopy).not.toHaveBeenCalled();
 });

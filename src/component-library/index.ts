@@ -4,6 +4,7 @@ import { isStoredScalar, defaultOperatingProfileRef, diodeProfileRef, diodeKindF
 import { quantityInput, storedFraction, formatQuantity, quantityFormatFor, type QuantityFormatOptions } from '../quantity';
 export { arrowStyle, arrowGeometry, resizeArrow } from './arrows';
 export { parameterValueAt, adjustableParameter, type AdjustableParameter } from './parameters';
+export { createComponentLabelAllocator } from './labels';
 import { compactWirePoints } from '../wire-geometry';
 export { compactWirePoints } from '../wire-geometry';
 import { notationTokens, notationDisplayText } from '../notation';
@@ -32,9 +33,10 @@ export function componentValueDisplay(component: ComponentInstance) {
     outputVisible: !secondary,
   };
 }
-export function createComponent(kind: ComponentKind, id: string, position: Point): ComponentInstance {
+/** Low-level symbol/model template. Placement supplies a name from the shared allocator. */
+export function createComponent(kind: ComponentKind, id: string, position: Point, label = id): ComponentInstance {
   if (kind === 'changeover-switch') return {
-    id, type: 'switch', label: id, position, rotation: 0,
+    id, type: 'switch', label, position, rotation: 0,
     properties: { switchKind: 'spdt', state: 'a' },
     terminals: [{ id: `${id}.common`, role: 'common' }, { id: `${id}.a`, role: 'throw-a' }, { id: `${id}.b`, role: 'throw-b' }],
   };
@@ -42,7 +44,7 @@ export function createComponent(kind: ComponentKind, id: string, position: Point
   const source = type === 'dc-voltage-source';
   const operatingProfile = type === 'diode' ? diodeProfileRef('signal') : defaultOperatingProfileRef(type);
   return {
-    id, type, label: type === 'resistive-load' ? id.replace(/^VR(\d+)$/, 'VR_$1') : id, position, rotation: source ? 90 : 0,
+    id, type, label, position, rotation: source ? 90 : 0,
     properties: source ? { voltageV: q.store(9) } : type === 'resistive-load' ? { resistanceOhm: q.store(10), resistanceMinOhm: q.store(1), resistanceMaxOhm: q.store(100) } : type === 'resistor' ? { resistanceOhm: q.store(10) } : type === 'switch' ? { state: 'open' } : {},
     ...(operatingProfile ? { operatingProfile } : {}),
     terminals: [{ id: `${id}.a`, role: source ? 'positive' : type === 'diode' ? 'anode' : 'a' }, { id: `${id}.b`, role: source ? 'negative' : type === 'diode' ? 'cathode' : 'b' }],
@@ -209,7 +211,7 @@ export function componentValue(component: ComponentInstance, options?: QuantityF
   return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(isStoredScalar(component.properties[def.property]) ? component.properties[def.property] as q.StoredScalar : undefined, def.unit, options) : def.name;
 }
 /** Shared schematic geometry for live SVG and independent print rendering. */
-export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean } = {}): string {
+export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean; showMeterPolarity?: boolean } = {}): string {
   if (isChangeoverSwitch(component)) {
     const common = changeoverTerminalPosition(component, 'common'), a = changeoverTerminalPosition(component, 'throw-a'), b = changeoverTerminalPosition(component, 'throw-b');
     const selected = component.properties.state === 'b' ? b : a;
@@ -229,7 +231,11 @@ export function symbolMarkup(component: ComponentInstance, options: { disconnect
     const a = component.terminals[0]?.localPosition ?? {x:-24,y:0}, b = component.terminals[1]?.localPosition ?? {x:24,y:0};
     return `<path d="M${a.x} ${a.y}L${b.x} ${b.y+(component.properties.state === 'closed' ? 0 : -20)}"/><circle cx="${a.x}" cy="${a.y}" r="3"/><circle cx="${b.x}" cy="${b.y}" r="3"/>`;
   }
-  return `<path d="M-44 0H-23 M23 0H44"/><circle r="23"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>`;
+  // The first/second terminal is the same signed reference used by meterReading and the solver.
+  const polarity = options.showMeterPolarity === false ? '' : [-34, 34].map((x, index) =>
+    `<text x="${x}" y="-10" transform="rotate(${-component.rotation} ${x} -10)">${index === 0 ? '+' : '−'}</text>`,
+  ).join('');
+  return `<path d="M-44 0H-23 M23 0H44"/><circle r="23"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>${polarity ? `<g data-symbol="meter-polarity" stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central">${polarity}</g>` : ''}`;
 }
 export function documentBounds(document: CircuitDocument, margin = 80) {
   const points = [...document.components.flatMap(c => [c.position, ...c.terminals.map((_, i) => terminalPosition(c, i))]), ...document.junctions.map(j => j.position), ...document.wires.flatMap(w => wirePoints(document, w))];

@@ -38,6 +38,41 @@ afterEach(() => {
 });
 
 describe('committed circuit session', () => {
+  it('keeps automatic references out of the document and deletes manual ground atomically', () => {
+    const doc = emptyDocument('automatic-reference');
+    doc.components = [createComponent('dc-voltage-source', 'V2', { x: 100, y: 100 }),
+      createComponent('dc-voltage-source', 'V1', { x: 300, y: 100 }),
+      createComponent('switch', 'S1', { x: 500, y: 100 })];
+    saveLocal(doc); render();
+    expect(session.history.present.referenceNode).toBeNull();
+    expect(session.history.past).toHaveLength(0);
+    act(() => session.execute({ type: 'SetProperties', id: 'S1', properties: { state: 'closed' } }));
+    expect(session.history.present.referenceNode).toBeNull();
+    act(() => session.execute({ type: 'SetReference', endpoint: { kind: 'terminal', id: 'V1.a' } }));
+    const manual = session.history.present;
+    act(() => session.execute({ type: 'SetReference', endpoint: null }));
+    expect(session.history.present.referenceNode).toBeNull();
+    expect(session.history.past).toHaveLength(3);
+    act(() => session.undo());
+    expect(session.history.present).toEqual(manual);
+    act(() => session.redo());
+    act(() => vi.advanceTimersByTime(450));
+    const saved = loadLocal();
+    expect(saved?.ok && saved.document).toEqual(session.history.present);
+    act(() => session.execute({ type: 'ReplaceDocument', document: doc }));
+    expect(session.history.present.referenceNode).toBeNull();
+    act(() => session.execute({ type: 'DeleteElements', ids: ['V2'] }));
+    expect(session.history.present.referenceNode).toBeNull();
+  });
+  it('preserves reference restrictions when opening a document without a reference', () => {
+    const doc = emptyDocument('restricted-reference');
+    doc.components = [createComponent('dc-voltage-source', 'V1', { x: 100, y: 100 })];
+    doc.activity = { allowedCommands: ['SetLabel'], revealSteps: [] };
+    saveLocal(doc); render();
+    expect(session.history.present.referenceNode).toBeNull();
+    act(() => session.execute({ type: 'SetLabel', id: 'V1', label: '전원' }));
+    expect(session.history.present.referenceNode).toBeNull();
+  });
   it('groups live values and preserves the final value for redo', () => {
     const doc = emptyDocument('live');
     doc.components = [createComponent('resistive-load', 'VR1', { x: 100, y: 100 })];
@@ -116,9 +151,7 @@ describe('committed circuit session', () => {
         ).toBe(true);
       });
       expect(session.history.present.components).toHaveLength(1);
-      expect(session.history.present.referenceNode).toEqual(
-        allowReference ? { kind: 'terminal', id: 'V1.b' } : null,
-      );
+      expect(session.history.present.referenceNode).toBeNull();
       expect(session.history.past).toHaveLength(1);
       act(() => session.undo());
       expect(session.history.present).toEqual(document);

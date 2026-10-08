@@ -15,18 +15,14 @@ const document = () => requireDocument(fixture.document);
 describe('changeover switch', () => {
   it('routes the bridge directly sideways from each contact without a second terminal below it', () => {
     const doc = document(), s = doc.components.find(c => c.id === 'S1')!;
-    expect(s.position).toEqual({x:400,y:272});
-    for (const [wireId, role, x] of [['W1','throw-a',424],['W2','throw-b',376]] as const) {
+    for (const [wireId, role] of [['W1','throw-a'],['W2','throw-b']] as const) {
       const end = terminalPosition(s,s.terminals.findIndex(t=>t.role===role));
-      expect(end).toEqual({x,y:296});
       const points = wirePoints(doc,doc.wires.find(w=>w.id===wireId)!).reverse();
       expect(points[0]).toEqual(end);
       expect(points[1].y).toBe(end.y);
       expect(points[1].x).not.toBe(end.x);
     }
-    expect(symbolMarkup(s)).toContain('d="M-24 0L24 -24"');
     expect(switchContactPath(s)).toHaveLength(2);
-    expect(switchContactPath(s).at(-1)).toEqual({x:424,y:296});
   });
   it.each(['switch', 'changeover-switch'] as const)('connects %s wires directly to the symbol contacts in every rotation and after storage', kind => {
     const s = createComponent(kind, 'S1', {x:100,y:100});

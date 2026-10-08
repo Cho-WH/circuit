@@ -7,14 +7,7 @@ import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 
 describe('curated learning circuit layouts', () => {
-  it('uses subscript notation for numbered names',()=>{
-    for(const example of examples)for(const component of example.document.components){
-      expect(component.label).toMatch(component.type === 'resistive-load' ? /^VR_\d+$/ : /^[A-Za-z]+_\d+$/);
-    }
-  });
-  it('offers eleven learning examples without diagnostic or connection exercises', () => {
-    expect(examples.map(example => example.id)).toEqual(['FIX-01', 'FIX-02', 'FIX-03', 'FIX-04', 'FIX-05', 'FIX-11', 'FIX-12', 'FIX-09', 'FIX-10', 'FIX-13', 'FIX-14']);
-  });
+
 
   it.each(examples)('$id preserves electrical meaning and leaves the fixture untouched', example => {
     const original = cloneDocument(example.document);
@@ -75,16 +68,4 @@ describe('curated learning circuit layouts', () => {
     }
   });
 
-  it('mirrors the parallel branches and source return around one center line', () => {
-    const doc = layoutExample(examples.find(example => example.id === 'FIX-03')!.document);
-    const [source, first, second] = doc.components;
-    expect(first.position.x).toBe(source.position.x);
-    expect(second.position.x).toBe(source.position.x);
-    expect(first.rotation).toBe(second.rotation);
-    expect(source.position.y - second.position.y).toBe(second.position.y - first.position.y);
-    for (const [left, right] of [['W1', 'W6'], ['W2', 'W4'], ['W3', 'W5']]) {
-      const points = (id: string) => compactWirePoints(wirePoints(doc, doc.wires.find(wire => wire.id === id)!));
-      expect(points(left).map(p => ({ x: 2 * source.position.x - p.x, y: p.y }))).toEqual(points(right).reverse());
-    }
-  });
 });

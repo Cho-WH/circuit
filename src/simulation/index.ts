@@ -1,6 +1,6 @@
 export type { SimulationEngine, SimulationResult, SolveOptions } from '../domain';
 export { failedResult, solveCircuit, dcEngine } from './solver';
-export { queryVoltage, queryCurrent } from './piecewise';
+export { queryVoltage, queryCurrent, independentReferences } from './piecewise';
 export type { QuantityQuery } from './solution-space';
 export {
   analyzeOperatingCircuit,

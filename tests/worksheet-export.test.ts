@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   componentDefinitions,
+  createComponent,
   symbolMarkup,
   annotationPlacements,
   annotationPresentation,
@@ -484,6 +485,25 @@ describe('free output layout', () => {
 
 
 describe('output ground and embedded math font',()=>{
+  it.each(['ammeter', 'voltmeter'] as const)('shares %s polarity in live and 3D symbols but hides it in output until enabled', kind => {
+    const doc = fixture(), before = structuredClone(doc);
+    const meter = createComponent(kind, 'meter', { x: 600, y: 200 });
+    doc.components.push(meter);
+    for (const rotation of [0, 90, 180, 270] as const) {
+      meter.rotation = rotation;
+      const live = symbolMarkup(meter);
+      expect(live).toContain('data-symbol="meter-polarity"');
+      expect(live).toContain('>+</text>');
+      expect(live).toContain('>−</text>');
+      expect(live).toContain('rotate(' + -rotation + ' -34 -10)');
+      expect(exportSvg(doc)).not.toContain('data-symbol="meter-polarity"');
+      expect(exportSvg(doc, { showMeterPolarity: false })).not.toContain('data-symbol="meter-polarity"');
+      expect(exportSvg(doc, { showMeterPolarity: true })).toContain(live);
+      expect(exportSvg(doc, { circuitOnly: true, showMeterPolarity: false })).toContain(live);
+    }
+    expect(doc.components.slice(0, -1)).toEqual(before.components);
+    expect(doc.wires).toEqual(before.wires);
+  });
   it('hides ground by default, shows only its symbol on request, and preserves the 3D reference',()=>{
     const doc=fixture();
     expect(doc.referenceNode).not.toBeNull();

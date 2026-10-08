@@ -77,9 +77,12 @@ export function createVoltageMeasurementOverlay(host: HTMLElement) {
             : '7',
         );
       const [a, b] = points;
+      const redReference = measurement.red && potential.endpoints[measurement.red.endpointId]?.referenceId;
+      const blackReference = measurement.black && potential.endpoints[measurement.black.endpointId]?.referenceId;
+      const comparable = !redReference || !blackReference || redReference === blackReference;
       ruler.style.display =
-        a && b && measurement.label !== null && screen.every((p) => p?.visible) ? '' : 'none';
-      if (!a || !b || measurement.label === null) return;
+        comparable && a && b && measurement.label !== null && screen.every((p) => p?.visible) ? '' : 'none';
+      if (!comparable || !a || !b || measurement.label === null) return;
       // Both ends have the same x/y: the ruler measures height, never diagonal distance.
       const x = (a.x + b.x) / 2,
         y = (a.y + b.y) / 2 - 38;

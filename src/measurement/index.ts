@@ -1,5 +1,5 @@
 import * as q from '../rational';
-import { queryVoltage, queryCurrent } from '../simulation';
+import { queryVoltage, queryCurrent, independentReferences } from '../simulation';
 import { isStoredScalar, isChangeoverSwitch, switchTerminals, type Rational, type StoredScalar } from '../domain';
 import {
   cloneDocument,
@@ -239,6 +239,8 @@ export function probeVoltage(
     };
   }
 
+  if (independentReferences(result, redNetId, blackNetId))
+    return fail('INDEPENDENT_VOLTAGE_REFERENCES', [red.id, black.id]);
   const queried = queryVoltage(result, redNetId, blackNetId);
   if (queried.status !== 'unique') return fail('MEASUREMENT_UNAVAILABLE', [red.id, black.id]);
   const voltageV = queried.value;

@@ -4,6 +4,7 @@ import type {
   OperatingQuantity,
   Rational,
   SimulationResult,
+  SolveOptions,
 } from '../domain';
 import * as q from '../rational';
 import { solveCircuit } from './solver';
@@ -125,6 +126,7 @@ export function assessOperatingPoint(
 }
 
 export interface OperatingOptions {
+  referencePolicy?: SolveOptions['referencePolicy'];
   physicalModel?: 'component';
   continuousAdjustment?: boolean;
 }
@@ -132,7 +134,8 @@ export function analyzeOperatingCircuit(
   circuit: CompiledCircuit,
   options: OperatingOptions = {},
 ): { result: SimulationResult; assessment: OperatingAssessment } {
-  const textbook = solveCircuit(circuit),
+  const referenceOptions: SolveOptions = options.referencePolicy ? { referencePolicy: options.referencePolicy } : {};
+  const textbook = solveCircuit(circuit, referenceOptions),
     hasDiodes = circuit.elements.some((e) => e.type === 'diode');
   const needsAssessment =
     hasDiodes ||
@@ -141,7 +144,7 @@ export function analyzeOperatingCircuit(
     );
   if (!needsAssessment)
     return { result: textbook, assessment: { status: 'unverified', components: [] } };
-  const component = solveCircuit(circuit, { physicalModel: 'component' });
+  const component = solveCircuit(circuit, { ...referenceOptions, physicalModel: 'component' });
   const assessment = assessOperatingPoint(circuit, component),
     textbookAssessment = assessOperatingPoint(circuit, textbook);
   const neededCurrents = circuit.elements.filter(

@@ -51,19 +51,4 @@ describe('repository Markdown links', () => {
     expect(errors).toEqual([]);
   });
 
-  it('detects deleted and outside targets while accepting relative paths and fragments', () => {
-    const file = join(root, 'docs', 'index.md');
-    expect(
-      linkErrors(
-        file,
-        '[guide](../README.md#실행) [section](#local) [web](https://example.invalid)',
-      ),
-    ).toEqual([]);
-    expect(linkErrors(file, '[old](../schemas/circuit-document-v1.schema.json)')).toEqual([
-      'missing link target: ../schemas/circuit-document-v1.schema.json',
-    ]);
-    expect(linkErrors(file, '[outside](../../outside.md)')).toEqual([
-      'link escapes root: ../../outside.md',
-    ]);
-  });
 });

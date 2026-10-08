@@ -63,8 +63,11 @@ export interface CompiledCircuit {
 }
 export interface CompileResult { circuit: CompiledCircuit; diagnostics: Diagnostic[] }
 export interface CircuitCompiler { compile(document: CircuitDocument): CompileResult }
-export interface SolveOptions { physicalModel?: PhysicalModel }
+export interface SolveOptions { physicalModel?: PhysicalModel; referencePolicy?: 'explicit' | 'independent' }
+/** Voltages in different groups have independent zeros and cannot be subtracted. */
+export interface VoltageReferenceGroup { id: string; referenceNetId: string; netIds: string[] }
 export interface SimulationResult {
+  referenceGroups?: VoltageReferenceGroup[];
   provenance?: SimulationProvenance;
   solution?: 'unique' | 'nonunique' | 'infeasible' | 'unverified';
   quality?: { mode: 'exact' } | { mode: 'approximate'; reason: 'integer-limit' | 'operation-limit'; policy: 'dc-budget-1'; backwardError: number; condition: number; refinements: number };

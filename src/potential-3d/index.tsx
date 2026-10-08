@@ -12,7 +12,7 @@ import { operatingMarkSvg, potentialAxisValue, buildCurrentPaths, type Component
 import { createCurrentOverlay, type CurrentOverlay } from '../current-view';
 import { projectCurrentPaths } from './current-projection';
 import { createHorizontalAttraction } from './camera-snap';
-import { adjustableParameter, componentValue, htmlNotation, terminalPosition } from '../component-library';
+import { adjustableParameter, componentValue, htmlNotation, terminalPosition, endpointPosition } from '../component-library';
 import { beginPrimitives, endPrimitives, line, tube, dot } from './primitives';
 import { exportSvg } from '../export';
 import { sceneAnchors, sceneExtent, selectedVoltage, obliqueDirection, projectedSize, sceneBounds, automaticHeight, fitPotentialHeight, minorVoltageTicks } from './model';
@@ -30,7 +30,6 @@ export interface Potential3DProps {
   potential: PotentialModel;
   heightMultiplier?: number;
   heightRange?: PotentialRange;
-  referenceLabel: string;
   selectedIds: string[];
   highlightedId?: string | null;
   selectedNet?: string | null;
@@ -149,7 +148,7 @@ function moveCamera(r: Runtime, preset: Preset, reset = false) {
 export function Potential3D(props: Potential3DProps) {
   const quantityFormat=useMemo(()=>({...props.quantityFormat??defaultQuantityFormat,modelApproximation:props.potential.modelApproximation}),[props.quantityFormat,props.potential.modelApproximation]);
   const formatQuantity=(value:Scalar|undefined,unit:string)=>formatSIQuantity(value,unit,quantityFormat);
-  const { document: circuit, referenceLabel, selectedIds, highlightedId, selectedNet, showNumbers, showColors, heightMultiplier = 1 } = props;
+  const { document: circuit, selectedIds, highlightedId, selectedNet, showNumbers, showColors, heightMultiplier = 1 } = props;
   const [heightTarget, setHeightTarget] = useState<{ height: number } | null>(null);
   const resetRequested = useRef(false);
   const potential = useMemo(() => heightTarget ? fitPotentialHeight(props.potential, heightTarget.height, heightMultiplier, props.heightRange) : props.potential, [props.potential, heightTarget, heightMultiplier, props.heightRange]);
@@ -197,24 +196,34 @@ export function Potential3D(props: Potential3DProps) {
       r.voltageOverlay?.update(latest.current.voltageMeasurement, latestPotential.current, camera, r.width, r.height, r.progress);
       const hostRect = element.getBoundingClientRect();
       const labels: ComponentLabelLayout['labels'] = [];
+      const symbolAnchors: NonNullable<ComponentLabelLayout['symbolAnchors']> = [];
+      const meterIds = new Set(latest.current.document.components.filter(c => c.type === 'ammeter' || c.type === 'voltmeter').map(c => c.id));
       const occupied = [...(element.closest('.potential-scene')?.querySelectorAll('.scene-toolbar,.scene-footer,.voltage-reading,.voltage-probe') ?? [])].map(item => {
         const rect = item.getBoundingClientRect();
         return { x: rect.left - hostRect.left, y: rect.top - hostRect.top, w: rect.width, h: rect.height };
       });
+      // Read dimensions before any projected position/visibility writes. Interleaving
+      // them can force the browser to recalculate styles for every label while orbiting.
+      // Remeasure each frame so font, content and viewport changes remain correct.
+      const measuredLabels = [...r.labels].sort((a,b) => b.priority-a.priority).map(label => ({
+        label, w: label.element.offsetWidth || 52, h: label.element.offsetHeight || 25,
+      }));
       // Keep net/component badges away from the full voltage axis, not just its tick text.
-      const axisPoints = r.labels.filter(label => label.element.classList.contains('axis-tag')).map(label => {
+      const axisPoints = measuredLabels.filter(({label}) => label.element.classList.contains('axis-tag')).map(({label,w}) => {
         const p = label.point.clone().project(camera);
-        return { axis: label.key.slice(0,label.key.lastIndexOf(':')), x: (p.x + 1) * r.width / 2, y: (1 - p.y) * r.height / 2, w: label.element.offsetWidth || 52 };
+        return { axis: label.key.slice(0,label.key.lastIndexOf(':')), x: (p.x + 1) * r.width / 2, y: (1 - p.y) * r.height / 2, w };
       });
       const axisGutters = [...new Set(axisPoints.map(p => p.axis))].map(axis => {
         const points = axisPoints.filter(p => p.axis === axis);
         return { left: Math.min(...points.map(p => p.x - p.w / 2)) - 8, right: Math.max(...points.map(p => p.x + p.w / 2)) + 8, top: Math.min(...points.map(p => p.y)) - 16, bottom: Math.max(...points.map(p => p.y)) + 16 };
       });
-      for (const label of [...r.labels].sort((a,b) => b.priority-a.priority)) {
+      for (const {label,w,h} of measuredLabels) {
         const p = label.point.clone(); if (label.lifted) p.z *= r.progress;
         p.project(camera);
         const x = (p.x + 1) * r.width / 2, y = (1 - p.y) * r.height / 2;
-        const w = label.element.offsetWidth || 52, h = label.element.offsetHeight || 25;
+        if (label.key.startsWith('component:') && meterIds.has(label.key.slice(10)) && p.z >= -1 && p.z <= 1) {
+          symbolAnchors.push({ componentId: label.key.slice(10), x: hostRect.x + x + 16, y: hostRect.y + y - 16 });
+        }
         const rect = { x: x - w / 2, y: label.element.classList.contains('axis-tag') || label.element.classList.contains('operating-tag') ? y - h / 2 : y - h - 9, w, h };
         if (label.key.startsWith('component:') && latest.current.operatingMarks?.[label.key.slice(10)]) rect.y = y - h - 43;
         const nearAxis = !label.element.classList.contains('axis-tag') && axisGutters.some(gutter => rect.x < gutter.right && rect.x + w > gutter.left && rect.y < gutter.bottom && rect.y + h > gutter.top);
@@ -227,7 +236,7 @@ export function Potential3D(props: Potential3DProps) {
           if (label.key.startsWith('component:')) labels.push({ componentId: label.key.slice(10), x: hostRect.x + rect.x, y: hostRect.y + rect.y, width: w, height: h });
         }
       }
-      latest.current.onComponentLabelLayout?.({ bounds: { x: hostRect.x, y: hostRect.y, width: r.width, height: r.height }, labels, obstacles: [
+      latest.current.onComponentLabelLayout?.({ bounds: { x: hostRect.x, y: hostRect.y, width: r.width, height: r.height }, labels, symbolAnchors, obstacles: [
         ...occupied.map(rect => ({ x: hostRect.x + rect.x, y: hostRect.y + rect.y, width: rect.w, height: rect.h })),
         ...axisGutters.map(g => ({ x: hostRect.x + g.left, y: hostRect.y + g.top, width: g.right - g.left, height: g.bottom - g.top })),
       ] });
@@ -444,12 +453,18 @@ export function Potential3D(props: Potential3DProps) {
       // Transparent meshes retain hit testing while current bands own the visible path.
       segment.points.slice(1).forEach((p,i) => tube(r.raised,point(segment.points[i]),point(p),color,radius*(active?1.65:1),segment.id,!props.currentDisplay));
     }
+    if (!props.operatingStopped && circuit.referenceNode && showNumbers) {
+      const reference = { id: circuit.referenceNode.id, endpoint: circuit.referenceNode };
+      const position = endpointPosition(circuit, reference.endpoint);
+      const height = potential.endpoints[reference.endpoint.id]?.height;
+      if (height !== undefined) addLabel(`reference:${reference.id}`, '0 V', point({ ...position, z: height }), 'net-tag', true, 7);
+    }
     for (const anchor of sceneAnchors(circuit,potential)) {
       const net = potential.nets[anchor.id];
       const pos = point(anchor);
       if (guides && anchor.z!==0) line(r.raised,[new THREE.Vector3(pos.x,pos.y,0),pos],'#929d88',true,.65);
       dot(r.raised, pos, showColors ? anchor.color : '#667060', radius*2, undefined, !props.currentDisplay, net.netId);
-      if(showNumbers) addLabel(`net:${anchor.id}`,formatQuantity(anchor.voltage,'V'),pos,'net-tag',true,3,undefined,net.netId);
+      if(showNumbers && (!circuit.referenceNode || potential.endpoints[circuit.referenceNode.id]?.netId !== net.netId)) addLabel(`net:${anchor.id}`,formatQuantity(anchor.voltage,'V'),pos,'net-tag',true,3,undefined,net.netId);
     }
     // All terminals remain visible, including the two disconnected ends of an open switch.
     for (const c of circuit.components) for (let i=0;i<c.terminals.length;i++) {
@@ -515,6 +530,6 @@ export function Potential3D(props: Potential3DProps) {
     <div className="potential-stage"><div className="potential-webgl" ref={host}/><div className="current-flow-host" ref={currentHost}/><div className="potential-labels" ref={overlay}/><div className="voltage-measurement-host" ref={voltageHost}/>
       {fallback&&<div className="scene-fallback" role="status"><strong>이 기기에서 3D를 표시할 수 없습니다.</strong><p>2D 전위와 경로 그래프에서 같은 값을 확인할 수 있습니다.</p></div>}
     </div>
-    <footer className="scene-footer" hidden={props.operatingStopped}><span className="floor-key"><i/>접지(0V): <small className="notation" aria-label={referenceLabel} dangerouslySetInnerHTML={{ __html: htmlNotation(referenceLabel.replace(/\s*·\s*0 V$/, ''), true) }}/></span><span className="height-key">높이 <b>×{Number(heightMultiplier.toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
+    <footer className="scene-footer" hidden={props.operatingStopped}><span className="height-key">높이 <b>×{Number(heightMultiplier.toFixed(2))}</b></span>{potential.undefinedCount>0&&<span>전위 미정 {potential.undefinedCount}개</span>}</footer>
   </section>;
 }

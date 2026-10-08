@@ -1,10 +1,11 @@
 import * as q from '../rational';
-import type { CircuitDocument, CompiledCircuit, SimulationResult } from '../domain';
+import type { CircuitDocument, CompiledCircuit, SimulationResult, EndpointRef } from '../domain';
 import { isChangeoverSwitch, switchTerminals } from '../domain';
 import { endpointPosition, wirePoints, switchContactPath } from '../component-library';
 import { potentialColor, type PotentialPaletteId } from './palettes';
 
 export interface PotentialValue {
+  referenceId?: string;
   netId: string;
   /** Normalized display coordinate; physical labels use exactVoltage. */
   voltage?: number;
@@ -30,6 +31,7 @@ export interface PotentialOptions {
   palette?: PotentialPaletteId;
 }
 export interface PotentialModel {
+  references?: PotentialReference[];
   modelApproximation?: boolean;
   voltageUnit: q.StoredScalar;
   approximation?: import('../domain').Approximation;
@@ -41,6 +43,14 @@ export interface PotentialModel {
   scale: number;
   referenceVoltage: number;
   undefinedCount: number;
+}
+export interface PotentialReference { id: string; label: string; endpoint: EndpointRef }
+
+/** Names describe display frames, not electrically connected grounds. */
+export function referenceGroupLabel(index: number): string {
+  let label = '';
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) label = String.fromCharCode(65 + (n - 1) % 26) + label;
+  return label;
 }
 export function buildPotentialModel(
   document: CircuitDocument,
@@ -75,6 +85,18 @@ export function buildPotentialModel(
     ? (result.nodeVoltages[circuit.referenceNetId] ?? q.ZERO)
     : q.ZERO;
   const referenceVoltage = coordinate(reference);
+  const referenceGroups = result.referenceGroups ?? [];
+  const referenceByNet = new Map(referenceGroups.flatMap(group => group.netIds.map(id => [id, group] as const)));
+  const references: PotentialReference[] = referenceGroups.flatMap((group, index) => {
+    const ids = circuit.nets.find(net => net.id === group.referenceNetId)?.endpointIds ?? [];
+    const manual = document.referenceNode && ids.includes(document.referenceNode.id) ? document.referenceNode : null;
+    const negative = [...document.components].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+      .filter(c => c.type === 'dc-voltage-source').flatMap(c => c.terminals).find(t => t.role === 'negative' && ids.includes(t.id));
+    const first = ids.slice().sort()[0];
+    const endpoint: EndpointRef | null = manual ?? (negative ? { kind: 'terminal', id: negative.id }
+      : first ? { kind: document.junctions.some(j => j.id === first) ? 'junction' : 'terminal', id: first } : null);
+    return endpoint ? [{ id: group.id, label: referenceGroups.length > 1 ? referenceGroupLabel(index) : '', endpoint }] : [];
+  });
   const nets = Object.fromEntries(
     circuit.nets.map((net) => {
       const v = result.nodeVoltages[net.id];
@@ -83,6 +105,7 @@ export function buildPotentialModel(
         net.id,
         {
           netId: net.id,
+          referenceId: referenceByNet.get(net.id)?.id,
           voltage,
           exactVoltage: v ? q.store(v) : undefined,
           color: potentialColor(
@@ -138,6 +161,7 @@ export function buildPotentialModel(
       });
   }
   return {
+    references,
     ...axis,
     ...(result.provenance?.physicalModel === 'component' ? { modelApproximation: true } : {}),
     approximation: exactValues.find((v) => v.approximation)?.approximation,

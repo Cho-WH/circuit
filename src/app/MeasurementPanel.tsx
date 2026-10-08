@@ -21,10 +21,12 @@ import type { CurrentReading, MeasurementResult, ProbeVoltage } from '../measure
 import { ArrowLeftRight, Plus, NotebookPen, Power } from 'lucide-react';
 import './measurement.css';
 import { diagnosticText } from './diagnostic-text';
+import { referenceGroupLabel } from '../visualization';
 import { useMeasurementRecords } from './useMeasurementRecords';
 import { MeasurementTable } from './MeasurementTable';
 import { SelectionButton } from './SelectionButton';
 import { CompactMeasurementBar } from './CompactMeasurementBar';
+import { MeasurementDisplay } from './MeasurementDisplay';
 
 interface Props {
   kind: MeasurementKind | null;
@@ -109,7 +111,10 @@ export function MeasurementPanel(props: Props) {
     const net = color === 'red' ? redNet : blackNet;
     const value = potentialsAvailable && ref(color === 'red' ? red : black)
       ? props.result.nodeVoltages[net] : undefined;
-    return value === undefined ? '—' : formatQuantity(value, 'V', { modelApproximation });
+    const groups = props.result.referenceGroups ?? [];
+    const index = groups.findIndex(group => group.netIds.includes(net));
+    const suffix = groups.length > 1 && index >= 0 ? ` · ${referenceGroupLabel(index)}` : '';
+    return value === undefined ? '—' : formatQuantity(value, 'V', { modelApproximation }) + suffix;
   };
   const excluded = compilation.circuit.elements
     .filter((e) => e.type === 'dc-voltage-source')
@@ -207,10 +212,6 @@ export function MeasurementPanel(props: Props) {
               kind === 'current' ? [measuredTarget?.id ?? ''] : [red, black],
             ), modelApproximation: kind !== 'resistance' && modelApproximation },
           );
-  // Keep the shared formatter's value and SI prefix intact; only separate typography.
-  const unitStart = formattedReading.lastIndexOf(' ');
-  const displayValue = formattedReading.slice(0, unitStart);
-  const displayUnit = formattedReading.slice(unitStart + 1);
   const recordsToggle = (
     <button
       className={`notebook-toggle${enabled ? '' : ' standalone'}`}
@@ -280,7 +281,7 @@ export function MeasurementPanel(props: Props) {
         )}
       </div>
       <div className="measure-readout">
-        <div className="measure-lcd">
+        <MeasurementDisplay reading={formattedReading}>
           <div className="measure-lcd-header">
             <span className="measure-lcd-caption">
               {kind === 'voltage' ? '전압' : kind === 'current' ? '전류' : '저항'}
@@ -303,18 +304,7 @@ export function MeasurementPanel(props: Props) {
               </div>
             )}
           </div>
-          <output aria-label="측정값" aria-live="polite" aria-atomic="true">
-            <span
-              className="measure-lcd-value"
-              style={{
-                fontSize: `clamp(18px, calc((100cqi - 34px) / ${Math.max(1, displayValue.length * 0.62)}), 46px)`,
-              }}
-            >
-              {displayValue}
-            </span>{' '}
-            <span className="measure-lcd-unit">{displayUnit}</span>
-          </output>
-        </div>
+        </MeasurementDisplay>
         <div className="measure-record-row" role="group" aria-label="측정 기록과 도구 종료">
           <span className="measure-record-label">기록</span>
           <button

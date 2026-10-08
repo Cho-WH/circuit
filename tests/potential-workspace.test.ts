@@ -23,7 +23,7 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 async function render(active = true, doc = circuit, sceneIdentity?: string) {
   const compiled = compileCircuit(doc).circuit;
-  await act(async () => root.render(createElement(PotentialWorkspace, { active, sceneIdentity, document: doc, potential: buildPotentialModel(doc, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, referenceLabel: 'V1.n', onReturnTo2D: vi.fn(), children: createElement('button', { 'data-2d': true }, '회로') })));
+  await act(async () => root.render(createElement(PotentialWorkspace, { active, sceneIdentity, document: doc, potential: buildPotentialModel(doc, compiled, solveCircuit(compiled)), selectedIds: [], showNumbers: true, showColors: true, onReturnTo2D: vi.fn(), children: createElement('button', { 'data-2d': true }, '회로') })));
 }
 const status = () => host.querySelector('.potential-workspace')!.getAttribute('data-status');
 const twoD = () => host.querySelector<HTMLElement>('.potential-workspace-2d')!;

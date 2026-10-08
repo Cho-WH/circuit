@@ -120,28 +120,15 @@ export function useCircuitSession(mode: WorkspaceMode) {
     return result;
   }
 
-  // The first source gets a reference when permitted, in the same undo step.
-  // Denying SetReference must still allow the independently permitted placement.
   function placeComponent(
     component: ComponentInstance,
     target?: { wireId: string; segment: number; newWireId: string },
   ): ExecuteCommandResult {
-    const result = execute(
+    return execute(
       target
         ? { type: 'InsertComponentOnWire', component, ...target }
         : { type: 'AddComponent', component },
     );
-    if (!result.ok) return result;
-    if (result.history.present.referenceNode || component.type !== 'dc-voltage-source')
-      return result;
-    const reference = executeCommand(result.history, {
-      type: 'SetReference',
-      endpoint: { kind: 'terminal', id: component.terminals[1].id },
-    });
-    if (!reference.ok) return result;
-    const next = { ...reference.history, past: result.history.past };
-    publish(next);
-    return { ok: true, history: next };
   }
 
   useEffect(() => {

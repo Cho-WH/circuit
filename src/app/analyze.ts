@@ -8,6 +8,7 @@ export function analyze(document: CircuitDocument, componentModel = false) {
   const evaluated = compilation.diagnostics.some(d => d.severity === 'error')
     ? { result: failedResult(compilation.diagnostics), assessment: { status: 'unverified', components: [] } as OperatingAssessment }
     : analyzeOperatingCircuit(compilation.circuit, {
+        referencePolicy: 'independent',
         ...(componentModel ? { physicalModel: 'component' as const } : {}),
         continuousAdjustment: document.components.some(c => c.type === 'diode') &&
           document.components.some(c => c.type === 'resistive-load'),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { emptyDocument, requireDocument, type Point } from '../src/domain';
-import { createComponent, wirePoints, compactWirePoints } from '../src/component-library';
+import { emptyDocument, requireDocument, type Point, type CircuitDocument } from '../src/domain';
+import { createComponent, terminalPosition, endpointPosition, wirePoints, compactWirePoints } from '../src/component-library';
 import { orthogonalRoute, stretchWire, shiftWireSegment } from '../src/wire-geometry';
 import { previewCommand, executeCommand, executeCommands, createHistory, undo, redo, type Command } from '../src/editor';
 import { compileCircuit } from '../src/connectivity';
@@ -63,7 +63,6 @@ describe('wire editing commands and invariants', () => {
   it.each<Command>([
     {type:'MoveWireSegment',wireId:'W2',segment:2,offset:40},
     {type:'MoveComponents',positions:{R1:{x:740,y:380}}},
-    {type:'RotateComponents',ids:['R1']},
   ])('shares preview, commit, undo and JSON geometry without changing connectivity: $type', command => {
     const doc=fixture(),before=structuredClone(doc),history=createHistory(doc);
     const result=executeCommand(history,command);expect(result.ok).toBe(true);if(!result.ok)return;
@@ -105,5 +104,129 @@ describe('wire editing commands and invariants', () => {
   ] as Command[])('rejects invalid segment changes without partial edits', command => {
     const history=createHistory(fixture()),before=structuredClone(history);
     expect(executeCommand(history,command).ok).toBe(false);expect(history).toEqual(before);
+  });
+});
+
+
+describe('rotation with stationary wiring', () => {
+  function wired(kind: Parameters<typeof createComponent>[0] = 'diode', rotation: 0 | 90 | 180 | 270 = 0) {
+    const doc = emptyDocument('rotation');
+    const component = createComponent(kind, 'C', { x: 200, y: 200 });
+    component.rotation = rotation;
+    doc.components = [component];
+    component.terminals.forEach((terminal, index) => {
+      const point = terminalPosition(component, index);
+      doc.junctions.push({ id: 'end' + index, position: { x: point.x + 200, y: point.y + 200 } });
+      doc.wires.push({ id: 'wire' + index, start: { kind: 'terminal', id: terminal.id }, end: { kind: 'junction', id: 'end' + index }, waypoints: [{ x: point.x, y: point.y + 200 }] });
+    });
+    return doc;
+  }
+  const rotate: Command = { type: 'RotateComponents', ids: ['C'] };
+  function turn(doc: CircuitDocument, command = rotate) {
+    const result = executeCommand(createHistory(doc), command);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    return result.history;
+  }
+  const paths = (doc: CircuitDocument) => doc.wires.map(w => wirePoints(doc, w));
+
+  it.each(['resistor', 'resistive-load', 'switch', 'ammeter', 'voltmeter', 'dc-voltage-source', 'diode'] as const)(
+    'leaves %s wires fixed and reverses their terminal connections at 180 degrees, including after reload', kind => {
+      for (const rotation of [0, 90, 180, 270] as const) {
+        const doc = wired(kind, rotation), before = structuredClone(doc);
+        const first = turn(doc), detached = first.present;
+        expect(paths(detached)).toEqual(paths(doc));
+        expect(detached.wires.map(w => w.waypoints)).toEqual(doc.wires.map(w => w.waypoints));
+        expect(detached.wires.every(w => w.start.kind === 'junction')).toBe(true);
+        expect(previewCommand(doc, rotate)).toEqual({ ok: true, document: detached });
+        expect(undo(first).present).toEqual(doc);
+        expect(redo(undo(first)).present).toEqual(detached);
+        const loaded = parseDocument(serializeDocument(detached));
+        expect(loaded.ok).toBe(true); if (!loaded.ok) continue;
+        const second = turn(loaded.document), reversed = second.present;
+        expect(paths(reversed)).toEqual(paths(doc));
+        expect(reversed.wires.map(w => w.start)).toEqual([...doc.wires].reverse().map(w => w.start));
+        expect(reversed.junctions).toEqual(doc.junctions);
+        const nets = compileCircuit(reversed).circuit.endpointToNet;
+        expect(nets['C.a']).toBe(nets.end1);
+        expect(nets['C.b']).toBe(nets.end0);
+        expect(nets.end0).not.toBe(nets.end1);
+        expect(undo(second).present).toEqual(detached);
+        expect(turn(turn(reversed).present).present).toEqual(doc);
+        expect(doc).toEqual(before);
+      }
+    },
+  );
+
+  it('preserves branches, ground and annotation positions through detach and reattach', () => {
+    const doc = wired();
+    doc.wires.push({ id: 'branch', start: { ...doc.wires[0].start }, end: { ...doc.wires[0].end }, waypoints: [{ x: 0, y: 200 }, { x: 0, y: 400 }] });
+    doc.referenceNode = { ...doc.wires[0].start };
+    doc.annotations = [{ id: 'note', kind: 'note', anchor: { ...doc.wires[1].start }, content: 'test', visibility: 'always' }];
+    const first = turn(doc).present, second = turn(first).present;
+    for (const next of [first, second]) {
+      expect(paths(next)).toEqual(paths(doc));
+      expect(next.wires[2].start).toEqual(next.wires[0].start);
+      expect(endpointPosition(next, next.referenceNode!)).toEqual(endpointPosition(doc, doc.referenceNode));
+      expect(endpointPosition(next, next.annotations[0].anchor!)).toEqual(endpointPosition(doc, doc.annotations[0].anchor!));
+    }
+    expect(second.referenceNode).toEqual({ kind: 'terminal', id: 'C.b' });
+    expect(second.annotations[0].anchor).toEqual({ kind: 'terminal', id: 'C.a' });
+  });
+
+  it('reconnects only exact, unambiguous endpoints and never a crossed wire segment', () => {
+    const first = turn(wired()).present;
+    const ambiguous = structuredClone(first);
+    const end = ambiguous.junctions.find(j => j.id === ambiguous.wires[0].start.id)!;
+    ambiguous.junctions.push({ id: 'overlap', position: { ...end.position } });
+    expect(turn(ambiguous).present.wires[0].start).toEqual(ambiguous.wires[0].start);
+    const occupied = structuredClone(first);
+    occupied.components.push(createComponent('resistor', 'other', { x: end.position.x + 44, y: end.position.y }));
+    expect(turn(occupied).present.wires[0].start).toEqual(occupied.wires[0].start);
+    const moved = executeCommand(createHistory(first), { type: 'MoveComponents', positions: { C: { x: 201, y: 200 } } });
+    expect(moved.ok).toBe(true); if (!moved.ok) return;
+    const next = turn(moved.history.present).present;
+    expect(next.wires).toEqual(first.wires);
+    expect(paths(next)).toEqual(paths(first));
+    const crossing = emptyDocument('crossing');
+    crossing.components = [createComponent('resistor', 'C', { x: 200, y: 200 })];
+    crossing.junctions = [{ id: 'a', position: { x: 0, y: 156 } }, { id: 'b', position: { x: 400, y: 156 } }];
+    crossing.wires = [{ id: 'w', start: { kind: 'junction', id: 'a' }, end: { kind: 'junction', id: 'b' }, waypoints: [] }];
+    expect(turn(crossing).present.wires).toEqual(crossing.wires);
+    expect(turn(crossing).present.junctions).toEqual(crossing.junctions);
+  });
+
+  it('keeps all SPDT wire paths and distinct contacts through a full turn', () => {
+    const doc = wired('changeover-switch');
+    let next = doc;
+    for (let i = 0; i < 4; i++) {
+      next = turn(next).present;
+      expect(paths(next)).toEqual(paths(doc));
+      const nets = compileCircuit(next).circuit.endpointToNet;
+      expect(new Set(doc.junctions.map(j => nets[j.id])).size).toBe(3);
+    }
+    expect(next).toEqual(doc);
+  });
+
+  it('rotates a group in document order and preserves wires between rotated components', () => {
+    const doc = wired();
+    doc.components.push(createComponent('resistor', 'R', { x: 600, y: 200 }));
+    doc.wires[0].end = { kind: 'terminal', id: 'R.a' };
+    const command: Command = { type: 'RotateComponents', ids: ['R', 'C'] };
+    const first = turn(doc, command).present;
+    expect(first).toEqual(turn(doc, { ...command, ids: ['C', 'R'] }).present);
+    const second = turn(first, command).present;
+    expect(paths(first)).toEqual(paths(doc));
+    expect(paths(second)).toEqual(paths(doc));
+    expect(second.wires[0]).toMatchObject({ start: { id: 'C.b' }, end: { id: 'R.b' } });
+  });
+
+  it('uses rotation permission for the atomic edit and leaves no trace on rejection', () => {
+    const doc = wired();
+    doc.activity = { allowedCommands: ['RotateComponents'], revealSteps: [] };
+    expect(turn(doc).past).toEqual([doc]);
+    doc.activity.allowedCommands = ['MoveComponents'];
+    const history = createHistory(doc), before = structuredClone(history);
+    expect(executeCommand(history, rotate)).toMatchObject({ ok: false, diagnostics: [{ code: 'COMMAND_NOT_ALLOWED' }] });
+    expect(history).toEqual(before);
   });
 });

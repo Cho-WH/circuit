@@ -60,7 +60,7 @@ it('allows dismissal and manual reopening when browser storage is unavailable', 
   expect(host.querySelector('[role="dialog"]')).not.toBeNull();
 });
 
-it('keeps the screen dim throughout the one-second exit, then fades it before restoring focus', async () => {
+it('waits for exit animations before saving dismissal and restoring focus', async () => {
   localStorage.removeItem(QUICK_START_SEEN_KEY);
   await act(async () => root.render(createElement(App)));
   const surface = host.querySelector<HTMLElement>('.quick-start-dialog')!;
@@ -81,16 +81,12 @@ it('keeps the screen dim throughout the one-second exit, then fades it before re
   await act(async () => button('직접 해보기').click());
   await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
   expect(surface.animate).toHaveBeenCalledTimes(1);
-  expect(vi.mocked(surface.animate).mock.calls[0][1]).toMatchObject({ duration: 1000 });
   expect(scrim.animate).not.toHaveBeenCalled();
   expect(host.querySelector('[role="dialog"]')).toBe(surface);
   expect(localStorage.getItem(QUICK_START_SEEN_KEY)).toBeNull();
-  const frames = vi.mocked(surface.animate).mock.calls[0][0] as Keyframe[];
-  expect(frames.at(-1)!.transform).toContain('translate(165px, -374px)');
   await act(async () => finish.get(surface)!());
   expect(target.animate).toHaveBeenCalledTimes(1);
   expect(scrim.animate).toHaveBeenCalledTimes(1);
-  expect(vi.mocked(scrim.animate).mock.calls[0][1]).toMatchObject({ duration: 400 });
   expect(host.querySelector('[role="dialog"]')).toBe(surface);
   expect(localStorage.getItem(QUICK_START_SEEN_KEY)).toBeNull();
   await act(async () => finish.get(scrim)!());

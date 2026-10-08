@@ -9,6 +9,11 @@ export function preserveConnectedWirePaths(before: CircuitDocument, after: Circu
     const start = endpointPosition(after, wire.start), end = endpointPosition(after, wire.end);
     const oldStart = endpointPosition(before, wire.start), oldEnd = endpointPosition(before, wire.end);
     if (start.x === oldStart.x && start.y === oldStart.y && end.x === oldEnd.x && end.y === oldEnd.y) continue;
+    const dx = start.x - oldStart.x, dy = start.y - oldStart.y;
+    if (dx === end.x - oldEnd.x && dy === end.y - oldEnd.y) {
+      wire.waypoints = wire.waypoints.map(p => ({ x: p.x + dx, y: p.y + dy }));
+      continue;
+    }
     wire.waypoints = stretchWire(wirePoints(before, wire), start, end).slice(1, -1);
   }
 }
@@ -39,7 +44,7 @@ function routeInsertionCandidates(document: CircuitDocument, point: Point, wireI
 }
 const failure=(ids:string[],reason:string):Diagnostic[]=>[diagnostic('WIRE_EDIT_UNAVAILABLE',ids,'error',{reason})];
 export function insertComponent(document:CircuitDocument, component:ComponentInstance, wireId:string, segment:number, newWireId:string):Diagnostic[]|null {
-  if(component.type==='voltmeter'||component.terminals.length!==2||component.terminals.some(t=>t.localPosition))return failure([component.id],'component');
+  if(component.terminals.length!==2||component.terminals.some(t=>t.localPosition))return failure([component.id],'component');
   const routeId=normalizeWireRoute(document,wireId);
   if(!routeId)return failure([wireId],'target');
   const candidate=routeInsertionCandidates(document,component.position,routeId).find(c=>c.segment===segment);
@@ -55,7 +60,6 @@ export function insertComponent(document:CircuitDocument, component:ComponentIns
   wire.waypoints=[...points.slice(1,segment+1)];
   document.wires.push({id:newWireId,start:{kind:'terminal',id:component.terminals[second].id},end:originalEnd,waypoints:points.slice(segment+1,-1)});
   document.components.push(component);
-  if(!document.referenceNode&&component.type==='dc-voltage-source')document.referenceNode={kind:'terminal',id:(component.terminals.find(t=>t.role==='negative')??component.terminals[1]).id};
   return null;
 }
 export function splitWire(document:CircuitDocument, wire:Wire, point:Point, junctionId:string, newWireId:string):boolean {
