@@ -1,15 +1,20 @@
 # 문서 색인
 
-## 먼저 읽을 문서
+## 목적에 따라 시작하기
+
+- [앱 소개](../README.md): 주요 기능, 실제 화면, 바로 사용하기
+- [사용 설명서](ux/quick-start.md): 첫 회로부터 편집·분석·측정·출력·저장까지
+- [개발자 안내](development/README.md): 로컬 실행, 코드 구조, 검증과 기여 절차
+
+## 개발·설계 문서
 
 - [현재 작업 현황](implementation/current-phase.md): 현재 구현·미완료 범위와 커밋·배포 상태
-- [빠른 시작](ux/quick-start.md): 현재 앱 사용법
 - [작업 추적](implementation/mvp-tracker.md): 최근 변경과 주요 완료 결과
 - [요구사항](../requirements/requirements.yaml) · [스키마](../schemas/) · [기술 결정 색인](../decisions/README.md): 규범과 계약
 
 ## 다이오드 확장 — D0~D4 구현
 
-선형 직류와 다이오드 구간선형 모델, 회로 v6·측정 기록 v5를 지원한다. 이전 형식은 변환 없이 거부한다. 교육용 프로필은 실물 정격이 아니며, 열 축적·파손 후 연쇄 고장은 제외한다. 현재 변경은 푸시·배포 전이고 교실·실기기·보조기술 검증은 남아 있다.
+선형 직류와 다이오드 구간선형 모델, 회로 v6·측정 기록 v5를 지원한다. 이전 형식은 변환 없이 거부한다. 교육용 프로필은 실물 정격이 아니며, 열 축적·파손 후 연쇄 고장은 제외한다. 교실·실기기·보조기술 검증은 [남은 작업](implementation/follow-up.md)을, 게시 상태는 [Pages 실행 기록](https://github.com/Cho-WH/circuit/actions/workflows/deploy-pages.yml)을 따른다.
 
 - [기획과 구현 순서](implementation/diode-mvp.md): 목표 경험, 범위, 기존 모듈 연결, 단계별 종료 조건
 - [ADR-026](../decisions/ADR-026-diode-boundary-analysis.md): 채택한 설계와 기존 규범의 관계
