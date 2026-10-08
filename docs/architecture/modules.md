@@ -83,7 +83,7 @@ function requireDocument(input: unknown): CircuitDocument;
 
 [ADR-026](../../decisions/ADR-026-diode-boundary-analysis.md)의 다이오드 확장은 `SolveOptions.physicalModel`(`textbook` 또는 `component`)을 사용한다. `SimulationResult.provenance`는 선택된 물리 모델·고정 프로필과 특성의 식별자·수치 품질을 구별한다. 아핀 해 공간과 부등식은 simulation 내부에만 남는다. `queryVoltage(result, aNet, bNet)`과 `queryCurrent(result, terms)`는 전압차와 전류 선형결합 자체의 유일성을 질의하므로 개별 전위·전류가 미정이어도 확정 가능한 측정을 보존한다.
 
-`analyzeOperatingCircuit(circuit, { physicalModel?, continuousAdjustment? })`는 현재 회로의 두 모델을 해석하고 표시 결과와 `OperatingAssessment`를 함께 반환한다. `assessOperatingPoint`는 검증된 값과 해당 프로필의 경계를 비교하고 부품 ID·원인·근거 값을 보존한다. 모델 유지·파손 후 잠금·연출은 app의 세션 책임이다. 측정 기록의 `provenance`와 CSV에도 모델·프로필·수치 출처가 남는다. 원래 풀이가 근사여도 같은 net의 차처럼 정확히 아는 측정은 기록값의 품질과 풀이의 출처가 다를 수 있다.
+`analyzeOperatingCircuit(circuit, { physicalModel?, referencePolicy? })`는 현재 회로의 두 모델을 해석하고 표시 결과와 `OperatingAssessment`를 함께 반환한다. 조절 범위나 이전 모델은 입력으로 받지 않는다. `assessOperatingPoint`는 검증된 값과 해당 프로필의 경계를 비교하고 부품 ID·원인·근거 값을 보존한다. 과부하·파손 후 잠금·연출은 app의 세션 책임이며 모델 선택은 simulation에서 매 입력마다 결정한다. 측정 기록의 `provenance`와 CSV에도 모델·프로필·수치 출처가 남는다. 원래 풀이가 근사여도 같은 net의 차처럼 정확히 아는 측정은 기록값의 품질과 풀이의 출처가 다를 수 있다.
 
 ## 연결망 구성
 

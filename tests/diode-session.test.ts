@@ -75,6 +75,7 @@ it('keeps changeover switching behind worksheet, activity and damage command gua
 });
 const render=(mode:WorkspaceMode)=>act(()=>root.render(createElement(Harness,{mode})));
 const change=(value:number)=>session.execute({type:'SetProperties',id:'R1',properties:{resistanceOhm:q.store(value)}});
+const usesComponentModel=()=>analyze(session.history.present).result.provenance?.physicalModel==='component';
 beforeEach(()=>{
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);vi.useFakeTimers();localStorage.clear();
   localStorage.setItem(QUICK_START_SEEN_KEY,'true');
@@ -82,16 +83,22 @@ beforeEach(()=>{
 });
 afterEach(()=>{act(()=>root.unmount());host.remove();vi.useRealTimers();vi.unstubAllGlobals();localStorage.clear();});
 
-it('keeps the diode model during voltage adjustment and stops further commands at overload', () => {
+it('uses the current voltage to select the diode model and stops further commands at overload', () => {
   const doc=circuit(10);
   doc.components[0].properties={voltageV:q.store(0),sourceKind:'adjustable',voltageMinV:q.store(0),voltageMaxV:q.store(12)};
   saveLocal(doc);render('build');
   act(()=>session.changeWorkspace('analysis'));render('analysis');
-  expect(session.analysisSession.componentModel).toBe(true);
+  expect(usesComponentModel()).toBe(false);
   expect(session.analysisSession.phase).toBe('normal');
   const voltage=(value:number)=>session.execute({type:'SetProperties',id:'V1',properties:{voltageV:q.store(value)}});
   act(()=>expect(voltage(1).ok).toBe(true));
-  expect(session.analysisSession.componentModel).toBe(true);
+  expect(usesComponentModel()).toBe(false);
+  // The ideal result exceeds .2 A here, but the component result is still safe.
+  act(()=>expect(voltage(3).ok).toBe(true));
+  expect(usesComponentModel()).toBe(true);
+  expect(session.analysisSession.phase).toBe('normal');
+  act(()=>expect(voltage(1).ok).toBe(true));
+  expect(usesComponentModel()).toBe(false);
   act(()=>{
     expect(voltage(5).ok).toBe(true);
     expect(voltage(6).ok).toBe(false);
@@ -100,6 +107,35 @@ it('keeps the diode model during voltage adjustment and stops further commands a
   expect(session.analysisSession.phase).toBe('overload');
   expect(session.history.present.components[0].properties.voltageV).toEqual(q.store(5));
   expect(session.canMeasure()).toBe(true);
+});
+
+it.each([false, true])('matches initial analysis when adjusting resistance (adjustable=%s)', adjustable => {
+  const doc = circuit(1000, adjustable);
+  saveLocal(doc); render('build');
+  act(() => session.changeWorkspace('analysis')); render('analysis');
+  // Cross the model boundary in both directions before entering actual overload.
+  for (const [resistance, componentModel, phase] of [
+    [1000, false, 'normal'], [21.5, false, 'normal'], [21.49999, true, 'normal'],
+    [21.5, false, 'normal'], [1000, false, 'normal'],
+    [18.50001, true, 'normal'], [18.5, true, 'normal'], [18.49999, true, 'overload'],
+  ] as const) {
+    act(() => expect(change(resistance).ok).toBe(true));
+    const fresh = analyze(circuit(resistance));
+    const current = analyze(session.history.present);
+    expect(current.result).toEqual(fresh.result);
+    expect(session.analysisSession.assessment).toEqual(fresh.assessment);
+    expect(current.result.provenance?.physicalModel).toBe(componentModel ? 'component' : 'textbook');
+    expect(session.analysisSession.phase).toBe(phase);
+    expect(current.result.componentVoltages.V1).toEqual(componentModel
+      ? q.sub(q.from(5), current.result.branchCurrents.D1) : q.from(5));
+  }
+  const last = session.history.present;
+  act(() => expect(change(1000).ok).toBe(false));
+  act(() => session.changeWorkspace('build')); render('build');
+  act(() => session.changeWorkspace('analysis')); render('analysis');
+  expect(session.history.present).toBe(last);
+  expect(session.analysisSession.assessment).toEqual(analyze(last).assessment);
+  expect(session.analysisSession.phase).toBe('overload');
 });
 
 it('locks damage and the last value synchronously, including queued edits and undo, and restores only the session',()=>{
@@ -127,7 +163,7 @@ it('locks damage and the last value synchronously, including queued edits and un
 it('freezes overload at the accepted value until reset while keeping measurements available',()=>{
   saveLocal(circuit());render('build');
   act(()=>session.changeWorkspace('analysis'));render('analysis');
-  expect(session.analysisSession.componentModel).toBe(false);
+  expect(usesComponentModel()).toBe(false);
   act(()=>change(10));expect(session.analysisSession.phase).toBe('overload');
   const frozen=session.analysisSession, last=session.history.present;
   act(()=>{
@@ -138,7 +174,7 @@ it('freezes overload at the accepted value until reset while keeping measurement
   });
   expect(session.history.present).toBe(last);expect(session.analysisSession).toBe(frozen);
   expect(session.canChangeValues()).toBe(false);expect(session.canMeasure()).toBe(true);
-  expect(session.analysisSession.componentModel).toBe(true);
+  expect(usesComponentModel()).toBe(true);
   act(()=>session.changeWorkspace('build'));render('build');
   expect(session.history.present).toBe(last);expect(session.canChangeValues()).toBe(true);
   act(()=>session.changeWorkspace('analysis'));render('analysis');
@@ -146,7 +182,7 @@ it('freezes overload at the accepted value until reset while keeping measurement
   act(()=>session.changeWorkspace('build'));render('build');
   act(()=>expect(change(1000).ok).toBe(true));
   act(()=>session.changeWorkspace('analysis'));render('analysis');
-  expect(session.analysisSession.phase).toBe('normal');expect(session.analysisSession.componentModel).toBe(false);
+  expect(session.analysisSession.phase).toBe('normal');expect(usesComponentModel()).toBe(false);
 });
 
 it('shows only a build warning, then damage decoration, a short cause and a working repair path',async()=>{

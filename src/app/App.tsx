@@ -354,7 +354,7 @@ export function App() {
         : null,
     [scaleContext],
   );
-  const evaluation = useMemo(() => analyze(doc, analysisSession.componentModel), [doc, analysisSession.componentModel]);
+  const evaluation = useMemo(() => analyze(doc), [doc]);
   const { compilation } = evaluation;
   const result = useMemo(() => stopped ? { ...failedResult([]), provenance: evaluation.result.provenance } : evaluation.result, [evaluation, stopped]);
   const assessment = mode === 'analysis' ? analysisSession.assessment : evaluation.assessment;

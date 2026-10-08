@@ -128,7 +128,6 @@ export function assessOperatingPoint(
 export interface OperatingOptions {
   referencePolicy?: SolveOptions['referencePolicy'];
   physicalModel?: 'component';
-  continuousAdjustment?: boolean;
 }
 export function analyzeOperatingCircuit(
   circuit: CompiledCircuit,
@@ -150,10 +149,11 @@ export function analyzeOperatingCircuit(
   const neededCurrents = circuit.elements.filter(
     (e) => e.type === 'diode' || e.type === 'dc-voltage-source',
   );
+  // Decide once from this input, never from the previously selected model or control range.
+  // Textbook overload requests a component solve; only that solve can confirm an event.
   const useComponent =
     options.physicalModel === 'component' ||
     circuit.elements.some((e) => e.explicitCharacteristics) ||
-    (hasDiodes && options.continuousAdjustment) ||
     textbook.status === 'error' ||
     textbook.solution === 'infeasible' ||
     neededCurrents.some((e) => !textbook.branchCurrents[e.id]) ||

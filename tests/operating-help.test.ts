@@ -29,7 +29,7 @@ const topics = (items: ReturnType<typeof resolveOperatingHelp>, id: string) =>
 
 describe('physical explanations use confirmed observations', () => {
   it('uses the adjustable source name with the existing physical explanations', () => {
-    const doc=document(1000);
+    const doc=document(20);
     Object.assign(doc.components[0].properties,{sourceKind:'adjustable',voltageMinV:q.store(0),voltageMaxV:q.store(12)});
     const items=resolveOperatingHelp({...input(doc),selectedIds:['V1']});
     const source=items.find(item=>item.componentId==='V1')!;

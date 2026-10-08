@@ -64,9 +64,8 @@ export function useCircuitSession(mode: WorkspaceMode) {
     setAnalysisSession(next);
   }
   function assess(document: CircuitDocument) {
-    const evaluation = analyze(document, operating.current.componentModel);
-    updateOperating(acceptOperatingPoint(operating.current, evaluation.assessment,
-      evaluation.result.provenance?.physicalModel === 'component'));
+    const evaluation = analyze(document);
+    updateOperating(acceptOperatingPoint(operating.current, evaluation.assessment));
   }
   function changeWorkspace(next: WorkspaceMode) {
     if (next === workspace.current && (next !== 'analysis' || operating.current.active)) return;

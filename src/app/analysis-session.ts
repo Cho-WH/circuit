@@ -3,14 +3,13 @@ import type { OperatingAssessment } from '../simulation';
 export interface AnalysisSession {
   active: boolean;
   phase: 'normal' | 'overload' | 'breaking' | 'broken';
-  componentModel: boolean;
   assessment: OperatingAssessment;
   events: Record<string, number>;
   stopEpoch: number;
 }
 
 export const freshAnalysisSession = (): AnalysisSession => ({
-  active: false, phase: 'normal', componentModel: false,
+  active: false, phase: 'normal',
   assessment: { status: 'unverified', components: [] }, events: {}, stopEpoch: 0,
 });
 
@@ -24,7 +23,6 @@ export const analysisStopped = (session: AnalysisSession) =>
 export function acceptOperatingPoint(
   previous: AnalysisSession,
   assessment: OperatingAssessment,
-  componentModel: boolean,
 ): AnalysisSession {
   if (analysisLocked(previous)) return previous;
   const events = { ...previous.events };
@@ -37,7 +35,7 @@ export function acceptOperatingPoint(
     }
   }
   return {
-    active: true, componentModel: previous.componentModel || componentModel,
+    active: true,
     phase: assessment.status === 'damage' ? 'breaking' : assessment.status === 'overload' ? 'overload' : 'normal',
     assessment, events,
     stopEpoch: previous.stopEpoch + (entered || assessment.status === 'unverified' ? 1 : 0),

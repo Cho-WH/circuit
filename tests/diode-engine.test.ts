@@ -454,15 +454,27 @@ describe('finite component models and verified boundaries (DIO-B)', () => {
     expect(boundary.result.provenance?.physicalModel).toBe('component');
     expect(boundary.assessment.status).toBe('normal');
   });
-  it('uses strict continuous and inclusive damage boundaries before rounding', () => {
-    for (const [r, expected] of [
-      [fraction(300001, 100000), 'overload'],
-      [fraction(3), 'damage'],
-      [fraction(299999, 100000), 'damage'],
-    ] as const) {
-      const input = series(r);
-      expect(assessOperatingPoint(input, component(input)).status).toBe(expected);
-    }
+  it.each([
+    [4600001, 'textbook', 'normal'],
+    [4600000, 'textbook', 'normal'],
+    [4599999, 'component', 'normal'],
+    [2600001, 'component', 'normal'],
+    [2600000, 'component', 'normal'],
+    [2599999, 'component', 'overload'],
+    [300001, 'component', 'overload'],
+    [300000, 'component', 'damage'],
+    [299999, 'component', 'damage'],
+  ] as const)('separates model selection from confirmed risk at R=%s/100000', (n, model, status) => {
+    // E=3 V, V0=.7 V, Rs+Ron=20 Ω; Imax=.05 A, Idamage=.1 A.
+    const input = series(fraction(n, 100000));
+    const evaluated = analyzeOperatingCircuit(input);
+    expect(evaluated.result.provenance?.physicalModel).toBe(model);
+    expect(evaluated.assessment.status).toBe(status);
+    expect(evaluated.assessment).toEqual(assessOperatingPoint(input, evaluated.result));
+    expect(evaluated.result.branchCurrents.D).toEqual(
+      q.div(fraction(23, 10), q.add(fraction(n, 100000), model === 'component' ? fraction(20) : q.ZERO)),
+    );
+    expect(analyzeOperatingCircuit(input)).toEqual(evaluated);
   });
   it('B11 can confirm reverse-voltage damage with exact zero heating power', () => {
     const input = series(1000, 5, true);
@@ -521,16 +533,13 @@ describe('finite component models and verified boundaries (DIO-B)', () => {
     };
     expect(component(input).branchCurrents.D1).toEqual(result.branchCurrents.D1);
   });
-  it('B13/B14 preserves textbook teaching values unless continuous adjustment requires component characteristics', () => {
+  it('B13 preserves textbook teaching values unless component characteristics are explicitly requested', () => {
     const input = series(1000, 5);
     expect(analyzeOperatingCircuit(input).result.provenance?.physicalModel).toBe('textbook');
     expect(
-      analyzeOperatingCircuit(input, { continuousAdjustment: true }).result.provenance
+      analyzeOperatingCircuit(input, { physicalModel: 'component' }).result.provenance
         ?.physicalModel,
     ).toBe('component');
-    expect(analyzeOperatingCircuit(input, { physicalModel: 'component' })).toEqual(
-      analyzeOperatingCircuit(input, { continuousAdjustment: true }),
-    );
   });
   it('B16 never confirms a boundary crossed only by arithmetic uncertainty', () => {
     const input = series(3),
