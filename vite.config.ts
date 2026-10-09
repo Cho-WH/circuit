@@ -7,7 +7,10 @@ if (!['main', 'dev'].includes(channel)) throw new Error('VITE_RELEASE_CHANNEL mu
 const publicAppUrl = `https://cho-wh.github.io/circuit/${channel === 'dev' ? 'dev/' : ''}`;
 
 export default defineConfig({
-  define: { 'import.meta.env.VITE_RELEASE_CHANNEL': JSON.stringify(channel) },
+  define: {
+    'import.meta.env.VITE_RELEASE_CHANNEL': JSON.stringify(channel),
+    'import.meta.env.VITE_BUILD_ID': JSON.stringify(new Date().toISOString()),
+  },
   base:
     process.env.GITHUB_PAGES === 'true' ? (channel === 'dev' ? '/circuit/dev/' : '/circuit/') : '/',
   plugins: [

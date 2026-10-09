@@ -2,7 +2,9 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FeedbackBoard } from '../src/app/FeedbackBoard';
+import FeedbackEntry, { FeedbackBoard } from '../src/app/FeedbackBoard';
+import { FeedbackFeature } from '../src/app/FeedbackFeature';
+import * as firebase from '../src/feedback-firebase';
 import { FeedbackAdminPage } from '../src/app/FeedbackAdminPage';
 import type { FeedbackAdminGateway, FeedbackGateway, FeedbackPost } from '../src/feedback';
 
@@ -15,7 +17,7 @@ beforeEach(() => {
   HTMLDialogElement.prototype.close = function () { this.open = false; };
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
-afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
+afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 function gateway(): FeedbackGateway {
   return { update: vi.fn<FeedbackGateway['update']>(async ({draft}) => ({ ok: true, value: { ...post, ...draft } })), list: vi.fn<FeedbackGateway['list']>(async () => ({ ok: true, value: { posts: [post], nextCursor: null } })), create: vi.fn<FeedbackGateway['create']>(async draft => ({ ok: true, value: { ...post, ...draft } })), remove: vi.fn<FeedbackGateway['remove']>(async () => ({ ok: true, value: undefined })) };
 }
@@ -40,6 +42,18 @@ async function compose() {
 async function submit(selector: string) { await act(async () => { host.querySelector(selector)!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); }
 
 describe('DAT-005: feedback board interaction', () => {
+  it('contains Firebase initializer errors and initializes again on retry', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const initialize = vi.spyOn(firebase, 'createFirebaseFeedbackGateway').mockImplementation(() => {
+      throw Object.assign(new Error('private SDK detail'), { name: 'FirebaseError', code: 'auth/invalid-api-key' });
+    });
+    await act(async () => root.render(createElement(FeedbackFeature, { load: async () => ({ default: FeedbackEntry }), onClose: vi.fn() })));
+    expect(JSON.parse(host.querySelector<HTMLTextAreaElement>('[aria-label="한마디 오류 정보"]')!.value))
+      .toMatchObject({ stage: 'initialize', code: 'auth/invalid-api-key' });
+    initialize.mockReturnValue(gateway()); await click(button('다시 시도'));
+    expect(host.querySelector('dialog')!.open).toBe(true);
+    expect(host.textContent).toContain(post.content);
+  });
   it('hides management controls for posts owned by another browser', async () => {
     const port = gateway();
     port.list = vi.fn<FeedbackGateway['list']>(async () => ({ ok: true, value: { posts: [{ ...post, canManage: false }], nextCursor: null } }));
@@ -87,6 +101,16 @@ describe('DAT-005: feedback board interaction', () => {
     await click(button('한마디 남기기'));
     expect(host.querySelector<HTMLTextAreaElement>('textarea')!.value).toBe('');
     expect(port.update).toHaveBeenCalledTimes(1);
+  });
+  it('keeps a failed new draft and does not automatically submit it again', async () => {
+    const port = gateway(); port.create = vi.fn(async () => ({ ok: false as const, code: 'UNAVAILABLE' as const }));
+    await render(port); await compose(); await submit('#feedback-compose');
+    expect(host.querySelector<HTMLTextAreaElement>('#feedback-content')!.value).toContain('좋았어요');
+    const diagnostic = host.querySelector<HTMLTextAreaElement>('[aria-label="한마디 오류 정보"]')!.value;
+    expect(JSON.parse(diagnostic)).toMatchObject({ stage: 'create', code: 'UNAVAILABLE' });
+    expect(diagnostic).not.toContain('좋았어요');
+    await click(button('새로고침'));
+    expect(port.create).toHaveBeenCalledTimes(1);
   });
   it('starts with readable review bodies, no quota count and no administrator control', async () => {
     await render(gateway());
@@ -155,8 +179,19 @@ describe('DAT-005: feedback board interaction', () => {
     await render(port);
     expect(host.textContent).toContain('다시 시도');
     expect(host.textContent).not.toContain('첫 이야기를 기다리고');
+    expect(JSON.parse(host.querySelector<HTMLTextAreaElement>('[aria-label="한마디 오류 정보"]')!.value)).toMatchObject({ stage: 'list', code: 'UNAVAILABLE' });
     port.list = vi.fn<FeedbackGateway['list']>(async () => ({ ok: true, value: { posts: [post], nextCursor: null } }));
     await click(button('다시 시도'));
     expect(host.textContent).toContain(post.content);
+  });
+  it('retries the failed first page after refresh instead of skipping to the old next cursor', async () => {
+    const port = gateway();
+    port.list = vi.fn<FeedbackGateway['list']>()
+      .mockResolvedValueOnce({ ok: true, value: { posts: [post], nextCursor: 'next-page' } })
+      .mockResolvedValueOnce({ ok: false, code: 'UNAVAILABLE' })
+      .mockResolvedValueOnce({ ok: true, value: { posts: [post], nextCursor: null } });
+    await render(port); await click(button('새로고침')); await click(button('다시 시도'));
+    expect(port.list).toHaveBeenLastCalledWith({ scope: 'public', cursor: undefined });
+    expect(host.querySelectorAll('article')).toHaveLength(1);
   });
 });
