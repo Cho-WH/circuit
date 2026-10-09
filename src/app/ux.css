@@ -210,6 +210,11 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
 .help-dialog h2{font-size:22px}.help-dialog ol,.help-dialog>p{font-size:13px;color:var(--muted)}
 .feedback-loading-dialog{position:relative;width:min(680px,100%);height:420px;padding:40px;background:#fcfbf8;border:1px solid var(--line);border-radius:16px;color:var(--ink);animation:surface-enter 200ms var(--ease-out)}
 .feedback-loading-dialog h2{font-size:27px;margin:14px 0 40px}.loading-lines{display:grid;gap:14px}.loading-lines i{height:12px;background:#e7e7df;border-radius:2px;animation:quiet-pulse 1.5s ease-in-out infinite}.loading-lines i:nth-child(2){width:84%}.loading-lines i:nth-child(3){width:56%}
+.feedback-failure-dialog{height:auto;max-height:calc(100dvh - 32px);overflow:auto;padding:28px;width:min(560px,100%)}
+.feedback-failure-dialog h2{margin:12px 0 18px}.feedback-failure-dialog p,.error-details p{font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.feedback-failure-actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}.feedback-failure-actions button,.error-details button{min-height:40px;padding:8px 14px;border:1px solid var(--line);border-radius:7px}
+.error-details{margin-top:16px;text-align:left;font-size:13px}.error-details summary{cursor:pointer;padding:8px 0}.error-details textarea{display:block;width:100%;height:170px;resize:vertical;margin:8px 0;font:12px/1.5 monospace;white-space:pre;overflow:auto}
+.screen-failure{max-width:640px;margin:40px auto;padding:24px;font-family:system-ui,sans-serif;line-height:1.7;overflow-wrap:anywhere}.screen-failure h1{font-size:22px;line-height:1.4;margin:0 0 16px}.screen-failure>p{margin:12px 0}.screen-failure>button{margin-top:8px;min-height:40px}
 @keyframes working{to{transform:rotate(360deg)}}
 @keyframes panel-enter{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
 @keyframes surface-enter{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}

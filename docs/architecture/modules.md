@@ -180,6 +180,8 @@ component-library.adjustableParameter는 부품의 조절 속성·범위·단위
 
 ### 구현 내부 경계
 
+전체 화면 갱신의 예상 밖 예외는 app에서 `calculation`(연결 구성·회로 계산·진단), `preparation`(측정·표시 모델 준비), `render`(그 밖의 화면 준비·표시) 세 단계로 구분한다. `runScreenStage`는 동기 작업의 최초 실패 단계를 보존하며 계산값을 대신 만들지 않는다. React 렌더·효과에서 전파된 예외는 최상위 `ErrorBoundary`가 단계 안내와 새로고침, 오류 정보 복사를 제공한다. 복사 정보는 단계·허용된 예외 종류·버전·채널·빌드 식별자로 제한하며 원문·스택·회로·작성 글을 넣거나 자동 전송하지 않는다. 이벤트 핸들러·비동기 작업은 이 경계의 포착 대상이 아니며, 정상적인 회로 진단과 저장·한마디·3D의 기존 개별 실패 처리는 유지한다. 분류와 격리는 `tests/screen-failure.test.ts`에서 검증한다.
+
 `app/operating-help`는 확정된 분석 결과·공개 질의에서 설명 후보를 고르는 순수 함수, 학생용 문구, 화면 충돌 배치, 공통 HTML UI를 분리한다. `CircuitCanvas`와 `Potential3D`의 선택적 `onComponentLabelLayout`은 `visualization.ComponentLabelLayout`(뷰포트 픽셀 기준 bounds·부품 라벨·장애물 사각형)만 전달한다. 3D는 기존 render 투영을 재사용하고 `onViewInteraction`으로 카메라 이동 시작을 알린다. app는 열림 상태를 소유하며 `FloatingPanel`의 선택적 controlled open과 기존 포털·키보드 처리를 재사용한다. 계산 모델·위험 판정·파손 효과 SVG와 설명 문구는 독립적으로 수정할 수 있다. [ADR-026](../../decisions/ADR-026-diode-boundary-analysis.md), [설명 계약](../ux/operating-help.md).
 
 `rational/conversion`은 단위 없는 10진 토큰 해석과 화면용 binary64 변환을 소유하고, quantity는 이를 재사용해 분수·SI 단위 문법과 표시를 처리한다. domain에는 최소 타입과 저장 정규형 검증만 둔다. `visualization/potential`은 정확 전위와 표시 좌표·축 단위 변환을 함께 관리한다. 2D 범례와 3D 눈금은 같은 공개 변환 함수를 사용하고, 숫자 표시는 정확 전위를 사용한다. 3D 높이 맞춤과 장면 경계는 같은 눈금 계산을 재사용한다.

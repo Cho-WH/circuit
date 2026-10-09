@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { assertFails, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, writeBatch, type Firestore } from 'firebase/firestore';
+import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, where, writeBatch, type Firestore } from 'firebase/firestore';
 import { createFirestoreAdminGateway, createFirestoreFeedbackGateway } from '../src/feedback-firebase';
 import type { FeedbackDraft } from '../src/feedback';
 
@@ -63,8 +63,8 @@ describe.skipIf(!enabled)('DAT-005: real Firestore rules and adapter (isolated d
   it('denies guest access, private cross-user reads, broad source queries and arbitrary writes', async () => {
     const post = await created('alice', 'private');
     const guest = env.unauthenticatedContext().firestore() as unknown as Firestore;
-    await assertFails(getDocs(collection(guest, 'feedbackPublic')));
-    await assertFails(getDocs(collection(userDb('bob'), 'feedbackPosts')));
+    await assertFails(getDocs(query(collection(guest, 'feedbackPublic'), limit(20))));
+    await assertFails(getDocs(query(collection(userDb('bob'), 'feedbackPosts'), limit(26))));
     await assertFails(getDoc(doc(userDb('bob'), 'feedbackPosts', post.id)));
     await assertFails(updateDoc(doc(userDb('bob'), 'feedbackPosts', post.id), { content: 'stolen', updatedAt: serverTimestamp() }));
     await assertFails(deleteDoc(doc(userDb('bob'), 'feedbackPosts', post.id)));
@@ -82,6 +82,20 @@ describe.skipIf(!enabled)('DAT-005: real Firestore rules and adapter (isolated d
     if (successes[0].ok) await port.remove({ id: successes[0].value.id });
     expect(await port.create(draft)).toEqual({ ok: false, code: 'DAILY_LIMIT' });
   }, 30_000);
+  it.each([
+    ['public', 20], ['mine', 26], ['admin', 100],
+  ] as const)('bounds %s list requests without changing document access', async (scope, maximum) => {
+    const post = await created();
+    const db = scope === 'admin' ? adminDb() : userDb('alice');
+    const collectionName = scope === 'public' ? 'feedbackPublic' : 'feedbackPosts';
+    const source = collection(db, collectionName);
+    const filters = scope === 'mine' ? [where('authorUid', '==', 'alice'), where('deletedAt', '==', null)] : [];
+    const page = await assertSucceeds(getDocs(query(source, ...filters, limit(maximum))));
+    expect(page.docs.map(item => item.id)).toEqual([post.id]);
+    await assertFails(getDocs(query(source, ...filters)));
+    await assertFails(getDocs(query(source, ...filters, limit(maximum + 1))));
+    await assertSucceeds(getDoc(doc(db, collectionName, post.id)));
+  });
   it.each([
     { authorUid: 'bob' }, { nickname: '' }, { nickname: 'x'.repeat(21) }, { content: 'x'.repeat(2001) },
     { content: 17 }, { kind: 'admin' }, { visibility: 'unknown' }, { extraData: true },

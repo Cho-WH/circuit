@@ -4,6 +4,8 @@ import { feedbackLimits, type FeedbackDraft, type FeedbackError, type FeedbackGa
 import { createFirebaseFeedbackGateway } from '../feedback-firebase';
 import './feedback.css';
 import { FeedbackIdentityNotice } from './FeedbackIdentityNotice';
+import { FeedbackErrorDetails } from './FeedbackErrorDetails';
+import { feedbackFailure, FeedbackInitializationError, type FeedbackFailure } from './feedback-failure';
 
 const labels: Record<FeedbackKind, string> = { review: '사용 후기', idea: '개선 제안', issue: '오류 제보' };
 const errors: Record<FeedbackError, string> = {
@@ -34,15 +36,19 @@ export function FeedbackBoard({ gateway, onClose }: { gateway: FeedbackGateway; 
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [loadFailure, setLoadFailure] = useState<FeedbackFailure | null>(null);
   const [notice, setNotice] = useState('');
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [formError, setFormError] = useState('');
+  const [formFailure, setFormFailure] = useState<FeedbackFailure | null>(null);
   const [busy, setBusy] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
+  const [deleteFailure, setDeleteFailure] = useState<FeedbackFailure | null>(null);
   const request = useRef(0);
+  const lastLoad = useRef<{ scope: View; cursor?: string }>({ scope: 'public' });
   const mutation = useRef(false);
   const restoreComposeFocus = useRef(false);
   const composeButton = useRef<HTMLButtonElement>(null);
@@ -73,16 +79,17 @@ export function FeedbackBoard({ gateway, onClose }: { gateway: FeedbackGateway; 
   }, [busy, formError, deleteError]);
 
   const load = useCallback(async (target: View, next?: string) => {
+    lastLoad.current = { scope: target, cursor: next };
     const id = ++request.current;
-    setLoading(true); setLoadError('');
+    setLoading(true); setLoadError(''); setLoadFailure(null);
     try {
       const result = await gateway.list({ scope: target, cursor: next });
       if (id !== request.current) return;
-      if (!result.ok) { setLoadError(errors[result.code]); return; }
+      if (!result.ok) { setLoadError(errors[result.code]); setLoadFailure(feedbackFailure('list', result)); return; }
       const data = result.value;
       setPosts(previous => next ? [...previous, ...data.posts.filter(post => !previous.some(item => item.id === post.id))] : data.posts);
       setCursor(data.nextCursor);
-    } catch { if (id === request.current) setLoadError(errors.UNAVAILABLE); }
+    } catch (error) { if (id === request.current) { setLoadError(errors.UNAVAILABLE); setLoadFailure(feedbackFailure('list', error)); } }
     finally { if (id === request.current) setLoading(false); }
   }, [gateway]);
   useEffect(() => { setPosts([]); setCursor(null); setDeleteId(null); void load(view); }, [view, load]);
@@ -90,29 +97,29 @@ export function FeedbackBoard({ gateway, onClose }: { gateway: FeedbackGateway; 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (mutation.current) return;
-    mutation.current = true; setBusy(true); setFormError(''); setNotice('');
+    mutation.current = true; setBusy(true); setFormError(''); setFormFailure(null); setNotice('');
     try {
       const result = editId ? await gateway.update({ id: editId, draft }) : await gateway.create(draft);
-      if (!result.ok) { setFormError(errors[result.code]); return; }
+      if (!result.ok) { setFormError(errors[result.code]); setFormFailure(feedbackFailure(editId ? 'update' : 'create', result)); return; }
       setDraft(emptyDraft()); setWriting(false); setEditId(null);
       setNotice(editId ? '글을 수정했어요.' : draft.visibility === 'private' ? '비공개로 남겼어요. 내가 쓴 글에서 확인할 수 있어요.' : '한마디를 남겼어요. 고맙습니다!');
       const target = draft.visibility === 'private' ? 'mine' : editId ? view : 'public';
       if (view !== target) setView(target); else await load(target);
       restoreComposeFocus.current = true;
-    } catch { setFormError(errors.UNAVAILABLE); }
+    } catch (error) { setFormError(errors.UNAVAILABLE); setFormFailure(feedbackFailure(editId ? 'update' : 'create', error)); }
     finally { mutation.current = false; setBusy(false); }
   }
   async function remove(event: FormEvent) {
     event.preventDefault();
     if (!deleteId || mutation.current) return;
-    mutation.current = true; setBusy(true); setDeleteError(''); setNotice('');
+    mutation.current = true; setBusy(true); setDeleteError(''); setDeleteFailure(null); setNotice('');
     try {
       const result = await gateway.remove({ id: deleteId });
-      if (!result.ok) { setDeleteError(errors[result.code]); return; }
+      if (!result.ok) { setDeleteError(errors[result.code]); setDeleteFailure(feedbackFailure('remove', result)); return; }
       setDeleteId(null); if (editId === deleteId) { setEditId(null); setWriting(false); setDraft(emptyDraft()); } setNotice('글을 삭제했어요. 관리자 보관함에는 기록이 남습니다.');
       await load(view);
       restoreComposeFocus.current = true;
-    } catch { setDeleteError(errors.UNAVAILABLE); }
+    } catch (error) { setDeleteError(errors.UNAVAILABLE); setDeleteFailure(feedbackFailure('remove', error)); }
     finally { mutation.current = false; setBusy(false); }
   }
   function changeView(next: View) { setView(next); cancelWriting(); setNotice(''); }
@@ -135,17 +142,20 @@ export function FeedbackBoard({ gateway, onClose }: { gateway: FeedbackGateway; 
           <div className="feedback-fields feedback-fields-single"><label>닉네임<input ref={nicknameInput} required maxLength={feedbackLimits.nickname} value={draft.nickname} disabled={busy} placeholder="자유롭게 지어 주세요" autoComplete="off" onChange={event => setDraft({ ...draft, nickname: event.target.value })}/></label></div>
           <fieldset className="feedback-visibility" disabled={busy}><legend>공개 범위</legend><label><input type="radio" name="feedback-visibility" checked={draft.visibility === 'public'} onChange={() => setDraft({ ...draft, visibility: 'public' })}/><span><Globe2 size={15}/> 공개<small>다른 선생님과 함께 읽어요</small></span></label><label><input type="radio" name="feedback-visibility" checked={draft.visibility === 'private'} onChange={() => setDraft({ ...draft, visibility: 'private' })}/><span><LockKeyhole size={15}/> 비공개<small>작성자와 관리자만 읽어요</small></span></label></fieldset>
           {formError && <p ref={formErrorElement} tabIndex={-1} className="feedback-error" role="alert">{formError}</p>}
+          {formError && formFailure && <FeedbackErrorDetails failure={formFailure}/>}
           <div className="feedback-submit-row"><span>삭제 후에도 관리자에게는 기록이 남아요.</span><button type="submit" className="feedback-primary" disabled={busy}>{busy ? '저장 중…' : editId ? '수정 저장' : '글 남기기'}<ArrowUpRight size={16}/></button></div>
         </form>}
         <p className="feedback-notice" role="status">{notice && <><Check size={15}/>{notice}</>}</p>
         <nav className="feedback-tabs" aria-label="게시글 보기"><button type="button" aria-pressed={view === 'public'} onClick={() => changeView('public')} disabled={busy}>모든 이야기</button><button type="button" aria-pressed={view === 'mine'} onClick={() => changeView('mine')} disabled={busy}>내가 쓴 글</button><button type="button" className="feedback-refresh" onClick={() => void load(view)} disabled={busy || loading}>새로고침</button></nav>
         {view === 'mine' && <p className="feedback-view-note">이 브라우저에서 남긴 공개·비공개 글이에요.</p>}
-        {loadError && <div className="feedback-load-error" role="alert"><p>{loadError}</p><button type="button" onClick={() => void load(view, cursor ?? undefined)}>다시 시도</button></div>}
+        {loadError && <div className="feedback-load-error" role="alert"><p>{loadError}</p><button type="button" onClick={() => void load(lastLoad.current.scope, lastLoad.current.cursor)}>다시 시도</button></div>}
+        {loadError && loadFailure && <FeedbackErrorDetails failure={loadFailure}/>}
         {!loading && !loadError && posts.length === 0 && <div className="feedback-empty"><MessageCircle size={27} strokeWidth={1.3}/><h2>{view === 'mine' ? '아직 남긴 이야기가 없어요' : '첫 이야기를 기다리고 있어요'}</h2><p>수업에 도움이 된 점, 있으면 좋을 기능.<br/>편하게 한마디 남겨 주세요.</p></div>}
         <div className="feedback-posts" aria-busy={loading}>{posts.map(post => <article key={post.id} className="feedback-post">
           <div className={`feedback-avatar feedback-avatar-${post.kind}`} aria-hidden="true">{Array.from(post.nickname)[0]}</div><div className="feedback-post-main"><div className="feedback-post-heading"><strong>{post.nickname}</strong><span className={`feedback-kind feedback-kind-${post.kind}`}>{labels[post.kind]}</span>{post.visibility === 'private' && <span className="feedback-private"><LockKeyhole size={12}/> 비공개</span>}</div>
           <PostBody content={post.content}/><div className="feedback-post-footer"><span><time dateTime={post.createdAt}>{dateLabel(post.createdAt)}</time>{post.updatedAt && <span className="feedback-edited" title={dateLabel(post.updatedAt)}> · 수정됨</span>}</span>{post.canManage && <span className="feedback-post-actions"><button type="button" disabled={busy} aria-label={`${post.nickname}의 글 수정`} onClick={() => edit(post)}>수정</button><button type="button" disabled={busy} aria-label={`${post.nickname}의 글 삭제`} onClick={() => { setDeleteId(deleteId === post.id ? null : post.id); setDeleteError(''); }}>삭제</button></span>}</div>
           {deleteId === post.id && <form className="feedback-delete-form" onSubmit={event => void remove(event)}><strong>이 글을 삭제할까요?</strong><p>게시판에서 삭제되며, 관리자에게는 원문이 남아요.</p>{deleteError && <p ref={deleteErrorElement} tabIndex={-1} className="feedback-error" role="alert">{deleteError}</p>}<div><button type="button" disabled={busy} onClick={() => { setDeleteId(null); }}>취소</button><button type="submit" className="feedback-delete-button" disabled={busy}><Trash2 size={14}/>{busy ? '삭제 중…' : '삭제하기'}</button></div></form>}
+          {deleteId === post.id && deleteError && deleteFailure && <FeedbackErrorDetails failure={deleteFailure}/>}
           </div>
         </article>)}</div>
         {loading && <p className="feedback-loading" role="status">이야기를 불러오는 중…</p>}
@@ -171,6 +181,9 @@ function PostBody({ content }: { content: string }) {
 }
 
 export default function FeedbackFeature({ onClose }: { onClose: () => void }) {
-  const [gateway] = useState(createFirebaseFeedbackGateway);
+  const [gateway] = useState(() => {
+    try { return createFirebaseFeedbackGateway(); }
+    catch (error) { throw new FeedbackInitializationError(error); }
+  });
   return <FeedbackBoard gateway={gateway} onClose={onClose}/>;
 }

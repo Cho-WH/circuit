@@ -19,7 +19,7 @@ import {
   type MeasurementTool,
 } from './measurement-tools';
 import { probeCurrent, probeVoltage } from '../measurement';
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Zap,
   MousePointer2,
@@ -78,6 +78,7 @@ import { RecoveryDialog } from './RecoveryDialog';
 import { useCircuitSession, type WorkspaceMode } from './useCircuitSession';
 import { examples } from '../fixtures';
 import { analyze } from './analyze';
+import { runScreenStage } from './screen-failure';
 import { failedResult } from '../simulation';
 import { analysisLocked, analysisStopped } from './analysis-session';
 import { operatingReason } from './operating-text';
@@ -111,7 +112,7 @@ import { QuickStartDialog } from './QuickStartDialog';
 import { ControlHintDialog } from './ControlHintDialog';
 import { useQuickStart } from './useQuickStart';
 import { FileMenu } from './FileMenu';
-import { FeedbackLoading } from './FeedbackLoading';
+import { FeedbackFeature } from './FeedbackFeature';
 import { PotentialWorkspace, type PotentialWorkspaceStatus } from './PotentialWorkspace';
 import type { ComponentLabelLayout } from '../visualization';
 import { resolveOperatingHelp, measuredHelpComponents, OperatingHelp, OperatingHelpOverlay, type OperatingHelpOverlayHandle } from './operating-help';
@@ -124,7 +125,6 @@ import './ux.css';
 import './quick-start.css';
 import './mobile.css';
 import './operating.css';
-const FeedbackFeature = lazy(() => import('./FeedbackBoard'));
 const noSelection: string[] = [];
 
 function GroundIcon({ size = 18 }: { size?: number }) {
@@ -257,15 +257,17 @@ export function App() {
   const [storedMeasurementAnchors, setMeasurementAnchors] = useState<
     Record<MeasurementTool, MeasurementAnchor | null>
   >({ red: null, black: null, current: null });
-  const measurementAnchors: Record<MeasurementTool, MeasurementAnchor | null> = {
+  const measurementAnchors = runScreenStage('preparation', (): Record<MeasurementTool, MeasurementAnchor | null> => ({
     red: anchorPose(doc, storedMeasurementAnchors.red) ? storedMeasurementAnchors.red : null,
     black: anchorPose(doc, storedMeasurementAnchors.black) ? storedMeasurementAnchors.black : null,
     current: anchorPose(doc, storedMeasurementAnchors.current)
       ? storedMeasurementAnchors.current
       : null,
-  };
-  const redProbe = anchorEndpoint(doc, measurementAnchors.red)?.id ?? '',
-    blackProbe = anchorEndpoint(doc, measurementAnchors.black)?.id ?? '';
+  }));
+  const [redProbe, blackProbe] = runScreenStage('preparation', () => [
+    anchorEndpoint(doc, measurementAnchors.red)?.id ?? '',
+    anchorEndpoint(doc, measurementAnchors.black)?.id ?? '',
+  ]);
   const [activeProbe, setActiveProbe] = useState<'red' | 'black'>('red');
   const [measurementKind, setMeasurementKind] = useState<MeasurementKind | null>(null);
   const [mobileMeasuring, setMobileMeasuring] = useState(false);
@@ -350,7 +352,7 @@ export function App() {
   const comparisonBaseline = useMemo(
     () =>
       scaleContext && comparisonComponent && comparisonParameter
-        ? parameterScales(doc, comparisonComponent.id, comparisonParameter)
+        ? runScreenStage('preparation', () => parameterScales(doc, comparisonComponent.id, comparisonParameter))
         : null,
     [scaleContext],
   );
@@ -373,20 +375,20 @@ export function App() {
   }, [mode, assessment, analysisSession.phase, analysisSession.events]);
   const voltageReading = useMemo(
     () =>
-      probeVoltage(
+      runScreenStage('preparation', () => probeVoltage(
         compilation,
         result,
         anchorEndpoint(doc, measurementAnchors.red),
         anchorEndpoint(doc, measurementAnchors.black),
-      ),
+      )),
     [doc, compilation, result, redProbe, blackProbe],
   );
-  const voltageLabel = formatQuantity(
+  const voltageLabel = runScreenStage('preparation', () => formatQuantity(
     voltageReading.ok ? voltageReading.value.voltageV : undefined,
     'V',
     { ...quantityFormatForTargets(doc, [redProbe, blackProbe]), modelApproximation: result.provenance?.physicalModel === 'component' },
-  );
-  const voltageMeasurement = useMemo<VoltageMeasurement | undefined>(() => {
+  ));
+  const voltageMeasurement = useMemo<VoltageMeasurement | undefined>(() => runScreenStage('preparation', () => {
     if (mode !== 'analysis' || stopped || measurementKind !== 'voltage') return undefined;
     const probe = (anchor: MeasurementAnchor | null) => {
       const pose = anchorPose(doc, anchor),
@@ -396,10 +398,10 @@ export function App() {
     const red = probe(measurementAnchors.red),
       black = probe(measurementAnchors.black);
     return { red, black, label: voltageReading.ok ? voltageLabel : null };
-  }, [doc, storedMeasurementAnchors, voltageReading, voltageLabel, measurementKind, mode, stopped]);
+  }), [doc, storedMeasurementAnchors, voltageReading, voltageLabel, measurementKind, mode, stopped]);
 
   const currents = useMemo(
-    () => buildCurrentModel(doc, compilation, result),
+    () => runScreenStage('preparation', () => buildCurrentModel(doc, compilation, result)),
     [doc, compilation, result],
   );
   const controlledSwitch = doc.components.find(c => selected.length === 1 && c.id === selected[0] && c.type === 'switch');
@@ -408,7 +410,7 @@ export function App() {
   let comparisonScales = comparisonBaseline;
   if (scaleContext && comparisonBaseline && doc.components.some(c => c.type === 'diode')) {
     const previous = heldScales.current?.context === scaleContext ? heldScales.current.scales : comparisonBaseline;
-    comparisonScales = includeCurrentScales(previous, compilation, result, currents.maxMagnitude);
+    comparisonScales = runScreenStage('preparation', () => includeCurrentScales(previous, compilation, result, currents.maxMagnitude));
     heldScales.current = { context: scaleContext, scales: comparisonScales };
   } else heldScales.current = null;
   const {
@@ -418,20 +420,20 @@ export function App() {
   } = useCurrentDisplay(currents, comparisonScales?.current, adjustingParameters.size > 0);
   const potential = useMemo(
     () =>
-      buildPotentialModel(doc, compilation.circuit, result, {
+      runScreenStage('preparation', () => buildPotentialModel(doc, compilation.circuit, result, {
         palette: potentialPalette,
         ...(fixedRange
           ? { range: { min: rangeMin, max: rangeMax } }
           : comparisonScales
             ? { range: comparisonScales.voltage }
             : {}),
-      }),
+      })),
     [doc, compilation, result, potentialPalette, fixedRange, rangeMin, rangeMax, comparisonScales],
   );
-  const paths = useMemo(() => suggestPaths(compilation.circuit), [compilation]);
-  const path = customPathIds.length
+  const paths = useMemo(() => runScreenStage('preparation', () => suggestPaths(compilation.circuit)), [compilation]);
+  const path = runScreenStage('preparation', () => customPathIds.length
     ? makePath(compilation.circuit, customPathIds)
-    : (paths[activePath] ?? paths[0] ?? null);
+    : (paths[activePath] ?? paths[0] ?? null));
   const component = doc.components.find((c) => c.id === selected[0]);
   const definition = component ? componentDefinition(component) : null;
   function newId(prefix: string) {
@@ -606,9 +608,9 @@ export function App() {
     setSelection([c.id]);
     cancelTool();
   }
-  const currentAnchor = anchorPose(doc, measurementAnchors.current)
+  const currentAnchor = runScreenStage('preparation', () => anchorPose(doc, measurementAnchors.current)
     ? measurementAnchors.current
-    : null;
+    : null);
   const currentTarget =
     currentAnchor && currentAnchor.kind !== 'endpoint'
       ? { kind: currentAnchor.kind, id: currentAnchor.id }
@@ -626,7 +628,7 @@ export function App() {
     if (openHelp && (!openedHelpItem || (openHelp.startsWith('detail:') && openHelp !== `detail:${selectedHelp?.key}`))) setOpenHelp(null);
   }, [openHelp, openedHelpItem, selectedHelp]);
   const currentReading = useMemo(
-    () => probeCurrent(doc, compilation, result, currentTarget),
+    () => runScreenStage('preparation', () => probeCurrent(doc, compilation, result, currentTarget)),
     [doc, compilation, result, currentAnchor],
   );
   function placeMeasurement(which: MeasurementTool, anchor: MeasurementAnchor | null) {
@@ -1078,11 +1080,7 @@ export function App() {
           onChange={(e) => void openFile(e.target.files?.[0])}
         />
       </header>
-      {feedbackOpen && (
-        <Suspense fallback={<FeedbackLoading onClose={() => setFeedbackOpen(false)} />}>
-          <FeedbackFeature onClose={() => setFeedbackOpen(false)} />
-        </Suspense>
-      )}
+      {feedbackOpen && <FeedbackFeature onClose={() => setFeedbackOpen(false)} />}
       {!compact && modeNavigation}
       <div className="workspace">
         <aside className="library-panel" hidden={mode === 'worksheet'}>
