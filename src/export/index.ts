@@ -4,6 +4,7 @@ import {
   arrowGeometry,
   circuitTextScale,
   componentNotationLayout,
+  componentSymbolBody,
   componentValueFontSize,
   svgNotation,
   notationWidth,
@@ -27,6 +28,7 @@ import {
   type CircuitDocument,
   type ComponentInstance,
   type SimulationResult,
+  type Point,
 } from '../domain';
 
 
@@ -59,6 +61,36 @@ interface Bounds {
   y: number;
   width: number;
   height: number;
+}
+
+export type OutputPart = 'body' | 'label' | 'value' | 'voltage' | 'current' | 'annotation';
+export type OutputRef = Readonly<{ id: string; part: OutputPart }>;
+export interface OutputLayoutItem {
+  ref: OutputRef;
+  kind: 'symbol' | 'text' | 'blank' | 'arrow' | 'point-note' | 'note';
+  movable: boolean;
+  bounds: Readonly<Bounds>;
+  referencePoint?: Readonly<Point>;
+  symbolBody?: ReturnType<typeof componentSymbolBody>;
+  baselineY?: number;
+  path?: readonly Point[];
+  movesWith?: OutputRef;
+}
+export interface OutputLayout {
+  items: readonly OutputLayoutItem[];
+  wireSegments: readonly { wireId: string; segmentIndex: number; start: Point; end: Point }[];
+}
+
+/** Same placements and notation metrics as the renderer; never DOM/crop bounds. */
+function textBounds(text: string, x: number, y: number, anchor: string, size: number, blank: boolean, scale: number): Bounds {
+  const metrics = notationMetrics(text, size);
+  const width = blank ? 56 * scale : metrics.width;
+  return { x: x - (anchor === 'middle' ? width / 2 : 0), y: y - (blank ? 18 * scale : metrics.ascent),
+    width, height: blank ? 24 * scale : metrics.ascent + metrics.descent };
+}
+function enclosingPoints(points: readonly Point[], padding = 0): Bounds {
+  const x = Math.min(...points.map(p => p.x)) - padding, y = Math.min(...points.map(p => p.y)) - padding;
+  return { x, y, width: Math.max(...points.map(p => p.x)) + padding - x, height: Math.max(...points.map(p => p.y)) + padding - y };
 }
 
 interface TextPlacement {
@@ -264,7 +296,7 @@ export function createSvgExport(
   input: CircuitDocument,
   requestedOptions: ExportOptions = {},
   result?: SimulationResult,
-): { svg: string; content: string; bounds: Bounds; options: NormalizedExportOptions } {
+): { svg: string; content: string; bounds: Bounds; options: NormalizedExportOptions; layout: OutputLayout } {
   const checked = validateDocument(input);
   if (!checked.ok) throw new DocumentError(checked.diagnostics);
   const document = checked.document;
@@ -273,6 +305,8 @@ export function createSvgExport(
   const colors = exportColors(options.monochrome);
   const symbolFill = options.background === 'white' ? '#ffffff' : 'none';
   const chunks: string[] = [];
+  const items: OutputLayoutItem[] = [];
+  const wireSegments: OutputLayout['wireSegments'][number][] = [];
   const fontDefinition = `<defs><style>${mathFontFace}</style></defs>`;
   const scale = circuitTextScale*(options.circuitOnly ? 1 : document.output?.fontScale ?? 1);
 
@@ -285,12 +319,18 @@ export function createSvgExport(
 
   const crossings=wireCrossings(document);
   for (const wire of document.wires) {
+    const points = wirePoints(document, wire);
+    points.slice(1).forEach((end, index) => wireSegments.push({ wireId: wire.id, segmentIndex: index, start: points[index], end }));
     chunks.push(`<path d="${wirePath(document, wire, crossings)}" data-export-wire="${escapeXml(wire.id)}" fill="none" stroke="${colors.ink}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`);
   }
 
   for (const component of document.components) {
+    items.push({ ref: { id: component.id, part: 'body' }, kind: 'symbol', movable: false,
+      referencePoint: component.position, bounds: { ...component.position, width: 0, height: 0 }, symbolBody: componentSymbolBody(component) });
     chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="body" transform="translate(${numberAttribute(component.position.x)} ${numberAttribute(component.position.y)}) rotate(${component.rotation})" stroke="${colors.ink}" fill="${symbolFill}" stroke-width="2.5" color="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">${symbolMarkup(component, { showSymbolPolarity: options.showSymbolPolarity })}</g>`);
     for (const placement of componentTextPlacements(component, options.circuitOnly, result, scale, options.quantityFormat)) {
+      items.push({ ref: { id: component.id, part: placement.tone }, kind: placement.blank ? 'blank' : 'text', movable: !options.circuitOnly,
+        bounds: textBounds(placement.text, placement.x, placement.y, placement.anchor, placement.fontSize ?? 15 * scale, !!placement.blank, scale), baselineY: placement.y });
       chunks.push(`<g data-output-id="${xmlText(component.id)}" data-output-part="${placement.tone}">${renderText(placement, colors, scale)}</g>`);
     }
   }
@@ -302,14 +342,24 @@ export function createSvgExport(
 
   for (const placement of (options.circuitOnly ? [] : annotationPlacements(document))) {
     const {annotation:a,x,y,text}=placement;
+    const ref: OutputRef = { id: a.id, part: 'annotation' };
+    const labels = annotationTextPlacements(placement, scale);
+    if (a.kind === 'arrow') {
+      const geometry = arrowGeometry(a, { x, y });
+      items.push({ ref, kind: 'arrow', movable: true, bounds: enclosingPoints([...geometry.points, ...geometry.headPoints], .9), path: geometry.points });
+    }
     chunks.push(`<g data-output-id="${xmlText(a.id)}" data-output-part="annotation">`);
     if(a.kind==='point') chunks.push(`<circle cx="${numberAttribute(x)}" cy="${numberAttribute(y)}" r="4" fill="${colors.annotation}"/>`);
     if(a.kind==='arrow') {
       const geometry=arrowGeometry(a,{x,y});
       chunks.push(`<path d="${geometry.path}" stroke="${colors.annotation}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${geometry.head}" fill="${colors.annotation}" stroke="${colors.annotation}" stroke-width="0.5" stroke-linejoin="round"/>`);
     }
-    for(const label of annotationTextPlacements(placement,scale)) {
+    for(const label of labels) {
       const {x:tx,y:ty,anchor,text,part,symbol}=label;
+      let labelBounds = textBounds(text, tx, ty, anchor, 16 * scale, text === '□', scale);
+      if (a.kind === 'point') labelBounds = enclosingPoints([{ x: labelBounds.x, y: labelBounds.y }, { x: labelBounds.x + labelBounds.width, y: labelBounds.y + labelBounds.height }, { x: x - 4, y: y - 4 }, { x: x + 4, y: y + 4 }]);
+      items.push({ ref: { id: a.id, part: part as OutputPart }, kind: a.kind === 'point' ? 'point-note' : a.kind === 'note' ? 'note' : text === '□' ? 'blank' : 'text',
+        movable: true, bounds: labelBounds, baselineY: ty, ...(a.kind === 'arrow' ? { movesWith: ref } : {}), ...(a.kind === 'point' ? { referencePoint: { x, y } } : {}) });
       if(a.kind==='arrow')chunks.push(`<g data-output-id="${xmlText(a.id)}" data-output-part="${part}">`);
       if(text==='□') chunks.push(blankMarkup(tx,ty,anchor,scale,colors.annotation));
       else chunks.push(svgNotation(text,{x:tx,y:ty,anchor,fontSize:16*scale,fill:colors.annotation,symbol}));
@@ -320,7 +370,7 @@ export function createSvgExport(
 
   chunks.push('</g></svg>');
   const svg = chunks.join('');
-  return { svg, content: svg.slice(svg.indexOf('>')+1, -6).replace(fontDefinition, ''), bounds, options };
+  return { svg, content: svg.slice(svg.indexOf('>')+1, -6).replace(fontDefinition, ''), bounds, options, layout: { items, wireSegments } };
 }
 
 export function exportSvg(document: CircuitDocument, options: ExportOptions = {}, result?: SimulationResult): string {

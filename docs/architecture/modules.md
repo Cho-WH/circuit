@@ -126,7 +126,9 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 분석 화면의 측정 도구은 `probeCurrent`의 부호 있는 전류와 기준 방향을 읽는다. 도선은 해당 edge를 제거한 연결 그래프와 단자 전류 합으로 처리하며, 도선 고리에는 미정 진단을 반환한다. 화면의 배치·스냅은 `app/measurement-tools`에 격리한다. 기존 전류계 삽입 공개 함수는 학습·계약 호환용으로 유지하며 분석 화면의 측정 도구에서는 호출하지 않는다. 이 함수는 선택 부품의 첫 전기 단자를 사용하되 전원은 positive 단자를 우선한다. 복제한 임시 문서·계기 ID·변경된 연결 정보를 반환하며 원본을 보존한다. 등가저항과 KCL·KVL 해석은 `simulation`의 공개 함수를 사용한다. 저항 측정 UI는 `equivalentResistance`의 `excludeSourceIds`에 모든 직류 전원 ID를 전달해 개방하며 원본 문서를 수정하지 않는다. 저수준 API의 나머지 독립원 비활성화 계약은 유지한다. `CircuitCanvas`의 측정 표시 옵션과 공통 `symbolMarkup(component, { disconnectedSource })`는 전원의 리드 단절·흐림만 표현하며 전기 계산에 관여하지 않는다. 물리 의미와 기록·실험 규칙은 [측정 규약](../physics/measurement-and-display.md)을 따른다.
 
-`component-library`의 공통 표기와 `export`의 SVG·PNG·클립보드 함수 및 옵션은 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)에 모았다. `domain`의 `Exporter<TOptions>`는 확장용 인터페이스이며 앱은 현재 `exportSvg`, `exportPng`, `copyPng` 함수를 사용한다.
+`component-library`의 공통 표기와 `export`의 SVG·PNG·클립보드 함수 및 옵션은 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)에 모았다. `domain`의 `Exporter<TOptions>`는 확장용 인터페이스이며 앱은 현재 `exportSvg`, `exportPng`, `copyPng` 함수를 사용한다. `createSvgExport`는 같은 렌더링 계산에서 문서 좌표의 `layout`도 반환한다. `OutputRef`·`OutputLayoutItem`·`OutputLayout`은 export의 공개 파생 타입이며 저장하지 않는다. app/output-layout이 부분 선택·스냅·정렬의 순수 계산과 명령 배열 조립을 맡는다. [ADR-040](../../decisions/ADR-040-output-alignment.md).
+
+`component-library.componentSymbolBody`는 공통 기호 치수에서 연결선을 제외한 본체의 문서 좌표 외곽·표시 종류·회전을 반환한다. export는 이를 `OutputLayoutItem.symbolBody`에 제공하며 app의 단일 이름/값 본체 간격 스냅만 참조한다. 기존 `referencePoint` 중심 스냅과 구분하고 DOM 선택 외곽·출력 자르기 경계로 대체하지 않는다. 저장 형식에는 추가하지 않는다.
 
 ## 의존성 규칙
 

@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { CircuitCanvas, type CanvasProps } from '../src/app/CircuitCanvas';
 import { ComponentPalette, type PaletteDrag } from '../src/app/ComponentPalette';
+import { createSvgExport, type OutputRef } from '../src/export';
 import { OutputCanvas } from '../src/app/OutputCanvas';
 import { emptyDocument } from '../src/domain';
 import { createComponent } from '../src/component-library';
@@ -36,7 +37,7 @@ it.each(['circuit','output'])('zooms %s with an ordinary wheel around the pointe
   let svg:SVGSVGElement;
   if(kind==='circuit')svg=canvas({document:doc}).svg;
   else {
-    act(()=>root.render(createElement(OutputCanvas,{document:doc,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected:[],tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'note'})));
+    act(()=>root.render(createElement(OutputCanvas,{document:doc,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selectedParts:[],onSelection:()=>{},snapEnabled:false,areaAdditive:false,tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'note'})));
     svg=mockSvg();
   }
   const read=()=>svg.getAttribute('viewBox')!.split(' ').map(Number);
@@ -171,13 +172,15 @@ it('cancels a held palette drag on a second finger without starting another held
   pointer(b,'pointerdown',200,50,3);pointer(b,'pointerup',200,50,3);click(b);expect(choose).toHaveBeenCalledTimes(2);
 });
 it('moves the explicitly chosen output label even when another label overlaps it',()=>{
-  const dispatch=vi.fn(()=>true),doc=fixture();let selected:string[]=[];
-  function render(){root.render(createElement(OutputCanvas,{document:doc,result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected,tool:'select',onSelect:id=>{selected=id?[id]:[];render();},onTool:()=>{},dispatch,newId:()=> 'note'}));}
-  act(render);const svg=mockSvg(),labels=host.querySelectorAll('[data-output-part="label"]');
-  for(const label of labels)Object.assign(label,{getBoundingClientRect:()=>({left:480,right:520,top:380,bottom:420,width:40,height:40})});
-  tap(svg,labels[0],500,400);const list=host.querySelector('[aria-label="겹친 출력 대상 선택"]')!;expect(list).not.toBeNull();click(list.querySelectorAll('button')[1]);
-  pointer(labels[0],'pointerdown',500,400);pointer(svg,'pointermove',550,420);pointer(svg,'pointerup',550,420);
-  expect(dispatch).toHaveBeenCalledExactlyOnceWith({type:'SetProperties',id:'B',properties:{labelOffsetX:50,labelOffsetY:20}});
+  const dispatch=vi.fn(()=>true),doc=fixture();let selectedParts:OutputRef[]=[];
+  doc.components[0].properties.labelOffsetX=300;doc.components[1].properties.labelOffsetX=-300;
+  const options={monochrome:true},result={status:'solved' as const,nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]};
+  function render(){root.render(createElement(OutputCanvas,{document:doc,result,options,selectedParts,onSelection:refs=>{selectedParts=refs;render();},snapEnabled:false,areaAdditive:false,tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'note'}));}
+  act(render);const svg=mockSvg();
+  const b=createSvgExport(doc).layout.items.find(i=>i.ref.id==='A'&&i.ref.part==='label')!.bounds,x=b.x+b.width/2,y=b.y+b.height/2;
+  tap(svg,svg,x,y);const list=host.querySelector('[aria-label="겹친 출력 대상 선택"]')!;expect(list).not.toBeNull();click(list.querySelectorAll('button')[1]);
+  pointer(svg,'pointerdown',x,y);pointer(svg,'pointermove',x+50,y+20);pointer(svg,'pointerup',x+50,y+20);
+  expect(dispatch).toHaveBeenCalledExactlyOnceWith([{type:'SetProperties',id:'B',properties:{labelOffsetX:-250,labelOffsetY:20}}]);
 });
 it.each([true,false])('cancels a sensor drag when the second touch starts on handle=%s',onHandle=>{
   const onPlace=vi.fn(),c=canvas({readOnly:true,tool:'probe',measurement:{tool:'current',anchors:{red:null,black:null,current:{kind:'component',id:'A'}},onPlace,onActivate:()=>{}}});
@@ -227,7 +230,7 @@ it('palette scroll cancels holding, while long press produces drag and suppresse
 });
 it('output pinch cancels label movement and does not create edits from residual touches',()=>{
   const dispatch=vi.fn(()=>true);
-  act(()=>root.render(createElement(OutputCanvas,{document:fixture(),result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selected:['A'],tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'note'})));
+  act(()=>root.render(createElement(OutputCanvas,{document:fixture(),result:{status:'solved',nodeVoltages:{},branchCurrents:{},componentVoltages:{},componentPowers:{},diagnostics:[]},options:{monochrome:true},selectedParts:[{id:'A',part:'label'}],onSelection:()=>{},snapEnabled:false,areaAdditive:false,tool:'select',onSelect:()=>{},onTool:()=>{},dispatch,newId:()=> 'note'})));
   const svg=mockSvg(),label=host.querySelector('[data-output-id="A"][data-output-part="label"]')!,view=svg.getAttribute('viewBox');
   pointer(label,'pointerdown',400,200,1);pointer(svg,'pointermove',450,200,1);pointer(svg,'pointerdown',600,200,2);pointer(svg,'pointermove',700,200,2);
   pointer(svg,'pointerup',700,200,2);pointer(svg,'pointerup',450,200,1);click(svg);expect(svg.getAttribute('viewBox')).not.toBe(view);expect(dispatch).not.toHaveBeenCalled();

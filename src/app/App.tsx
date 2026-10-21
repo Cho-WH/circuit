@@ -104,7 +104,7 @@ import { AnalysisTools, type MeasurementKind, type AnalysisPanel } from './Analy
 import { WorksheetPanel } from './WorksheetPanel';
 import { OutputCanvas, type OutputTool } from './OutputCanvas';
 import type { VoltageMeasurement } from '../potential-3d';
-import type { ExportOptions } from '../export';
+import type { ExportOptions, OutputRef } from '../export';
 import { formatQuantity, quantityFormatFor, type QuantityMode } from '../quantity';
 import { Notation } from './Notation';
 import { PotentialSettings, defaultPotentialSettings } from './PotentialSettings';
@@ -249,6 +249,11 @@ export function App() {
   const [customPathIds, setCustomPathIds] = useState<string[]>([]);
   const [outputFontPreview, setOutputFontPreview] = useState<number | null>(null);
   const [outputTool, setOutputTool] = useState<OutputTool>('select');
+  const [outputSelection, setOutputSelection] = useState<OutputRef[]>([]);
+  const [outputInspectedId, setOutputInspectedId] = useState<string | null>(null);
+  const [outputSnap, setOutputSnap] = useState(true);
+  const [outputAreaAdditive, setOutputAreaAdditive] = useState(false);
+  useEffect(() => { setOutputSelection([]); setOutputInspectedId(null); setOutputTool('select'); }, [mode, documentEpoch, doc.documentId]);
   const [outputOptions, setOutputOptions] = useState<ExportOptions>({
     background: 'white',
     highResolution: false,
@@ -452,7 +457,7 @@ export function App() {
     } while (all.has(id));
     return id;
   }
-  function dispatch(command: Command) {
+  function dispatch(command: Command | readonly Command[]) {
     const applied = execute(command);
     if (!applied.ok) {
       setNotice(
@@ -539,13 +544,13 @@ export function App() {
         if (event.key === 'Escape') {
           cancelTool();
           setSelection([]);
+          setOutputSelection([]); setOutputInspectedId(null);
         } else if (event.key === 'Delete' || event.key === 'Backspace') {
           event.preventDefault();
-          dispatch({
-            type: 'DeleteElements',
-            ids: selected.filter((id) => doc.annotations.some((a) => a.id === id)),
-          });
-          setSelection([]);
+          if (outputSelection.length <= 1 && outputInspectedId && doc.annotations.some(a => a.id === outputInspectedId)) {
+            dispatch({ type: 'DeleteElements', ids: [outputInspectedId] });
+            setOutputSelection([]); setOutputInspectedId(null);
+          }
         }
         return;
       } else if (modifier && event.key.toLowerCase() === 'a') {
@@ -1415,9 +1420,12 @@ export function App() {
                   }
                   result={result}
                   options={outputOptions}
-                  selected={compact ? noSelection : selected}
+                  selectedParts={compact ? [] : outputSelection}
+                  onSelection={setOutputSelection}
+                  snapEnabled={outputSnap}
+                  areaAdditive={outputAreaAdditive}
                   tool={compact ? 'select' : outputTool}
-                  onSelect={selectElement}
+                  onSelect={setOutputInspectedId}
                   onInspect={() => {
                     if (window.matchMedia('(min-width: 641px)').matches) setDetailsOpen(true);
                   }}
@@ -1520,8 +1528,13 @@ export function App() {
               active={mode === 'worksheet'}
               document={doc}
               result={result}
-              selected={compact ? noSelection : selected}
-              onSelect={(id) => setSelection([id])}
+              selected={compact || outputSelection.length > 1 || !outputInspectedId ? noSelection : [outputInspectedId]}
+              selectedParts={compact ? [] : outputSelection}
+              snapEnabled={outputSnap}
+              onSnapEnabled={setOutputSnap}
+              areaAdditive={outputAreaAdditive}
+              onAreaAdditive={setOutputAreaAdditive}
+              onSelect={(id) => { setOutputSelection([{ id, part: 'annotation' }]); setOutputInspectedId(id); }}
               dispatch={dispatch}
               onNotice={setNotice}
               tool={outputTool}

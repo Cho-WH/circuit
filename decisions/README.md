@@ -52,4 +52,4 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-037](ADR-037-manual-ground-display.md) | 수동 접지만 표시 | accepted | 자동 기호·하단 설명·삭제 안내 제거, 계산 규칙 유지 |
 | [ADR-038](ADR-038-adjustable-dc-source.md) | 전지와 조절 가능한 직류 전원 | accepted | 전압원 모델·가변저항 조절 UI 공유 |
 | [ADR-039](ADR-039-circuit-recovery.md) | 읽지 못한 회로의 보호와 복원 | accepted | 원본 보관·세 선택지·명시적 v5 변환 |
-| [ADR-040](ADR-040-output-alignment.md) | 출력 표기 정렬과 파생 배치 정보 | proposed | 사용자 UX 네 항목 확정, 공통 기하·스냅·선택 정렬의 구현 전 설계 |
+| [ADR-040](ADR-040-output-alignment.md) | 출력 표기 정렬과 파생 배치 정보 | accepted | 사용자 UX 네 항목 확정, 공통 기하·스냅·선택 정렬의 구현 전 설계 |

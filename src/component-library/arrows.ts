@@ -23,7 +23,7 @@ export function arrowGeometry(annotation: Annotation, position: Point) {
   const length=Math.hypot(tip.x-previous.x,tip.y-previous.y)||1, ux=(tip.x-previous.x)/length,uy=(tip.y-previous.y)/length;
   const size=Math.min(10,length*.45),half=size*.38;
   const head=[tip,{x:tip.x-size*ux+half*uy,y:tip.y-size*uy-half*ux},{x:tip.x-size*.72*ux,y:tip.y-size*.72*uy},{x:tip.x-size*ux-half*uy,y:tip.y-size*uy+half*ux}];
-  return {style,points,path,head:head.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join('')+'Z'};
+  return {style,points,path,headPoints:head,head:head.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join('')+'Z'};
 }
 
 /** Resize along the existing segment axis; the opposite end/corner stays fixed. */

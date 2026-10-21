@@ -1,8 +1,8 @@
 import type { ComponentProperties } from '../domain';
 import { saveBlob } from './download';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowRight, CornerDownRight, CircleDot, MousePointer2, Type, Undo2, Redo2, Trash2, Check, LoaderCircle } from 'lucide-react';
+import { ArrowRight, CornerDownRight, CircleDot, MousePointer2, Scan, Type, Undo2, Redo2, Trash2, Check, LoaderCircle } from 'lucide-react';
 import { OutputNotationFields } from './OutputNotationFields';
 import { ArrowControls } from './ArrowControls';
 import { Notation } from './Notation';
@@ -10,7 +10,8 @@ import { useDialogFocus } from './useDialogFocus';
 import type { CircuitDocument, SimulationResult } from '../domain';
 import type { Command } from '../editor';
 import { annotationPlacements, componentPresentation, componentDefinition, componentValueDisplay } from '../component-library';
-import { exportSvg, exportPng, copyPng, type ExportOptions } from '../export';
+import { createSvgExport, exportSvg, exportPng, copyPng, type ExportOptions, type OutputRef } from '../export';
+import { alignmentLabels, alignmentMoves, movementCommands, selectionUnits, type Alignment } from './output-layout';
 import type { OutputTool } from './OutputCanvas';
 import './panels.css';
 interface Props {
@@ -19,15 +20,29 @@ interface Props {
   tool: OutputTool; onTool: (tool: OutputTool) => void;
   options: ExportOptions; onOptions: (options: ExportOptions) => void;
   onFontPreview: (scale:number|null) => void;
-  onSelect: (id: string) => void; dispatch: (command: Command) => boolean;
+  onSelect: (id: string) => void; dispatch: (command: Command | readonly Command[]) => boolean;
+  selectedParts?: readonly OutputRef[];
+  snapEnabled?: boolean; onSnapEnabled?: (enabled: boolean) => void;
+  areaAdditive?: boolean; onAreaAdditive?: (enabled: boolean) => void;
   onNotice: (message: string, kind?: 'status' | 'error') => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
   toolbarEnd?: ReactNode;
 }
 export function WorksheetPanel(props: Props) {
   const {document:doc}=props;
-  const component=doc.components.find(c=>c.id===props.selected[0]);
-  const annotation=doc.annotations.find(a=>a.id===props.selected[0]);
+  const multiple=(props.selectedParts?.length??0)>1;
+  const component=multiple?undefined:doc.components.find(c=>c.id===props.selected[0]);
+  const annotation=multiple?undefined:doc.annotations.find(a=>a.id===props.selected[0]);
+  const layout=useMemo(()=>props.active?createSvgExport(doc,props.options,props.result).layout:{items:[],wireSegments:[]},[props.active,doc,props.options,props.result]);
+  const units=selectionUnits(layout,props.selectedParts??[]);
+  const [alignOpen,setAlignOpen]=useState(false);
+  useEffect(()=>{if(units.length<2)setAlignOpen(false);},[units.length]);
+  function align(action:Alignment) {
+    const moves=alignmentMoves(units,action);if(!moves)return;
+    const commands=movementCommands(doc,moves);
+    if(commands.length&&props.dispatch(commands))props.onNotice(`표기 ${units.length}개: ${alignmentLabels[action]} 완료`);
+    setAlignOpen(false);
+  }
   const [busy,setBusy]=useState(false),[preview,setPreview]=useState<string|null>(null);
   const [copied,setCopied]=useState(false);
   useEffect(()=>{if(!copied)return;const timer=window.setTimeout(()=>setCopied(false),2400);return()=>window.clearTimeout(timer);},[copied]);
@@ -54,8 +69,21 @@ export function WorksheetPanel(props: Props) {
   return <section className="worksheet-panel"><h3>{component?<>{componentDefinition(component).name} <Notation symbol text={component.label}/></>:annotation?annotation.kind==='point'?'점':annotation.kind==='arrow'?'화살표':'글자':'보기 설정'}</h3>
     {toolbar&&createPortal(<>
       {!props.compact && <>
-      <div className="tool-group">{([{id:'select',label:'선택',Icon:MousePointer2},{id:'point',label:'점',Icon:CircleDot},{id:'arrow',label:'전류 화살표',Icon:ArrowRight},{id:'corner-arrow',label:'직각 전류 화살표',Icon:CornerDownRight},{id:'note',label:'글자',Icon:Type}] as const).map(({id,label,Icon})=><button key={id} data-tooltip={label} aria-label={label} aria-pressed={props.tool===id} className={props.tool===id?'active':''} onClick={()=>props.onTool(id)}><Icon size={18}/></button>)}</div>
-      {annotation?.kind==='arrow'&&<ArrowControls key={annotation.id} annotation={annotation} position={annotationPlacements(doc).find(a=>a.annotation.id===annotation.id)??{x:0,y:0}} onChange={arrow=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{arrow}})}/>}
+      <div className="tool-group">{([{id:'select',label:'선택',Icon:MousePointer2},{id:'area',label:'영역 선택',Icon:Scan},{id:'point',label:'점',Icon:CircleDot},{id:'arrow',label:'전류 화살표',Icon:ArrowRight},{id:'corner-arrow',label:'직각 전류 화살표',Icon:CornerDownRight},{id:'note',label:'글자',Icon:Type}] as const).map(({id,label,Icon})=><button key={id} data-tooltip={label} aria-label={label} aria-pressed={props.tool===id} className={props.tool===id?'active':''} onClick={()=>props.onTool(id)}><Icon size={18}/></button>)}</div>
+      <div className="output-alignment-tools">
+        {props.tool==='area'&&<button aria-pressed={props.areaAdditive??false} onClick={()=>props.onAreaAdditive?.(!props.areaAdditive)}>선택에 추가</button>}
+        <button aria-pressed={props.snapEnabled??true} title="가까운 정렬 위치에 맞춥니다. Alt: 맞춤 일시 해제. 드래그 중 Shift: 가로·세로 이동." onClick={()=>props.onSnapEnabled?.(!(props.snapEnabled??true))}>자동 맞춤</button>
+        <div className="output-align-menu" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setAlignOpen(false);}} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setAlignOpen(false);e.currentTarget.querySelector('button')?.focus();}}}>
+          <button disabled={units.length<2} aria-expanded={alignOpen} aria-controls="output-align-options" onClick={()=>setAlignOpen(!alignOpen)}>정렬</button>
+          {alignOpen&&<div id="output-align-options" aria-label="선택 표기 정렬">{(Object.keys(alignmentLabels) as Alignment[]).map(action=>{
+            const enabled=alignmentMoves(units,action)!==null;
+            const gap=action==='gapX'||action==='gapY';
+            return <button key={action} disabled={!enabled} title={!enabled&&gap&&units.length>=3?'요소를 조금 벌린 뒤 다시 시도하세요.':undefined} onClick={()=>align(action)}>{alignmentLabels[action]}</button>;
+          })}{units.length>=3&&(['gapX','gapY'] as const).some(action=>alignmentMoves(units,action)===null)&&<small>요소를 조금 벌린 뒤 다시 시도하세요.</small>}</div>}
+        </div>
+        <span className="output-selection-count">{units.length>0?`표기 ${units.length}개 선택`:''}</span>
+      </div>
+      {annotation?.kind==='arrow'&&<div className="output-arrow-controls"><ArrowControls key={annotation.id} annotation={annotation} position={annotationPlacements(doc).find(a=>a.annotation.id===annotation.id)??{x:0,y:0}} onChange={arrow=>props.dispatch({type:'UpdateAnnotation',id:annotation.id,changes:{arrow}})}/></div>}
       <label className="output-font-scale"><Type size={17}/><input aria-label="글자 크기 배율" type="range" min="0.5" max="2" step="0.05" value={fontScale} onChange={e=>{setFontScale(e.target.valueAsNumber);props.onFontPreview(e.target.valueAsNumber);}} onPointerCancel={()=>{setFontScale(doc.output?.fontScale??1);props.onFontPreview(null);}} onPointerUp={scaleCommit} onKeyUp={scaleCommit} onBlur={scaleCommit}/><output>{Math.round(fontScale*100)}%</output></label>
       <div className="tool-group"><button aria-label="출력 실행 취소" disabled={!props.canUndo} onClick={props.undo}><Undo2 size={17}/></button><button aria-label="출력 다시 실행" disabled={!props.canRedo} onClick={props.redo}><Redo2 size={17}/></button></div>
       </>}

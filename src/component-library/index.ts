@@ -211,12 +211,67 @@ export function componentValue(component: ComponentInstance, options?: QuantityF
   const fraction=def.property?storedFraction(component.properties,def.property,def.unit):undefined;
   return fraction && (!options?.mode || options.mode==='auto') ? `${fraction} ${def.unit}` : def.property ? formatQuantity(isStoredScalar(component.properties[def.property]) ? component.properties[def.property] as q.StoredScalar : undefined, def.unit, options) : def.name;
 }
+// Body dimensions are shared by the rendered paths and output gap references.
+// Leads, external polarity marks and terminal names are deliberately excluded.
+const symbolBody = {
+  resistor: { halfWidth: 30, halfHeight: 10 },
+  adjustment: { halfWidth: 18, halfHeight: 20 },
+  diode: { halfWidth: 16, halfHeight: 18 },
+  battery: { plateX: 7, longHalfHeight: 22, shortHalfHeight: 12, shortStroke: 5 },
+  circleRadius: 23,
+  contactRadius: 3,
+  openSwitchRise: 20,
+};
+/** Visible body bounds in document coordinates, including the output stroke. */
+export function componentSymbolBody(component: ComponentInstance, strokeWidth = 2.5) {
+  const kind: ComponentKind = isChangeoverSwitch(component) ? 'changeover-switch'
+    : isAdjustableVoltageSource(component) ? 'adjustable-voltage-source' : component.type;
+  const points: Point[] = [];
+  const box = (x: number, y: number, halfWidth: number, halfHeight: number, pad = strokeWidth / 2) => {
+    points.push({ x: x - halfWidth - pad, y: y - halfHeight - pad },
+      { x: x + halfWidth + pad, y: y + halfHeight + pad });
+  };
+  if (kind === 'resistor' || kind === 'resistive-load') {
+    box(0, 0, symbolBody.resistor.halfWidth, symbolBody.resistor.halfHeight);
+    if (kind === 'resistive-load') box(0, 0, symbolBody.adjustment.halfWidth, symbolBody.adjustment.halfHeight);
+  } else if (kind === 'diode') box(0, 0, symbolBody.diode.halfWidth, symbolBody.diode.halfHeight);
+  else if (kind === 'dc-voltage-source') {
+    const b = symbolBody.battery;
+    box(-b.plateX, 0, 0, b.longHalfHeight);
+    // The short plate has butt caps and its own stroke width.
+    box(b.plateX, 0, b.shortStroke / 2, b.shortHalfHeight, 0);
+  } else if (kind === 'switch' || kind === 'changeover-switch') {
+    const contacts = kind === 'changeover-switch'
+      ? ['common', 'throw-a', 'throw-b'].map(role => changeoverTerminalPosition(component, role))
+      : [component.terminals[0]?.localPosition ?? { x: -24, y: 0 }, component.terminals[1]?.localPosition ?? { x: 24, y: 0 }];
+    for (const p of contacts) box(p.x, p.y, symbolBody.contactRadius, symbolBody.contactRadius);
+    if (kind === 'switch' && component.properties.state !== 'closed')
+      box(contacts[1].x, contacts[1].y - symbolBody.openSwitchRise, 0, 0);
+  } else box(0, 0, symbolBody.circleRadius, symbolBody.circleRadius);
+  const local = { left: Math.min(...points.map(p => p.x)), right: Math.max(...points.map(p => p.x)),
+    top: Math.min(...points.map(p => p.y)), bottom: Math.max(...points.map(p => p.y)) };
+  // Schema permits quarter turns only; exact transforms avoid floating-point drift.
+  const world = [
+    { x: local.left, y: local.top }, { x: local.right, y: local.top },
+    { x: local.left, y: local.bottom }, { x: local.right, y: local.bottom },
+  ].map(p => {
+    const r = component.rotation === 90 ? { x: -p.y, y: p.x }
+      : component.rotation === 180 ? { x: -p.x, y: -p.y }
+      : component.rotation === 270 ? { x: p.y, y: -p.x } : p;
+    return { x: r.x + component.position.x, y: r.y + component.position.y };
+  });
+  const x = Math.min(...world.map(p => p.x)), y = Math.min(...world.map(p => p.y));
+  return { kind, rotation: component.rotation, bounds: { x, y,
+    width: Math.max(...world.map(p => p.x)) - x, height: Math.max(...world.map(p => p.y)) - y } };
+}
+
 /** Shared schematic geometry for live SVG and independent print rendering. */
 export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean; showSymbolPolarity?: boolean } = {}): string {
   if (isAdjustableVoltageSource(component)) {
     const lead = options.disconnectedSource ? 32 : 44;
     const polarity = [-10, 10].map((x, i) => `<g transform="rotate(${-component.rotation} ${x} 0)"><path d="M${x-4} 0h8${i === 0 ? ` M${x} -4v8` : ''}"/></g>`).join('');
-    return `<g data-symbol="dc-supply"><path d="M-${lead} 0H-23 M23 0H${lead}"/><circle r="23"/>${polarity}</g>`;
+    const r = symbolBody.circleRadius;
+    return `<g data-symbol="dc-supply"><path d="M-${lead} 0H-${r} M${r} 0H${lead}"/><circle r="${r}"/>${polarity}</g>`;
   }
   if (isChangeoverSwitch(component)) {
     const common = changeoverTerminalPosition(component, 'common'), a = changeoverTerminalPosition(component, 'throw-a'), b = changeoverTerminalPosition(component, 'throw-b');
@@ -225,23 +280,32 @@ export function symbolMarkup(component: ComponentInstance, options: { disconnect
       const x=point.x+8,y=point.y+dy;
       return `<text x="${x}" y="${y}" transform="rotate(${-component.rotation} ${x} ${y})">${label}</text>`;
     }).join('');
-    return `<path d="M${common.x} ${common.y}L${selected.x} ${selected.y}" fill="none"/>${[common,a,b].map(p=>`<circle cx="${p.x}" cy="${p.y}" r="3"/>`).join('')}${labels ? `<g stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central">${labels}</g>` : ''}`;
+    return `<path d="M${common.x} ${common.y}L${selected.x} ${selected.y}" fill="none"/>${[common,a,b].map(p=>`<circle cx="${p.x}" cy="${p.y}" r="${symbolBody.contactRadius}"/>`).join('')}${labels ? `<g stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central">${labels}</g>` : ''}`;
   }
-  if (component.type === 'diode') return '<path d="M-44 0H-16 M16 0H44 M-16 -18L16 0 -16 18Z M16 -18V18" fill="none"/>';
+  if (component.type === 'diode') {
+    const { halfWidth: w, halfHeight: h } = symbolBody.diode;
+    return `<path d="M-44 0H-${w} M${w} 0H44 M-${w} -${h}L${w} 0 -${w} ${h}Z M${w} -${h}V${h}" fill="none"/>`;
+  }
   if (component.type === 'resistor' || component.type === 'resistive-load') {
-    const resistor='<path d="M-44 0H-30L-25 -10 -15 10 -5 -10 5 10 15 -10 25 10 30 0H44" fill="none"/>';
-    return resistor+(component.type==='resistive-load'?'<path data-symbol="adjustment-arrow" d="M-18 20L18 -20 M8 -18L18 -20 17 -10" fill="none"/>':'');
+    const { halfWidth: w, halfHeight: h } = symbolBody.resistor;
+    const { halfWidth: aw, halfHeight: ah } = symbolBody.adjustment;
+    const resistor=`<path d="M-44 0H-${w}L-25 -${h} -15 ${h} -5 -${h} 5 ${h} 15 -${h} 25 ${h} ${w} 0H44" fill="none"/>`;
+    return resistor+(component.type==='resistive-load'?`<path data-symbol="adjustment-arrow" d="M-${aw} ${ah}L${aw} -${ah} M8 -18L${aw} -${ah} 17 -10" fill="none"/>`:'');
   }
-  if (component.type === 'dc-voltage-source') return `<path d="M-${options.disconnectedSource?32:44} 0H-7 M7 0H${options.disconnectedSource?32:44} M-7 -22V22"/><path d="M7 -12V12" stroke-width="5" stroke-linecap="butt"/>${options.showSymbolPolarity === false ? '' : '<text data-symbol="battery-polarity" x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>'}`;
+  if (component.type === 'dc-voltage-source') {
+    const b = symbolBody.battery;
+    return `<path d="M-${options.disconnectedSource?32:44} 0H-${b.plateX} M${b.plateX} 0H${options.disconnectedSource?32:44} M-${b.plateX} -${b.longHalfHeight}V${b.longHalfHeight}"/><path d="M${b.plateX} -${b.shortHalfHeight}V${b.shortHalfHeight}" stroke-width="${b.shortStroke}" stroke-linecap="butt"/>${options.showSymbolPolarity === false ? '' : '<text data-symbol="battery-polarity" x="-25" y="-12" stroke="none" fill="currentColor" font-size="15">+</text>'}`;
+  }
   if (component.type === 'switch') {
     const a = component.terminals[0]?.localPosition ?? {x:-24,y:0}, b = component.terminals[1]?.localPosition ?? {x:24,y:0};
-    return `<path d="M${a.x} ${a.y}L${b.x} ${b.y+(component.properties.state === 'closed' ? 0 : -20)}"/><circle cx="${a.x}" cy="${a.y}" r="3"/><circle cx="${b.x}" cy="${b.y}" r="3"/>`;
+    return `<path d="M${a.x} ${a.y}L${b.x} ${b.y+(component.properties.state === 'closed' ? 0 : -symbolBody.openSwitchRise)}"/><circle cx="${a.x}" cy="${a.y}" r="${symbolBody.contactRadius}"/><circle cx="${b.x}" cy="${b.y}" r="${symbolBody.contactRadius}"/>`;
   }
   // The first/second terminal is the same signed reference used by meterReading and the solver.
   const polarity = options.showSymbolPolarity === false ? '' : [-34, 34].map((x, index) =>
     `<text x="${x}" y="-10" transform="rotate(${-component.rotation} ${x} -10)">${index === 0 ? '+' : '−'}</text>`,
   ).join('');
-  return `<path d="M-44 0H-23 M23 0H44"/><circle r="23"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>${polarity ? `<g data-symbol="meter-polarity" stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central">${polarity}</g>` : ''}`;
+  const r = symbolBody.circleRadius;
+  return `<path d="M-44 0H-${r} M${r} 0H44"/><circle r="${r}"/><text x="0" y="6" text-anchor="middle" stroke="none" fill="currentColor" font-size="19">${component.type === 'ammeter' ? 'A' : 'V'}</text>${polarity ? `<g data-symbol="meter-polarity" stroke="none" fill="currentColor" font-size="12" text-anchor="middle" dominant-baseline="central">${polarity}</g>` : ''}`;
 }
 export function documentBounds(document: CircuitDocument, margin = 80) {
   const points = [...document.components.flatMap(c => [c.position, ...c.terminals.map((_, i) => terminalPosition(c, i))]), ...document.junctions.map(j => j.position), ...document.wires.flatMap(w => wirePoints(document, w))];
