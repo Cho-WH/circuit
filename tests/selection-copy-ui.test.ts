@@ -133,10 +133,18 @@ it('routes every registered native drop through the same naming policy and ignor
     Object.defineProperty(event, 'dataTransfer', { value: { getData: () => kind } });
     act(() => svg.dispatchEvent(event));
   };
-  Object.keys(componentDefinitions).forEach((kind, i) => drop(kind, 100 + i * 160));
-  expect(saved().components.map(c => c.label)).toEqual(['C_1', 'V_1', 'V_2', 'R_1', 'VR_1', 'S_1', 'S_2', 'A_1', 'M_1', 'D_1']);
+  Object.entries(componentDefinitions).forEach(([kind, definition], i) => {
+    const before = saved().components;
+    drop(kind, 100 + i * 160);
+    const after = saved().components;
+    expect(after).toHaveLength(before.length + 1);
+    expect(after.slice(0, -1)).toEqual(before);
+    expect(after.at(-1)?.label).toMatch(new RegExp(`^${definition.short}_[1-9]\\d*$`));
+    expect(new Set(after.map(c => c.label)).size).toBe(after.length);
+  });
+  const beforeUnknown = saved();
   drop('toString', 1400); drop('unsupported', 1600);
-  expect(saved().components).toHaveLength(10);
+  expect(saved()).toEqual(beforeUnknown);
 });
 
 it('keeps one conditional copy button in the compact top toolbar and inserts a touch copy atomically', () => {

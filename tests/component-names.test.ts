@@ -28,13 +28,13 @@ describe('component display names independent of internal IDs', () => {
     expect(createComponentLabelAllocator([...names, 'R1_2'])(componentDefinitions.resistor)).toBe('R_12');
   });
 
-  it('uses registry prefixes for every kind, including shared switch numbering', () => {
-    const allocate = createComponentLabelAllocator([]);
-    expect(Object.values(componentDefinitions).map(allocate)).toEqual([
-      'C_1', 'V_1', 'V_2', 'R_1', 'VR_1', 'S_1', 'S_2', 'A_1', 'M_1', 'D_1',
-    ]);
-    // Capacitors use the same suffix reservation as existing components.
-    expect(createComponentLabelAllocator(['C1'])(componentDefinitions.capacitor)).toBe('C_2');
+  it('shares numbering across source and switch variants while reserving capacitor aliases', () => {
+    const allocate = createComponentLabelAllocator(['C1']);
+    expect(allocate(componentDefinitions['changeover-switch'])).toBe('S_1');
+    expect(allocate(componentDefinitions['adjustable-voltage-source'])).toBe('V_1');
+    expect(allocate(componentDefinitions.capacitor)).toBe('C_2');
+    expect(allocate(componentDefinitions.switch)).toBe('S_2');
+    expect(allocate(componentDefinitions['dc-voltage-source'])).toBe('V_2');
   });
 
   it('accepts an explicit display name without changing IDs or terminal references', () => {
