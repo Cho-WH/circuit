@@ -2,7 +2,8 @@ import * as q from '../src/rational';
 import { describe, expect, it } from 'vitest';
 import { examples } from '../src/fixtures';
 import { compileCircuit } from '../src/connectivity';
-import { solveCircuit } from '../src/simulation';
+import { solveCircuit, rcEngine, rcInitialState, rcCircuitRevision, observeRcFrame } from '../src/simulation';
+import { rcPolicy, type CircuitObservation } from '../src/domain';
 import { probeCurrent } from '../src/measurement';
 import { layoutExample } from '../src/app/examples';
 import { anchorPose, anchorEndpoint, measurementHit } from '../src/app/measurement-tools';
@@ -11,7 +12,16 @@ const parallel=()=>layoutExample(examples.find(e=>e.id==='FIX-03')!.document);
 const read=(doc:ReturnType<typeof parallel>,id:string,kind:'wire'|'component'='wire')=>{const c=compileCircuit(doc);return probeCurrent(doc,c,solveCircuit(c.circuit),{kind,id});};
 describe('non-contact current',()=>{
   it.each(examples)('$id reads every component without modifying the document or its routes',example=>{
-    const doc=layoutExample(example.document),before=JSON.stringify(doc),compilation=compileCircuit(doc),result=solveCircuit(compilation.circuit);
+    const doc=layoutExample(example.document),before=JSON.stringify(doc),compilation=compileCircuit(doc);
+    let result:CircuitObservation;
+    if(doc.components.some(c=>c.type==='capacitor')) {
+      const circuit=compilation.circuit;
+      const prepared=rcEngine.prepare({circuit,initialState:rcInitialState(circuit),circuitRevision:rcCircuitRevision(circuit),operationIndex:0,transition:'initial',policy:rcPolicy});
+      if(!prepared.ok)throw new Error(JSON.stringify(prepared.diagnostics));
+      const sampled=rcEngine.sample(prepared.value,{kind:'finite',seconds:1});
+      if(!sampled.ok)throw new Error(JSON.stringify(sampled.diagnostics));
+      result=observeRcFrame(sampled.value);
+    } else result=solveCircuit(compilation.circuit);
     for(const component of doc.components){const reading=probeCurrent(doc,compilation,result,{kind:'component',id:component.id});expect(reading.ok).toBe(true);if(reading.ok)expect(q.toNumber(reading.value.amperes)).toBeCloseTo(q.toNumber(result.branchCurrents[component.id]),10);}
     expect(JSON.stringify(doc)).toBe(before);
   });
