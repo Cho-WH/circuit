@@ -193,7 +193,7 @@ describe('release channel storage', () => {
     expect(store.getItem(legacyKey)).toBe(raw);
     vi.stubEnv('VITE_RELEASE_CHANNEL', 'main');
     store.setItem(legacyKey, JSON.stringify({ version: 999, entries: [] }));
-    expect(loadMeasurementNotebook(store)).toEqual({ entries: [] });
+    expect(loadMeasurementNotebook(store)).toMatchObject({ entries: [], warning: expect.any(String) });
     expect(store.getItem(channelStorageKey(legacyKey))).toBeNull();
   });
 

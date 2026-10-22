@@ -1,6 +1,6 @@
 import * as q from '../rational';
-import { queryVoltage, queryCurrent, independentReferences } from '../simulation';
-import { isStoredScalar, isChangeoverSwitch, switchTerminals, type Rational, type StoredScalar } from '../domain';
+import { observationVoltage as queryVoltage, observationCurrent as queryCurrent, observationWireCurrent, independentReferences } from '../simulation';
+import { isStoredScalar, isChangeoverSwitch, switchTerminals, validRcFrameContext, type RcFrameContext, type Rational, type StoredScalar } from '../domain';
 import {
   cloneDocument,
   diagnostic,
@@ -12,7 +12,7 @@ import {
   type Diagnostic,
   type EndpointRef,
   type SimulationEngine,
-  type SimulationResult,
+  type CircuitObservation,
   type Wire,
   type SimulationProvenance,
 } from '../domain';
@@ -41,7 +41,7 @@ export interface CurrentReading {
 export function probeCurrent(
   document: CircuitDocument,
   compilation: CompileResult,
-  result: SimulationResult,
+  result: CircuitObservation,
   target: CurrentTarget | null,
 ): MeasurementResult<CurrentReading> {
   if (!target) return fail('INCOMPLETE_PROBE');
@@ -58,7 +58,7 @@ export function probeCurrent(
     const positive =
       c.type === 'dc-voltage-source'
         ? c.terminals.find((t) => t.role === 'positive')
-        : c.type === 'diode'
+        : c.type === 'capacitor' ? c.terminals.find(t => t.role === 'a') : c.type === 'diode'
           ? c.terminals.find((t) => t.role === 'anode')
           : undefined;
     const first = positive ?? c.terminals[0];
@@ -79,6 +79,12 @@ export function probeCurrent(
   }
   const wire = document.wires.find((w) => w.id === target.id);
   if (!wire) return fail('MEASUREMENT_TARGET_NOT_FOUND', [target.id]);
+  if ('rcFrame' in result) {
+    const reading = observationWireCurrent(result, wire.id);
+    if (reading.status === 'error') return { ok: false, diagnostics: reading.diagnostics };
+    if (reading.status !== 'unique') return fail('WIRE_CURRENT_UNDEFINED', [wire.id]);
+    return ok({ amperes: reading.value, from: wire.start, to: wire.end });
+  }
   // Remove only the queried wire from the ideal conductor graph. A remaining path
   // means a zero-resistance cycle: its individual wire currents are not unique.
   const neighbors = new Map<string, string[]>();
@@ -171,6 +177,7 @@ export type MeasurementUnit = 'V' | 'A' | 'Ω' | 'W';
 
 export interface MeasurementRecordFields {
   provenance?: SimulationProvenance;
+  transient?: RcFrameContext;
   condition: string;
   source: 'simulation' | 'external';
   quantity: MeasurementQuantity;
@@ -209,7 +216,7 @@ const owns = (record: Record<string, Rational>, id: string): boolean =>
 
 export function probeVoltage(
   compilation: CompileResult,
-  result: SimulationResult,
+  result: CircuitObservation,
   red: EndpointRef | null,
   black: EndpointRef | null,
 ): MeasurementResult<ProbeVoltage> {
@@ -242,6 +249,7 @@ export function probeVoltage(
   if (independentReferences(result, redNetId, blackNetId))
     return fail('INDEPENDENT_VOLTAGE_REFERENCES', [red.id, black.id]);
   const queried = queryVoltage(result, redNetId, blackNetId);
+  if (queried.status === 'error') return { ok: false, diagnostics: queried.diagnostics };
   if (queried.status !== 'unique') return fail('MEASUREMENT_UNAVAILABLE', [red.id, black.id]);
   const voltageV = queried.value;
   if (!q.isRational(voltageV)) {
@@ -345,7 +353,7 @@ function quantityUnit(quantity: SweepQuantity): SweepResult['yUnit'] {
 function sweepReading(
   quantity: SweepQuantity,
   compilation: CompileResult,
-  result: SimulationResult,
+  result: CircuitObservation,
 ): MeasurementResult<Rational> {
   if (quantity.kind === 'probe-voltage') {
     const measured = probeVoltage(compilation, result, quantity.red, quantity.black);
@@ -503,7 +511,13 @@ function validateRecordFields(
   affectedIds?: string[],
 ): Diagnostic[] {
   const diagnosticIds = affectedIds ?? (Array.isArray(fields.targetIds) ? fields.targetIds : []);
+  const rc = fields.transient;
+  const approximation = fields.value && typeof fields.value === 'object' ? fields.value.approximation : undefined;
   if (
+    (rc !== undefined && (!validRcFrameContext(rc) || fields.source !== 'simulation' ||
+      !['voltage', 'current'].includes(fields.quantity) || fields.provenance !== undefined ||
+      (approximation !== undefined && approximation.reason !== 'rc-modal'))) ||
+    (approximation?.reason === 'rc-modal' && rc === undefined) ||
     (fields.provenance !== undefined && !validProvenance(fields.provenance)) ||
     ('quality' in fields &&
       fields.quality !==
@@ -532,10 +546,15 @@ export function createMeasurementRecord(
   const validation = validateDocument(document);
   if (!validation.ok) return { ok: false, diagnostics: validation.diagnostics };
   const diagnostics = validateRecordFields(fields);
+  if (fields.transient && !document.components.some(c => c.type === 'capacitor'))
+    diagnostics.push(diagnostic('INVALID_MEASUREMENT_RECORD', [], 'error', { reason: 'RC_SNAPSHOT_REQUIRED' }));
+  if (!fields.transient && fields.source === 'simulation' && document.components.some(c => c.type === 'capacitor'))
+    diagnostics.push(diagnostic('INVALID_MEASUREMENT_RECORD', [], 'error', { reason: 'RC_CONTEXT_REQUIRED' }));
   if (diagnostics.length) return { ok: false, diagnostics };
   return ok({
     ...fields,
     ...(fields.provenance ? { provenance: { ...fields.provenance } } : {}),
+    ...(fields.transient ? { transient: { ...fields.transient, time: { ...fields.transient.time } } } : {}),
     quality: fields.value !== null && q.from(fields.value).approximation ? 'approximate' : 'exact',
     value: fields.value === null ? null : q.store(fields.value),
     targetIds: [...fields.targetIds],
@@ -571,10 +590,14 @@ export function measurementsToCsv(records: MeasurementRecord[]): MeasurementResu
       'physicalModel',
       'profileRevision',
       'arithmeticQuality',
+      'rcModel', 'rcModelRevision', 'rcArithmeticPolicy', 'rcSettlingPolicy',
+      'circuitRevision', 'operationIndex', 'frameId', 'timeKind', 'physicalSeconds',
     ].join(','),
   ];
 
   for (const record of records) {
+    const checked = createMeasurementRecord(record.documentSnapshot, record);
+    if (!checked.ok) return { ok: false, diagnostics: checked.diagnostics };
     const fieldDiagnostics = validateRecordFields(record);
     if (fieldDiagnostics.length) return { ok: false, diagnostics: fieldDiagnostics };
     const documentValidation = validateDocument(record.documentSnapshot);
@@ -599,6 +622,15 @@ export function measurementsToCsv(records: MeasurementRecord[]): MeasurementResu
         record.provenance?.physicalModel ?? '',
         csvCell(record.provenance?.profileRevision ?? ''),
         record.provenance?.arithmeticQuality ?? record.quality,
+        record.transient?.model ?? '',
+        record.transient ? String(record.transient.modelRevision) : '',
+        record.transient?.arithmeticPolicy ?? '',
+        record.transient?.settlingPolicy ?? '',
+        csvCell(record.transient?.circuitRevision ?? ''),
+        record.transient ? String(record.transient.operationIndex) : '',
+        csvCell(record.transient?.frameId ?? ''),
+        record.transient?.time.kind ?? '',
+        record.transient?.time.kind === 'finite' ? String(record.transient.time.seconds) : '',
       ].join(','),
     );
   }

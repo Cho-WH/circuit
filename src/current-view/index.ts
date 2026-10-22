@@ -42,6 +42,7 @@ interface TrackView {
   retiring?: Train;
   pending: number | null;
   blendStart: number | null;
+  lastRcReflow?: number;
 }
 const samePoints = (a: Point[], b: Point[]) =>
   a.length === b.length && a.every((p, i) => p.x === b[i].x && p.y === b[i].y);
@@ -225,7 +226,8 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
         return [path.id, value.status, value.status === 'known'
           ? [q.exactText(value.amperes), value.from.id, value.to.id] : null];
       }).sort((a, b) => String(a[0]).localeCompare(String(b[0])))]);
-      visibility.update(currentSignature !== null && signature !== currentSignature,
+      const electricalChange = currentSignature !== null && signature !== currentSignature;
+      visibility.update(!display.model.frameId && electricalChange,
         !!display.changing, currentSignature === null || display.paused || media.matches || !active || doc.hidden);
       currentSignature = signature;
       svg.setAttribute('viewBox', `0 0 ${Math.max(1, size.width)} ${Math.max(1, size.height)}`);
@@ -308,6 +310,19 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
             view.distances = cumulativeLengths(track.points);
           }
           view.track = track;
+        }
+        // RC samples describe a continuously changing experiment. Keep its marks visible;
+        // gently refresh density at most four times a second, independently of physics time.
+        if (display.model.frameId) {
+          const now = performance.now();
+          if (display.paused || media.matches) {
+            view.retiring?.group.remove(); view.retiring = undefined;
+            view.blendStart = null; view.pending = null;
+            view.train.metric = track.points; view.train.spacing = spacing(track);
+            view.train.group.style.opacity = '1';
+          } else if (electricalChange && !view.retiring && now - (view.lastRcReflow ?? 0) >= 250) {
+            reflow(view, now); view.lastRcReflow = now;
+          }
         }
         for (const [id, point] of [
           [track.startJunction, track.points[0]],

@@ -27,6 +27,8 @@
 
 <p align="center"><sub>회로의 3D 분석 : 높이와 색상은 전위, 두께와 흐름은 전류를 표현합니다.</sub></p>
 
+[개발판](https://cho-wh.github.io/circuit/dev/)에는 **축전기 충전·방전 관찰**이 추가되었습니다. 여러 축전기의 변화, 일시정지 측정, 2D 판 색상과 3D 높이를 확인할 수 있습니다. [축전기 사용법](docs/ux/quick-start.md#capacitor)
+
 ## 주요 기능
 
 <table>

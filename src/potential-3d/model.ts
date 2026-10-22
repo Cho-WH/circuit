@@ -98,5 +98,10 @@ export function selectedVoltage(document: CircuitDocument, potential: PotentialM
     };
   });
   if (!ends[0] || !ends[1]) return null;
-  return { component, a: ends[0], b: ends[1], difference: q.sub(ends[0].voltage,ends[1].voltage) };
+  const certified = potential.componentVoltages?.[component.id];
+  if (potential.frameId && certified === undefined) return null;
+  const positiveRole = component.type === 'dc-voltage-source' ? 'positive' : 'a';
+  const reversed = component.terminals.some(t => t.role === positiveRole) && component.terminals[0].role !== positiveRole;
+  return { component, a: ends[0], b: ends[1], difference: certified
+    ? (reversed ? q.neg(certified) : certified) : q.sub(ends[0].voltage,ends[1].voltage) };
 }

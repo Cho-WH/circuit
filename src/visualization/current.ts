@@ -4,7 +4,7 @@ import type {
   CompileResult,
   Diagnostic,
   EndpointRef,
-  SimulationResult,
+  CircuitObservation,
 } from '../domain';
 import { probeCurrent } from '../measurement';
 
@@ -18,6 +18,7 @@ export interface CurrentSample {
   value: CurrentValue;
 }
 export interface CurrentModel {
+  frameId?: string;
   modelApproximation?: boolean;
   samples: CurrentSample[];
   maxMagnitude: q.Scalar;
@@ -34,7 +35,7 @@ export interface CurrentDisplay {
 export function buildCurrentModel(
   document: CircuitDocument,
   compilation: CompileResult,
-  result: SimulationResult,
+  result: CircuitObservation,
 ): CurrentModel {
   const targets = [
     ...document.components.map(({ id }) => ({ id, kind: 'component' as const })),
@@ -55,6 +56,7 @@ export function buildCurrentModel(
     return { ...target, value };
   });
   return {
+    ...('rcFrame' in result ? { frameId: result.rcFrame.context.frameId } : {}),
     samples,
     ...(result.provenance?.physicalModel === 'component' ? { modelApproximation: true } : {}),
     maxMagnitude: samples.reduce<q.Scalar>(

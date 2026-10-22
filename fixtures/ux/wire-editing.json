@@ -1,6 +1,6 @@
 {
   "format": "edu-circuit",
-  "version": 6,
+  "version": 7,
   "documentId": "ux-wire-editing",
   "title": "도선 삽입·교차 연결 연습",
   "components": [

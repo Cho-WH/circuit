@@ -61,7 +61,7 @@ function net(id: string) {
 
 function element(
   id: string,
-  type: CompiledElement["type"],
+  type: Exclude<CompiledElement["type"], 'capacitor'>,
   a: string,
   b: string,
   value: number,
@@ -663,7 +663,7 @@ describe("measurement records and CSV", () => {
     if (!exported.ok) return;
     const [header, ...bodyLines] = exported.value.split("\r\n");
     expect(header).toBe(
-      "condition,documentId,source,quantity,value,unit,targetIds,recordedAt,documentSnapshot,quality,approximation,physicalModel,profileRevision,arithmeticQuality",
+      "condition,documentId,source,quantity,value,unit,targetIds,recordedAt,documentSnapshot,quality,approximation,physicalModel,profileRevision,arithmeticQuality,rcModel,rcModelRevision,rcArithmeticPolicy,rcSettlingPolicy,circuitRevision,operationIndex,frameId,timeKind,physicalSeconds",
     );
     const body = bodyLines.join("\r\n");
     expect(body).toContain('"\'=HYPERLINK(""https://example.invalid""),');

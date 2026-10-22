@@ -2,7 +2,7 @@
 
 기준: SIM-008, [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md), [ADR-025](../../decisions/ADR-025-bounded-approximate-dc.md), 2026-10-02.
 
-**채택 명세와 구현 상태를 구분한다.** 현재 런타임은 정확 유리수와 예산 초과 근사 해석, 회로 저장은 v6, 측정 기록은 v5다. §1~6의 정확 경로를 구현했고 [첫 비용 검증](../testing/exact-dc-performance.md)을 완료했다. §7의 요청별 계산 예산·명시적 근사 경로와 공통 품질 전달을 구현했다. 이전 형식의 변환·호환 경로는 제공하지 않는다.
+**채택 명세와 구현 상태를 구분한다.** 현재 런타임은 정확 유리수와 예산 초과 근사 해석, 회로 저장은 v7, 측정 기록은 v6다. §1~6의 정확 경로를 구현했고 [첫 비용 검증](../testing/exact-dc-performance.md)을 완료했다. §7의 요청별 계산 예산·명시적 근사 경로와 공통 품질 전달을 구현했다. 이전 회로 v5/v6의 명시적 복원과 기록 v5의 검증 변환은 [ADR-042](../../decisions/ADR-042-rc-contracts-storage.md)를 따른다. 이 버전 전환은 DC 수치 모델을 변경하지 않는다.
 
 ## 1. 보장 범위
 
@@ -27,7 +27,7 @@
 
 ### 저장과 입력
 
-JSON 물리값은 `{ "numerator": "1", "denominator": "3" }`처럼 정규형 정수 문자열 쌍으로 저장한다. 좌표·회전·화면 배율 등 비물리 데이터는 기존 타입을 유지한다. v6의 voltageV·resistanceOhm·resistanceMinOhm·resistanceMaxOhm에 적용한다. number 물리값·비정규형 분수는 거부한다.
+JSON 물리값은 `{ "numerator": "1", "denominator": "3" }`처럼 정규형 정수 문자열 쌍으로 저장한다. 좌표·회전·화면 배율 등 비물리 데이터는 기존 타입을 유지한다. v7의 voltageV·resistanceOhm·resistanceMinOhm·resistanceMaxOhm에 적용한다. 축전기의 capacitanceF·initialVoltageV도 같은 정확 입력 형식이며 RC 수치 정책은 [별도 규약](linear-rc-transient.md)을 따른다. number 물리값·비정규형 분수는 거부한다.
 
 `CircuitDocument`의 해당 값이 유일한 물리 원본이다. 원문·표시 방식은 별도 표기 정보로 둘 수 있지만 서로 독립적으로 편집되는 number/분수 이중 원본을 만들지 않는다. 계산 결과와 UI 상태는 계속 문서 밖에 둔다.
 

@@ -121,6 +121,9 @@ function terminalPair(
     return null;
   }
 
+  if (component.type === 'capacitor') {
+    return [component.terminals.find(t => t.role === 'a')!.id, component.terminals.find(t => t.role === 'b')!.id];
+  }
   if (component.type === 'diode') {
     const anode = component.terminals.find(terminal => terminal.role === 'anode');
     const cathode = component.terminals.find(terminal => terminal.role === 'cathode');
@@ -154,7 +157,8 @@ function numericValue(
   diagnostics: Diagnostic[],
 ): Rational | null {
   if (component.type === 'diode') return from({ numerator: '7', denominator: '10' });
-  let propertyName: 'voltageV' | 'resistanceOhm' | null = null;
+  let propertyName: 'voltageV' | 'resistanceOhm' | 'capacitanceF' | null = null;
+  if (component.type === 'capacitor') propertyName = 'capacitanceF';
   if (component.type === 'dc-voltage-source') propertyName = 'voltageV';
   if (component.type === 'resistor' || component.type === 'resistive-load') {
     propertyName = 'resistanceOhm';
@@ -205,6 +209,13 @@ function compileElements(
     if (!terminals || value === null || !validSwitchState) continue;
     const operatingProfile = operatingProfileFor(component);
 
+    if (component.type === 'capacitor') {
+      elements.push({ id: component.id, type: 'capacitor', a: endpointToNet[terminals[0]], b: endpointToNet[terminals[1]],
+        value, closed: false, initialVoltageV: from(component.properties.initialVoltageV as import('../domain').StoredScalar),
+        aTerminalId: terminals[0], bTerminalId: terminals[1] });
+      continue;
+    }
+
     elements.push({
       id: component.id,
       type: component.type,
@@ -249,10 +260,48 @@ export function compileCircuit(document: CircuitDocument): CompileResult {
       nets,
       elements,
       endpointToNet,
+      ...(elements.some(e => e.type === 'capacitor') ? { wireCurrentTerms: compileWireCurrentTerms(validatedDocument) } : {}),
       ...(referenceNetId === undefined ? {} : { referenceNetId }),
     },
     diagnostics,
   };
+}
+
+/** KCL cuts use terminal IDs, including capacitor a/b and the active SPDT contact. */
+function compileWireCurrentTerms(document: CircuitDocument): NonNullable<CompiledCircuit['wireCurrentTerms']> {
+  const result: NonNullable<CompiledCircuit['wireCurrentTerms']> = Object.create(null);
+  const neighbors = new Map<string, { id: string; to: string }[]>();
+  for (const wire of document.wires) {
+    for (const [a, b] of [[wire.start.id, wire.end.id], [wire.end.id, wire.start.id]]) {
+      const adjacent = neighbors.get(a) ?? [];
+      adjacent.push({ id: wire.id, to: b });
+      neighbors.set(a, adjacent);
+    }
+  }
+  const terminals = [...document.components].sort((a, b) => compareIds(a.id, b.id))
+    .map(c => ({ id: c.id, pair: terminalPair(c, []) }));
+  for (const wire of [...document.wires].sort((a, b) => compareIds(a.id, b.id))) {
+    const side = new Set([wire.start.id]), queue = [wire.start.id];
+    for (let i = 0; i < queue.length && !side.has(wire.end.id); i++) {
+      for (const edge of neighbors.get(queue[i]) ?? []) {
+        if (edge.id === wire.id || side.has(edge.to)) continue;
+        side.add(edge.to);
+        queue.push(edge.to);
+      }
+    }
+    if (side.has(wire.end.id)) {
+      result[wire.id] = null;
+      continue;
+    }
+    const terms = [];
+    for (const { id, pair } of terminals) {
+      if (!pair) continue; // Compilation diagnostics report unsupported terminals.
+      const coefficient = Number(side.has(pair[1])) - Number(side.has(pair[0]));
+      if (coefficient) terms.push({ componentId: id, coefficient });
+    }
+    result[wire.id] = terms;
+  }
+  return result;
 }
 
 export const circuitCompiler: CircuitCompiler = {

@@ -4,7 +4,7 @@ import type {
   CircuitDocument,
   CompileResult,
   ComponentInstance,
-  SimulationResult,
+  CircuitObservation,
 } from '../domain';
 import { probeCurrent, probeVoltage } from '../measurement';
 import { endpointName } from '../component-library';
@@ -16,7 +16,7 @@ import './meter-readouts.css';
 interface Props {
   document: CircuitDocument;
   compilation: CompileResult;
-  result: SimulationResult;
+  result: CircuitObservation;
   suspended: boolean;
   openIds: ReadonlySet<string>;
   onToggle: (id: string) => void;

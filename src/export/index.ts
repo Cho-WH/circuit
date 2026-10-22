@@ -170,7 +170,7 @@ function componentTextPlacements(
 
   add(presentation.label,'label');
   add(presentation.value,'value');
-  add(presentation.voltage === null ? null : `U = ${presentation.voltage}`,'voltage');
+  add(presentation.voltage === null ? null : component.type === 'capacitor' ? presentation.voltage : `U = ${presentation.voltage}`,'voltage');
   add(presentation.current === null ? null : `I = ${presentation.current}`,'current');
   return placements;
 }

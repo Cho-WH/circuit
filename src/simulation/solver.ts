@@ -298,6 +298,8 @@ export function solveCircuit(
   circuit: CompiledCircuit,
   options: SolveOptions = {},
 ): SimulationResult {
+  const capacitors = circuit.elements.filter(e => e.type === 'capacitor');
+  if (capacitors.length) return failedResult([diagnostic('RC_ENGINE_REQUIRED', capacitors.map(c => c.id))]);
   if (
     Object.keys(options).some((key) => key !== 'physicalModel' && key !== 'referencePolicy') ||
     (options.referencePolicy !== undefined && options.referencePolicy !== 'explicit' && options.referencePolicy !== 'independent') ||

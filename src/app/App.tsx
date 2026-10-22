@@ -1,4 +1,4 @@
-import type { ComponentProperties } from '../domain';
+import type { ComponentProperties, CircuitObservation } from '../domain';
 import { diodeKindFor } from '../domain';
 import { DiodeKindField } from './DiodeKindField';
 import * as q from '../rational';
@@ -76,10 +76,15 @@ import { copyAt, copyOverlapsComponents, singleCopiedComponent } from './copy-pl
 import { parseDocument, serializeDocument, type RecoverySource } from '../persistence';
 import { RecoveryDialog } from './RecoveryDialog';
 import { useCircuitSession, type WorkspaceMode } from './useCircuitSession';
+import { RcPlaybackControls } from './RcPlaybackControls';
+import { CapacitorProperties, CapacitorReadout } from './CapacitorProperties';
+import { RcParameterControl } from './parameters/RcParameterControl';
+import { hasCapacitor } from './rc-session';
+import { compileCircuit } from '../connectivity';
 import { examples } from '../fixtures';
 import { analyze } from './analyze';
 import { runScreenStage } from './screen-failure';
-import { failedResult } from '../simulation';
+import { failedResult, observeRcFrame, rcEngine } from '../simulation';
 import { analysisLocked, analysisStopped } from './analysis-session';
 import { operatingReason } from './operating-text';
 import type { ComponentOperatingMark } from '../visualization';
@@ -156,6 +161,9 @@ export function App() {
     recovery,
     finishRecovery,
     analysisSession,
+    rcSession,
+    rcPlayback,
+    applyRc,
     changeWorkspace,
     canMeasure,
     canChangeValues,
@@ -174,7 +182,8 @@ export function App() {
     paused: '원본 보관 중',
   }[saveStatus];
   const doc = history.present;
-  const locked = analysisLocked(analysisSession);
+  const rcActive = mode === 'analysis' && hasCapacitor(doc);
+  const locked = rcActive ? !canChangeValues() : analysisLocked(analysisSession);
   const stopped = analysisStopped(analysisSession);
   const [selected, setSelected] = useState<string[]>([]);
   const [tool, setTool] = useState('select');
@@ -297,7 +306,7 @@ export function App() {
   const measurementEnabled = mode === 'analysis' && measurementKind !== null && !needsIsolation && !(locked && measurementKind === 'resistance');
   const showOperatingState = mode === 'analysis' && !isolated && !stopped;
   function chooseMeasurement(kind: MeasurementKind | null) {
-    if (kind && (!canMeasure() || (kind === 'resistance' && !canChangeValues()))) return;
+    if (kind && ((!rcActive && !canMeasure()) || (kind === 'resistance' && (rcActive || !canChangeValues())))) return;
     setMeasurementKind(kind);
     setMobileMeasuring(kind !== null);
     setSourcesDetached(false);
@@ -356,14 +365,19 @@ export function App() {
       : null;
   const comparisonBaseline = useMemo(
     () =>
-      scaleContext && comparisonComponent && comparisonParameter
+      !rcActive && scaleContext && comparisonComponent && comparisonParameter
         ? runScreenStage('preparation', () => parameterScales(doc, comparisonComponent.id, comparisonParameter))
         : null,
-    [scaleContext],
+    [scaleContext, rcActive],
   );
-  const evaluation = useMemo(() => analyze(doc), [doc]);
+  const evaluation = useMemo(() => hasCapacitor(doc) ? {
+    compilation: compileCircuit(doc), result: failedResult([]),
+    assessment: { status: 'unverified' as const, components: [] },
+  } : analyze(doc), [doc, rcActive]);
   const { compilation } = evaluation;
-  const result = useMemo(() => stopped ? { ...failedResult([]), provenance: evaluation.result.provenance } : evaluation.result, [evaluation, stopped]);
+  const result = useMemo<CircuitObservation>(() => rcActive && rcSession?.frame ? observeRcFrame(rcSession.frame)
+    : stopped ? { ...failedResult([]), provenance: evaluation.result.provenance } : evaluation.result,
+    [evaluation, stopped, rcActive, rcSession?.frame]);
   const assessment = mode === 'analysis' ? analysisSession.assessment : evaluation.assessment;
   const operatingMarks = useMemo(() => {
     if (mode !== 'analysis') return undefined;
@@ -418,11 +432,31 @@ export function App() {
     comparisonScales = runScreenStage('preparation', () => includeCurrentScales(previous, compilation, result, currents.maxMagnitude));
     heldScales.current = { context: scaleContext, scales: comparisonScales };
   } else heldScales.current = null;
+  const rcScaleSeed = useMemo(() => {
+    if (!rcSession?.plan) return null;
+    const samples = [rcEngine.sample(rcSession.plan, { kind: 'finite', seconds: 0 }), rcEngine.sample(rcSession.plan, { kind: 'equilibrium' })];
+    let scale: ReturnType<typeof includeCurrentScales> = { voltage: { min: q.ZERO, max: q.ZERO }, height: { min: q.ZERO, max: q.ZERO }, current: q.ZERO };
+    for (const sample of samples) if (sample.ok) {
+      const view = observeRcFrame(sample.value);
+      const max = [...Object.values(sample.value.branchCurrents), ...Object.values(sample.value.wireCurrents)].reduce((a,b) => q.compare(a,q.abs(b)) > 0 ? a : q.abs(b), q.ZERO);
+      scale = includeCurrentScales(scale, compilation, view, max);
+    }
+    return scale;
+  }, [rcSession?.plan, compilation]);
+  const rcHeldScales = useRef<{ seed: typeof rcScaleSeed; value: NonNullable<typeof rcScaleSeed> } | null>(null);
+  if (rcActive && rcScaleSeed) {
+    const previous = rcHeldScales.current?.seed === rcScaleSeed ? rcHeldScales.current.value : rcScaleSeed;
+    comparisonScales = includeCurrentScales(previous, compilation, result, currents.maxMagnitude);
+    rcHeldScales.current = { seed: rcScaleSeed, value: comparisonScales };
+  } else rcHeldScales.current = null;
   const {
-    display: currentDisplay,
+    display: baseCurrentDisplay,
     setPaused: setCurrentPaused,
     setWidthScale: setCurrentWidthScale,
   } = useCurrentDisplay(currents, comparisonScales?.current, adjustingParameters.size > 0);
+  const currentDisplay = useMemo(() => rcActive ? { ...baseCurrentDisplay,
+    changing: false, paused: ['paused', 'preparing', 'error'].includes(rcSession?.phase ?? 'preparing'),
+  } : baseCurrentDisplay, [baseCurrentDisplay, rcActive, rcSession?.phase]);
   const potential = useMemo(
     () =>
       runScreenStage('preparation', () => buildPotentialModel(doc, compilation.circuit, result, {
@@ -478,7 +512,7 @@ export function App() {
   }, [notice]);
   useEffect(() => {
     setValueDraft(component && definition?.property ? componentValueInput(component) : '');
-  }, [component?.id, component?.properties, definition?.property, locked]);
+  }, [component?.id, component?.properties, definition?.property, rcActive ? false : locked, rcSession?.experimentEpoch]);
   function copy() {
     if (mode !== 'build' || !selected.length) return;
     const payload = copySelection(doc, selected, newId, { x: 0, y: 0 });
@@ -622,7 +656,7 @@ export function App() {
       : null;
   const helpItems = useMemo(() => resolveOperatingHelp({
     document: doc, circuit: compilation.circuit, result, assessment,
-    active: mode === 'analysis' && !isolated, phase: analysisSession.phase, selectedIds: selected, showNumbers,
+    active: mode === 'analysis' && !isolated && !rcActive, phase: analysisSession.phase, selectedIds: selected, showNumbers,
     measuredComponentIds: measurementEnabled && !stopped ? measuredHelpComponents(compilation.circuit,
       measurementKind === 'voltage' ? redProbe : '', measurementKind === 'voltage' ? blackProbe : '',
       measurementKind === 'current' ? currentTarget?.id : undefined) : [],
@@ -687,11 +721,17 @@ export function App() {
   function toggleSwitch(id: string): boolean {
     const component = doc.components.find((c) => c.id === id);
     if (!component || component.type !== 'switch') return false;
-    return dispatch({
+    const command: Command = {
       type: 'SetProperties',
       id,
       properties: { state: nextSwitchState(component) },
-    });
+    };
+    if (rcActive) {
+      if (!canChangeValues()) return false;
+      void applyRc(command);
+      return true;
+    }
+    return dispatch(command);
   }
   function applyValue() {
     if (!canChangeValues() || !component || !definition?.property) return;
@@ -706,14 +746,16 @@ export function App() {
       (parsed?.fraction ?? '') === (component.properties[definition.property + 'Fraction'] ?? '')
     )
       return;
-    dispatch({
+    const command: Command = {
       type: 'SetProperties',
       id: component.id,
       properties: {
         [definition.property]: value,
         [definition.property + 'Fraction']: parsed?.fraction ?? '',
       },
-    });
+    };
+    if (rcActive) void applyRc(command);
+    else dispatch(command);
   }
   function applyQuantityMode(next: QuantityMode, all = false) {
     if (!component) return;
@@ -889,6 +931,7 @@ export function App() {
     ) : null;
   const circuitCanvas = (
     <CircuitCanvas
+      observationFrameId={'rcFrame' in result ? result.rcFrame.context.frameId : undefined}
       onComponentLabelLayout={mode === 'analysis' ? receive2DComponentLayout : undefined}
       paletteDrag={paletteDrag}
       preserveViewOnResize={mode === 'analysis'}
@@ -971,7 +1014,7 @@ export function App() {
       onWire={onWire}
       focusIds={focusIds}
       onCancel={cancelTool}
-      onCommitComponent={(id, edit) => {
+      onCommitComponent={rcActive ? undefined : (id, edit) => {
         const c = doc.components.find((c) => c.id === id);
         if (!c || mode === 'worksheet') return false;
         const commands: Command[] = [];
@@ -1092,7 +1135,7 @@ export function App() {
           {mode === 'analysis' ? (!compact &&
             <AnalysisTools
               stopped={stopped}
-              resistanceDisabled={locked}
+              resistanceDisabled={rcActive || locked}
               kind={measurementKind}
               onChoose={chooseMeasurement}
               needsIsolation={needsIsolation}
@@ -1148,13 +1191,18 @@ export function App() {
               const parameter = adjustableParameter(adjustableComponent)!;
               return (
                 <ComponentControlPanel
-                  key={`${documentEpoch}:${doc.documentId}:${adjustableComponent.id}:${q.exactText(parameter.min)}:${q.exactText(parameter.max)}`}
+                  key={`${documentEpoch}:${rcSession?.experimentEpoch ?? 0}:${doc.documentId}:${adjustableComponent.id}:${q.exactText(parameter.min)}:${q.exactText(parameter.max)}`}
                   component={adjustableComponent}
                   compact={compact}
                   onClose={() => setSelection([])}
                   hidden={controlledComponent?.id !== adjustableComponent.id}
                 >
-                  <ParameterControl
+                  {rcActive ? <RcParameterControl
+                    component={adjustableComponent} parameter={parameter} disabled={controlsDisabled}
+                    onApply={async (value, fraction) => (await applyRc({ type: 'SetProperties', id: adjustableComponent.id,
+                      properties: { [parameter.property]: value, [parameter.property + 'Fraction']: fraction ?? '' },
+                    })).ok}
+                  /> : <ParameterControl
                     stopEpoch={analysisSession.stopEpoch}
                     inspectIntermediate={doc.components.some(c => c.type === 'diode')}
                     onAdjustingChange={onParameterAdjusting}
@@ -1184,7 +1232,7 @@ export function App() {
                       );
                       return !applied.ok ? false : automaticEpoch() !== before ? 'stop' : true;
                     }}
-                  />
+                  />}
                 </ComponentControlPanel>
               );
             })}
@@ -1196,6 +1244,7 @@ export function App() {
           )}
         </aside>
         <main className="canvas-column">
+          {rcActive && rcSession && <RcPlaybackControls state={rcSession} session={rcPlayback} document={doc} />}
           <div className="editor-toolbar" hidden={mode !== 'build'}>
             {compact && <FloatingPanel label="부품 추가" contentLabel="부품 추가" trigger={<><Plus size={17} />부품</>} className="compact-parts" contentClassName="compact-parts-panel" align="start" width={330}>
               {close => <>
@@ -1335,7 +1384,7 @@ export function App() {
               result={result}
               canRecord={canMeasure}
               stopped={stopped}
-              resistanceDisabled={locked}
+              resistanceDisabled={rcActive || locked}
               voltageReading={voltageReading}
               voltageLabel={voltageLabel}
               active={mode === 'analysis'}
@@ -1370,7 +1419,7 @@ export function App() {
                           setOpenHelp(key => key?.startsWith('canvas:') && !helpItems.some(item => `canvas:${item.key}` === key && ids.includes(item.componentId)) ? null : key);
                         }} />
                       <span className="measurement-sr-only" role="status" key={analysisSession.stopEpoch}>{assessment.representative ? `${doc.components.find(c => c.id === assessment.representative!.componentId)?.label ?? ''}: ${operatingReason(assessment.representative,assessment.representative.level === 'damage')}` : ''}</span>
-                      {showOperatingState && showCurrent && (
+                      {showOperatingState && showCurrent && !rcActive && (
                         <CurrentControls
                           paused={currentDisplay.paused}
                           onPause={setCurrentPaused}
@@ -1602,14 +1651,16 @@ export function App() {
                 <fieldset className="component-properties" disabled={locked}>
                   <label className="field-label">
                     이름
-                    <ComponentNameInput
+                    {rcActive ? <span>{component.label}</span> : <ComponentNameInput
                       key={component.id}
                       label="부품 이름"
                       value={component.label}
                       onCommit={(label) => dispatch({ type: 'SetLabel', id: component.id, label })}
-                    />
+                    />}
                   </label>
-                  {definition.property && (
+                  {component.type === 'capacitor' && mode === 'build' && <CapacitorProperties key={component.id} component={component} document={doc} onApply={properties => dispatch({ type: 'SetProperties', id: component.id, properties })} />}
+                  {component.type === 'capacitor' && rcActive && <CapacitorReadout component={component} document={doc} frame={rcSession?.frame ?? null} />}
+                  {definition.property && component.type !== 'capacitor' && (
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
@@ -1623,8 +1674,9 @@ export function App() {
                             ref={valueInput}
                             aria-label={`${component.label} 값`}
                             value={valueDraft}
+                            disabled={rcActive && component.type !== 'resistor' && !adjustableParameter(component)}
                             onChange={(e) => setValueDraft(e.target.value)}
-                            onBlur={applyValue}
+                            onBlur={rcActive ? undefined : applyValue}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') {
                                 e.preventDefault();
@@ -1636,7 +1688,7 @@ export function App() {
                           <span>{definition.unit}</span>
                         </div>
                       </label>
-                      {quantityControl}
+                      {rcActive ? <button type="submit" disabled={component.type !== 'resistor' && !adjustableParameter(component)}>적용</button> : quantityControl}
                       <p className="tiny-note">
                         {definition.unit === 'Ω'
                           ? '1k, 1.5 kΩ처럼 입력할 수 있어요.'
@@ -1705,7 +1757,7 @@ export function App() {
                         )}
                       </strong>
                     </div>
-                    <div>
+                    <div hidden={hasCapacitor(doc)}>
                       <span>
                         {q.sign(result.componentPowers[component.id] ?? 0) < 0
                           ? '공급 전력'

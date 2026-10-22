@@ -7,7 +7,7 @@ import {
   type CircuitDocument,
   type DocumentValidation,
 } from '../domain';
-export { loadMeasurementNotebook, saveMeasurementNotebook, type MeasurementEntry, type MeasurementAnchor, type MeasurementAnchors } from './measurement-notebook';
+export { loadMeasurementNotebook, saveMeasurementNotebook, parseMeasurementNotebook, migrateMeasurementNotebook, type MeasurementEntry, type MeasurementAnchor, type MeasurementAnchors } from './measurement-notebook';
 
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
 type StorageKind = 'auto' | 'manual';
@@ -23,7 +23,7 @@ const ORIGINAL_KEY = 'edu-circuit:originals:v1';
 export interface RecoverySource { raw: string; storageKey?: string; filename?: string }
 
 export function recoveryReason(raw: string): 'older-version' | 'newer-version' | 'invalid-data' {
-  const currentVersion: CircuitDocument['version'] = 6;
+  const currentVersion: CircuitDocument['version'] = 7;
   try {
     const data = JSON.parse(raw);
     if (data?.format === 'edu-circuit' && Number.isInteger(data.version) && data.version > 0) {

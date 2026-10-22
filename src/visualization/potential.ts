@@ -1,7 +1,7 @@
 import * as q from '../rational';
-import type { CircuitDocument, CompiledCircuit, SimulationResult, EndpointRef } from '../domain';
+import type { CircuitDocument, CompiledCircuit, CircuitObservation, EndpointRef } from '../domain';
 import { isChangeoverSwitch, switchTerminals } from '../domain';
-import { endpointPosition, wirePoints, switchContactPath } from '../component-library';
+import { endpointPosition, wirePoints, switchContactPath, capacitorPlatePaths } from '../component-library';
 import { potentialColor, type PotentialPaletteId } from './palettes';
 
 export interface PotentialValue {
@@ -31,6 +31,9 @@ export interface PotentialOptions {
   palette?: PotentialPaletteId;
 }
 export interface PotentialModel {
+  frameId?: string;
+  /** Certified a→b/positive→negative differences from the RC frame, not subtracted approximations. */
+  componentVoltages?: Record<string, q.Rational>;
   references?: PotentialReference[];
   modelApproximation?: boolean;
   voltageUnit: q.StoredScalar;
@@ -55,7 +58,7 @@ export function referenceGroupLabel(index: number): string {
 export function buildPotentialModel(
   document: CircuitDocument,
   circuit: CompiledCircuit,
-  result: SimulationResult,
+  result: CircuitObservation,
   options: PotentialOptions = {},
 ): PotentialModel {
   const exactValues = Object.values(result.nodeVoltages).filter(q.isRational);
@@ -143,6 +146,15 @@ export function buildPotentialModel(
     });
   }
   for (const c of document.components) {
+    if (c.type === 'capacitor') {
+      for (const plate of capacitorPlatePaths(c)) {
+        const value = endpoints[plate.terminalId];
+        if (value?.height === undefined) continue;
+        for (const path of plate.paths) segments.push({ id: c.id, kind: 'component', color: value.color,
+          points: path.map(p => ({ ...p, z: value.height! })) });
+      }
+      continue;
+    }
     if (c.type === 'switch' && c.properties.state === 'open') continue;
     if (c.type === 'voltmeter') continue;
     const points = (isChangeoverSwitch(c) ? switchTerminals(c) : c.terminals.slice(0, 2)).map((t) => {
@@ -161,6 +173,7 @@ export function buildPotentialModel(
       });
   }
   return {
+    ...('rcFrame' in result ? { frameId: result.rcFrame.context.frameId, componentVoltages: result.componentVoltages } : {}),
     references,
     ...axis,
     ...(result.provenance?.physicalModel === 'component' ? { modelApproximation: true } : {}),

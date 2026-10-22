@@ -1,7 +1,7 @@
 import * as q from '../rational';
 import { isStoredScalar, type StoredScalar } from '../domain';
 /** Pure SI input and display. Formatting never changes a stored physical value. */
-export type QuantityUnit = 'Ω' | 'V' | 'A' | '';
+export type QuantityUnit = 'Ω' | 'V' | 'A' | 'F' | 'C' | '';
 export interface ParsedQuantity {
   value: StoredScalar;
   fraction?: string;
@@ -32,7 +32,7 @@ const pattern = new RegExp(
     scalarPattern +
     ')(?:\\s*[/⁄]\\s*(' +
     scalarPattern +
-    '))?\\s*([pnumkMμµ]?)\\s*(Ω|ohm|V|A)?\\s*$',
+    '))?\\s*([pnumkMμµ]?)\\s*(Ω|ohm|V|A|F|C)?\\s*$',
 );
 
 function decimalText(coefficient: bigint, power: number): string {

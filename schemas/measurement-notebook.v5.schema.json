@@ -1,0 +1,357 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 5
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "condition": {
+                "type": "string"
+              },
+              "source": {
+                "enum": ["simulation", "external"]
+              },
+              "quantity": {
+                "enum": ["voltage", "current", "resistance"]
+              },
+              "value": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "numerator": {
+                        "type": "string",
+                        "pattern": "^(0|-?[1-9][0-9]*)$"
+                      },
+                      "denominator": {
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]*$"
+                      },
+                      "approximation": {
+                        "type": "object",
+                        "properties": {
+                          "reason": {
+                            "enum": ["integer-limit", "operation-limit"]
+                          },
+                          "policy": {
+                            "const": "dc-budget-1"
+                          },
+                          "absoluteError": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "required": ["reason", "policy", "absoluteError"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["numerator", "denominator"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "unit": {
+                "enum": ["V", "A", "Ω"]
+              },
+              "targetIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "recordedAt": {
+                "type": "string"
+              },
+              "quality": {
+                "enum": ["exact", "approximate"]
+              },
+              "documentSnapshot": {
+                "$ref": "https://example.invalid/edu-circuit/circuit-document.v6.schema.json"
+              },
+              "provenance": {
+                "type": "object",
+                "properties": {
+                  "physicalModel": {
+                    "enum": ["textbook", "component"]
+                  },
+                  "profileRevision": {
+                    "type": "string"
+                  },
+                  "arithmeticQuality": {
+                    "enum": ["exact", "approximate"]
+                  }
+                },
+                "required": ["physicalModel", "profileRevision", "arithmeticQuality"],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "condition",
+              "source",
+              "quantity",
+              "value",
+              "unit",
+              "targetIds",
+              "quality",
+              "documentSnapshot"
+            ],
+            "additionalProperties": false
+          },
+          "note": {
+            "type": "string"
+          },
+          "sourcesDisconnected": {
+            "type": "boolean"
+          },
+          "anchors": {
+            "type": "object",
+            "properties": {
+              "red": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "endpoint"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "endpointKind": {
+                        "enum": ["terminal", "junction"]
+                      }
+                    },
+                    "required": ["kind", "id", "endpointKind"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "wire"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "segment": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "t": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": ["kind", "id", "segment", "t"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "component"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["kind", "id"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "black": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "endpoint"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "endpointKind": {
+                        "enum": ["terminal", "junction"]
+                      }
+                    },
+                    "required": ["kind", "id", "endpointKind"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "wire"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "segment": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "t": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": ["kind", "id", "segment", "t"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "component"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["kind", "id"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "current": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "endpoint"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "endpointKind": {
+                        "enum": ["terminal", "junction"]
+                      }
+                    },
+                    "required": ["kind", "id", "endpointKind"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "wire"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "segment": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "t": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": ["kind", "id", "segment", "t"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "component"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["kind", "id"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": ["red", "black", "current"],
+            "additionalProperties": false
+          },
+          "currentDirection": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": ["terminal", "junction"]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["kind", "id"],
+                "additionalProperties": false
+              },
+              "to": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": ["terminal", "junction"]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["kind", "id"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["from", "to"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "record", "note", "sourcesDisconnected", "anchors"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["version", "entries"],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/edu-circuit/measurement-notebook.v5.schema.json",
+  "title": "Measurement notebook v5 (recovery only)"
+}

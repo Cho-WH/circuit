@@ -27,6 +27,7 @@ interface Props {
   diagnostics: ReactNode;
   stopped?: boolean;
   resistanceDisabled?: boolean;
+  quiet?: boolean;
 }
 
 /** A different mobile layout over the same measurement values and commands. */
@@ -44,7 +45,7 @@ export function CompactMeasurementBar(props: Props) {
       <Unplug size={16} />전원 분리하고 측정
     </button> : <>
       <FloatingPanel label="측정값 상세" contentLabel="측정값 상세" className="compact-reading" contentClassName="compact-reading-detail" width={300}
-        trigger={<output aria-label="측정값" aria-live="polite" aria-atomic="true" style={{ fontSize: `${Math.max(12, Math.min(24, 100 / Math.max(4, props.reading.length * .55)))}px` }}>{props.reading}</output>}>
+        trigger={<output aria-label="측정값" aria-live={props.quiet ? 'off' : 'polite'} aria-atomic="true" style={{ fontSize: `${Math.max(12, Math.min(24, 100 / Math.max(4, props.reading.length * .55)))}px` }}>{props.reading}</output>}>
         {() => <>
           <strong>{props.reading}</strong>
           {props.kind === 'voltage' && <p>빨강 {props.potentials.red} · 검정 {props.potentials.black}</p>}

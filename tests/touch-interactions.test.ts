@@ -86,6 +86,18 @@ it('places on empty-space release with no extra confirmation, but never after a 
   pointer(c.svg,'pointerdown',600,100);pointer(c.svg,'pointermove',700,150);pointer(c.svg,'pointerup',700,150);click(c.svg,700,150);
   expect(c.props.onPlace).not.toHaveBeenCalled();
 });
+
+it('places a capacitor by touch and routes a value tap to the initial-condition editor',()=>{
+  const c=canvas({placement:'capacitor',onValue:vi.fn()});
+  tap(c.svg,c.svg,600,100);
+  expect(c.props.onPlace).toHaveBeenCalledExactlyOnceWith('capacitor',{x:600,y:100});
+  const doc=fixture();doc.components.push(createComponent('capacitor','C',{x:600,y:100}));
+  c.render({document:doc,placement:null});
+  const value=host.querySelector('[data-value-id="C"]')!;
+  pointer(value,'pointerdown',600,142);pointer(value,'pointerup',600,142);click(value,600,142);
+  expect(c.props.onValue).toHaveBeenCalledExactlyOnceWith('C');
+  expect(host.querySelector('[data-symbol="capacitor"]')).not.toBeNull();
+});
 it('holds an unselected body to move it; a short swipe pans instead',()=>{
   vi.useFakeTimers();const c=canvas(),body=host.querySelector('[data-component-id="A"] .component')!;
   pointer(body,'pointerdown',200,400);act(()=>vi.advanceTimersByTime(450));

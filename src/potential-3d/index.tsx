@@ -451,7 +451,7 @@ export function Potential3D(props: Potential3DProps) {
       const active = selectedIds.includes(segment.id) || highlightedId===segment.id || Boolean(selectedNet && potential.nets[selectedNet]?.wireIds.includes(segment.id));
       const color = active ? '#53694b' : showColors ? segment.color : '#667060';
       // Transparent meshes retain hit testing while current bands own the visible path.
-      segment.points.slice(1).forEach((p,i) => tube(r.raised,point(segment.points[i]),point(p),color,radius*(active?1.65:1),segment.id,!props.currentDisplay));
+      segment.points.slice(1).forEach((p,i) => tube(r.raised,point(segment.points[i]),point(p),color,radius*(active?1.65:1),segment.id,!props.currentDisplay || circuit.components.some(c => c.id === segment.id && c.type === 'capacitor')));
     }
     if (!props.operatingStopped && circuit.referenceNode && showNumbers) {
       const reference = { id: circuit.referenceNode.id, endpoint: circuit.referenceNode };
@@ -523,7 +523,7 @@ export function Potential3D(props: Potential3DProps) {
     else moveCamera(r,value);
     setPreset(value);
   } };
-  return <section className="potential-scene" aria-label="3D 전위 높이 보기">
+  return <section className="potential-scene" data-rc-frame={potential.frameId} aria-label="3D 전위 높이 보기">
     <header className="potential-scene-header"><div className="scene-toolbar" aria-label="3D 카메라 보기">
       <button aria-pressed={preset==='oblique'} onClick={()=>choose('oblique')}><MoveUpRight size={14}/>사선</button><button aria-pressed={preset==='front'} onClick={()=>choose('front')}><ScanLine size={14}/>정면</button><button aria-pressed={preset==='top'} onClick={()=>choose('top')}><Layers3 size={14}/>위</button><button aria-label="보기 초기화" onClick={()=>choose('oblique',true)}><RotateCcw size={14}/></button><span className="scene-divider"/><button aria-label="눈금" aria-pressed={guides} onClick={()=>setGuides(!guides)}>{guides?<Eye size={15}/>:<EyeOff size={15}/>}눈금</button>
     </div></header>

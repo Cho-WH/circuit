@@ -5,8 +5,8 @@ import { SvgNotation } from './Notation';
 import type { CircuitDocument } from '../domain';
 import type { CircuitPath } from '../visualization';
 import { pathVoltages } from '../visualization';
-import type { SimulationResult } from '../domain';
-export function PotentialGraph({ path, result, hovered, onHover, document }: { document: CircuitDocument; path: CircuitPath | null; result: SimulationResult; hovered: string | null; onHover: (id: string | null) => void }) {
+import type { CircuitObservation } from '../domain';
+export function PotentialGraph({ path, result, hovered, onHover, document }: { document: CircuitDocument; path: CircuitPath | null; result: CircuitObservation; hovered: string | null; onHover: (id: string | null) => void }) {
   if (!path) return <div className="graph-empty">전원을 포함한 회로를 연결하거나 경로를 직접 선택하세요.</div>;
   const queried = pathVoltages(path, result);
   const steps = queried.flatMap(s => s.fromVoltage !== undefined && s.toVoltage !== undefined ? [{ ...s, fromVoltage: s.fromVoltage, toVoltage: s.toVoltage }] : []);

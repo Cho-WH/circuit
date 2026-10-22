@@ -20,10 +20,12 @@ export function measurementConditionKey(entry: MeasurementEntry): string {
     documentId: doc.documentId,
     isolated: entry.sourcesDisconnected,
     provenance: entry.record.provenance,
+    transient: entry.record.transient,
     components: sorted(doc.components).map((c) => ({
       id: c.id,
       type: c.type,
       operatingProfile: c.operatingProfile,
+      initialVoltageV: c.properties.initialVoltageV,
       characteristics: [c.properties.diodeThresholdV,c.properties.diodeOnResistanceOhm,c.properties.sourceResistanceOhm],
       terminals: c.terminals.map((t) => [t.id, t.role]),
       value: componentDefinition(c).property
@@ -62,6 +64,7 @@ export function conditionValues(entry: MeasurementEntry): { label: string; value
             quantityFormatForTargets(doc, [c.id]),
           ),
         },
+        ...(c.type === 'capacitor' ? [{ label: `${c.label} 초기 전압`, value: formatQuantity(c.properties.initialVoltageV as q.Scalar, 'V') }] : []),
       ];
     return c.type === 'switch' || c.type === 'diode'
       ? [{ label: c.label, value: componentValue(c) }]
@@ -75,7 +78,15 @@ export function conditionDescription(entry: MeasurementEntry): string {
     ...conditionValues(entry).map(({ label, value }) => `${label} ${value}`),
     ...(entry.sourcesDisconnected ? ['모든 전원 분리'] : []),
     ...(entry.record.provenance?.physicalModel === 'component' ? ['부품 특성'] : []),
+    ...(entry.record.transient ? ['이상적 RC', measurementMoment(entry)] : []),
   ].join(' · ');
+}
+
+export function measurementMoment(entry: MeasurementEntry): string {
+  const context = entry.record.transient;
+  if (!context) return '직류 평형';
+  const operation = context.operationIndex === 0 ? '최초 관찰' : `조작 ${context.operationIndex}`;
+  return `${operation} · ${context.time.kind === 'equilibrium' ? '최종 평형' : `${Number(context.time.seconds.toPrecision(6))} s`}`;
 }
 
 export function measurementQuantityName(entry: MeasurementEntry): string {
@@ -123,9 +134,12 @@ export function measurementValue(entry: MeasurementEntry): string {
   );
 }
 
-export function measurementTableRows(entries: MeasurementEntry[]): string[][] {
+export function measurementTableRows(entries: MeasurementEntry[], includeSource = false): string[][] {
+  const rc = entries.some(entry => entry.record.transient);
   return [
-    ['기록', '측정 위치', '측정', '측정값', '방향 / 탐침', '회로 조건', '메모'],
+    ['기록', '측정 위치', '측정', '측정값', '방향 / 탐침', '회로 조건', '메모',
+      ...(rc ? ['관찰 시각'] : []),
+      ...(rc && includeSource ? ['수치 품질', '원본 수치', 'RC 시간 출처', '오차 보증', '원본 회로'] : [])],
     ...measurementConditions(entries).flatMap((group) =>
       group.entries.map((entry) => [
         String(entries.indexOf(entry) + 1),
@@ -135,14 +149,20 @@ export function measurementTableRows(entries: MeasurementEntry[]): string[][] {
         measurementDirection(entry),
         `조건 ${group.number} · ${conditionDescription(entry)}`,
         entry.note,
+        ...(rc ? [measurementMoment(entry)] : []),
+        ...(rc && includeSource ? [entry.record.quality,
+          entry.record.value === null ? '' : q.exactText(entry.record.value),
+          entry.record.transient ? JSON.stringify(entry.record.transient) : '',
+          entry.record.value?.approximation ? JSON.stringify(entry.record.value.approximation) : '',
+          JSON.stringify(entry.record.documentSnapshot)] : []),
       ]),
     ),
-  ].map((row) => row.map((cell) => notationDisplayText(cell)));
+  ].map((row) => row.map((cell, index) => includeSource && rc && index >= 8 ? cell : notationDisplayText(cell)));
 }
 
 const safeText = (text: string) => (/^[\s]*[=+\-@]/.test(text) ? `'${text}` : text);
 export function measurementTableText(entries: MeasurementEntry[], separator = '\t'): string {
-  return measurementTableRows(entries)
+  return measurementTableRows(entries, separator === ',')
     .map((row) =>
       row
         .map((value) => {

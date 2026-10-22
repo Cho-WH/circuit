@@ -93,6 +93,7 @@ export interface CanvasProps {
   highlightedElements?: string[];
   onHoverElement?: (id: string | null) => void;
   currentDisplay?: CurrentDisplay;
+  observationFrameId?: string;
   measurement?: Omit<MeasurementLayerProps, 'document' | 'scale' | 'bounds' | 'point'>;
   largeLabels?: boolean;
   operatingMarks?: Record<string, ComponentOperatingMark>;
@@ -492,7 +493,7 @@ export function CircuitCanvas(props: CanvasProps) {
       return;
     }
     props.onSelect(id);
-    if (props.onCommitComponent) setEditingId(id);
+    if (props.onCommitComponent && c.type !== 'capacitor') setEditingId(id);
     else props.onValue(id);
   }
   function closeEditor() {
@@ -621,6 +622,7 @@ export function CircuitCanvas(props: CanvasProps) {
     >
       <svg
         ref={svg}
+      data-rc-frame={props.observationFrameId}
         className="circuit-canvas"
         aria-label={props.readOnly ? (props.readOnlyLabel ?? '측정 회로') : '회로 편집 캔버스'}
         role="group"
@@ -1183,7 +1185,7 @@ export function CircuitCanvas(props: CanvasProps) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     dangerouslySetInnerHTML={{
-                      __html: symbolMarkup(c, { disconnectedSource: isolated }),
+                      __html: symbolMarkup(c, { disconnectedSource: isolated, showSymbolPolarity: c.type === 'capacitor' && !props.readOnly && props.selected.includes(c.id), terminalColors: props.endpointColors }),
                     }}
                   />
                 </g>
@@ -1228,7 +1230,7 @@ export function CircuitCanvas(props: CanvasProps) {
                 text={value}
               />
               {[
-                presentation.voltage && `U = ${presentation.voltage}`,
+                presentation.voltage && (c.type === 'capacitor' ? presentation.voltage : `U = ${presentation.voltage}`),
                 presentation.current && `I = ${presentation.current}`,
               ]
                 .filter(Boolean)

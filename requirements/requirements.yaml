@@ -413,6 +413,103 @@ requirements:
   - decisions/ADR-025-bounded-approximate-dc.md
   - docs/physics/exact-dc-arithmetic.md
   - docs/implementation/current-phase.md
+- id: SIM-009
+  title: 선형 RC 지수응답과 최종 평형
+  state: accepted
+  priority: SHOULD
+  phase: later
+  statement: 여러 이상적 축전기와 저항·직류 전원·스위치의 조작별 응답을 초기 전하를 보존하는 선형 RC 엔진으로 계산하고, 남은 변화 상한으로 관찰 종료 시점을 정한 뒤 명시적으로 최종 평형으로 전환한다.
+  acceptance:
+  - 초기 전압과 연결 제약의 일관성을 검사한다. 다이오드 혼합과 충격 전류가 필요한 조작은 거부하며 가상의 저항·누설을 추가하지 않는다.
+  - 독립 저장 상태와 보존 전하를 분리한 전체 회로의 지수응답을 계산한다. 같은 입력·물리 시각·정책에서 FPS·배속과 무관한 결과를 반환한다.
+  - 유일한 관측 전압·전류와 축전기 상태 전체의 앞으로 남은 변화 상한으로 안정화를 판단한다. 상대 0.1%·단위별 절대 바닥값·수치 오차 예산을 분리하고 미확인을 정상 종료로 바꾸지 않는다.
+  - 고립된 축전기의 전하와 동적 기준 관계를 유지한다. 작은 양의 감쇠율·미정 전류·정확한 0을 임의로 합치지 않는다.
+  - 기준 통과 또는 넘기기 후 최종 평형으로 명시적으로 이동한다. 다음 조작은 이 평형에서 시작하며 평형을 유한 시간의 값으로 기록하지 않는다.
+  - RC 첫 버전에는 기존 DC의 자동 모델 전환·과부하·파손 판정을 적용하지 않는다. 축전기 없는 기존 DC 경로는 유지한다.
+  modules:
+  - domain
+  - connectivity
+  - simulation
+  - diagnostics
+  physics_rules: []
+  fixtures: []
+  docs:
+  - decisions/ADR-041-linear-rc-transient.md
+  - docs/physics/linear-rc-transient.md
+  - docs/architecture/rc-transient.md
+  - docs/testing/rc-transient-cases.md
+  - docs/testing/rc-c0-results.md
+  - decisions/ADR-043-rc-product-engine.md
+  - docs/testing/rc-c2-results.md
+- id: VIS-008
+  title: RC 관찰 재생과 조작 잠금
+  state: accepted
+  priority: SHOULD
+  phase: later
+  statement: 분석하기에서 조작 한 번의 충전·방전을 관찰하고 최종 평형에 도달한 뒤 다음 조작을 허용한다. 물리 시각과 표시 시계를 구분한다.
+  acceptance:
+  - 평형에서 스위치·저항·조절 가능한 직류 전원 전압을 한 번씩 적용하며 실행·일시정지·평형 전환 중 전기 조건 변경을 명령 단계에서 막는다.
+  - 기본 1배, 예상 시간이 5초 이상이면 처음부터 배속·넘기기 아이콘을 제공한다. 0.5초 미만의 변화는 화면에서 1초 동안 보이도록 감속하며 배율을 표시한다.
+  - 일시정지·재개 아이콘과 접근성 이름을 제공한다. 모든 2D·3D·계기·탐침은 같은 시각의 프레임을 사용하고 숨긴 탭에서는 일시정지한다.
+  - 최종 평형 전환 중에는 유한 경과 시간과 측정 기록을 제공하지 않는다. 다시 시작은 분석 진입 당시 회로와 초기 전압으로 복원한다.
+  - 입자 표시로 전하를 적분하지 않으며 전하 표식이 축전기 유전체를 통과하지 않는다.
+  modules:
+  - app
+  - editor
+  - visualization
+  - potential-3d
+  - current-view
+  - component-library
+  physics_rules: []
+  fixtures: []
+  docs:
+  - docs/ux/rc-transient.md
+  - docs/architecture/rc-transient.md
+  - docs/testing/rc-transient-cases.md
+- id: MEA-006
+  title: RC 시각별 측정과 평형 기록
+  state: accepted
+  priority: SHOULD
+  phase: later
+  statement: RC 관찰의 일시정지 시각과 최종 평형을 구분해 전압·전류를 측정하고 조건·시간 종류·품질을 기록한다.
+  acceptance:
+  - 일시정지와 평형에서 측정 기록을 허용한다. 실행 중과 평형 전환 중에는 기록하지 않는다.
+  - 조작 번호·유한 경과 시간 또는 평형·회로 조건·수치 출처를 저장과 CSV에 보존한다. 근사값을 정확값으로 승격하지 않는다.
+  - RC 문서에서는 첫 버전 등가저항 측정과 자동 값 변화 실험을 비활성화한다. 축전기 없는 문서의 기존 도구는 유지한다.
+  modules:
+  - measurement
+  - quantity
+  - app
+  - persistence
+  physics_rules: []
+  fixtures: []
+  docs:
+  - docs/ux/rc-transient.md
+  - docs/architecture/rc-transient.md
+  - docs/testing/rc-transient-cases.md
+- id: DAT-006
+  title: 축전기 초기 조건과 RC 기록 형식
+  state: accepted
+  priority: SHOULD
+  phase: later
+  statement: 축전기 전기용량·초기 전압을 회로 설정으로 저장하고 현재 충전 상태와 재생 위치는 저장하지 않는다. 새 형식은 명시적인 버전 변경과 원본 보호를 통해 도입한다.
+  acceptance:
+  - C와 부호 있는 초기 전압은 정확 입력이며 기본 초기 전압은 0 V다. 현재 전하·시계·행렬·재생 plan을 CircuitDocument에 저장하지 않는다.
+  - 회로 v7·측정 기록 v6를 사용한다. 회로 v5/v6는 명시적 복원, 기록 v5는 원본 키를 보존한 검증 복사로 변환한다. 시간·정책·오차 출처를 누락하거나 꾸미지 않는다.
+  - 기존 형식의 검증된 명시적 복원, 새 형식 왕복, 지원 밖 입력 거부 및 원본 보존을 확인한다. 예전 DC 기록에 가짜 RC 시간 정보를 추가하지 않는다.
+  modules:
+  - domain
+  - persistence
+  - measurement
+  - export
+  physics_rules: []
+  fixtures: []
+  docs:
+  - decisions/ADR-041-linear-rc-transient.md
+  - docs/architecture/rc-transient.md
+  - docs/testing/rc-transient-cases.md
+  - decisions/ADR-042-rc-contracts-storage.md
+  - docs/testing/rc-c1-results.md
 - id: VIS-001
   title: 절점 전위 숫자
   state: accepted
@@ -846,7 +943,7 @@ requirements:
   phase: 2
   statement: 회로 문서를 브라우저에 자동 저장한다.
   acceptance:
-  - v6 문서는 부품 프로필 ID·revision과 선택적 정확 특성 편차를 보존하며 파손 연출·분석 세션 상태는 저장하지 않는다.
+  - v7 문서는 부품 프로필 ID·revision과 선택적 정확 특성 편차를 보존하며 파손 연출·분석 세션 상태는 저장하지 않는다.
   - 비정상 종료 후 마지막 안정 상태를 복원할 수 있다.
   - 검증을 통과한 문서만 정상 저장본으로 승격한다.
   - 읽지 못한 자동 저장 원본은 새 회로로 덮어쓰지 않는다. 새 회로·복원·백업을 제공하고 복원 실패 후에는 새 회로·백업만 제공한다. 원본 보관과 결과 저장이 성공한 뒤 자동 저장을 재개한다(ADR-039).
@@ -866,7 +963,7 @@ requirements:
   phase: 2
   statement: 버전이 포함된 JSON 파일로 저장하고 연다.
   acceptance:
-  - 현재 v6 회로와 v5 측정 기록을 왕복한다. 명시적 복원에 한해 검증된 회로 v5를 v6로 변환하며 기록은 변환하지 않는다(ADR-039).
+  - 현재 v7 회로와 v6 측정 기록을 왕복한다. 명시적 복원에서 회로 v5→v6→v7 또는 v6→v7을 검증하고, 측정 기록 v5는 원본을 보존하여 v6로 복사한다(ADR-039/042).
   - 잘못된 파일은 현재 문서를 손상시키지 않고 거부한다.
   - 오류 원인과 복구 방법을 설명한다.
   modules:

@@ -319,3 +319,22 @@ describe('current overlay ownership and motion', () => {
     expect(host.querySelector('[data-band-state="overflow"]')).not.toBeNull();
   });
 });
+
+
+it('keeps RC current marks visible during changing samples and freezes them on pause', () => {
+  let now = 0;
+  vi.spyOn(performance,'now').mockImplementation(()=>now);
+  const rc = { ...display, model: { ...display.model, frameId: 'rc:0' } };
+  overlay.update([path(3)],size,rc); step(0);
+  for (let i=1;i<=12;i++) {
+    now=i*50;
+    overlay.update([path(3-i/10)],size,{...rc,model:{...rc.model,frameId:`rc:${i}`}});
+    step(now);
+    expect(host.querySelector<SVGGElement>('[data-flow-marks]')!.style.opacity).not.toBe('0');
+  }
+  const before = host.querySelector('[data-current-id]')!.getAttribute('data-amperes');
+  overlay.update([path(1.8)],size,{...rc,paused:true});
+  expect(frames.size).toBe(0);
+  expect(host.querySelector('[data-current-id]')!.getAttribute('data-amperes')).toBe(before);
+  expect(host.querySelector('.current-flow-overlay')!.getAttribute('data-motion')).toBe('paused');
+});

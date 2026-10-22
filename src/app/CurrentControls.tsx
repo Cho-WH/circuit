@@ -63,7 +63,7 @@ export function CurrentSettings({
           onChange={(e) => onWidthScale(Number(e.target.value))}
         />
       </label>
-      <div className="current-readout" aria-live="polite">
+      <div className="current-readout" aria-live={display.model.frameId ? 'off' : 'polite'}>
         {!selected ? (
           <span>도선이나 부품을 선택하면 전류값과 방향을 확인할 수 있습니다.</span>
         ) : (

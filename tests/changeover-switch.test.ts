@@ -143,6 +143,6 @@ describe('changeover switch', () => {
     expect(nets['V1.p']).not.toBe(nets.JT);
     expect(nets['V2.n']).not.toBe(nets.JT);
     expect(undo(deleted.history).present).toEqual(doc);
-    for (const version of [5, 7]) expect(parseDocument(JSON.stringify({ ...doc, version })).ok).toBe(false);
+    for (const version of [5, 6, 8]) expect(parseDocument(JSON.stringify({ ...doc, version })).ok).toBe(false);
   });
 });

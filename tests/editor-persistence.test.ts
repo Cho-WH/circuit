@@ -465,8 +465,8 @@ describe("value parsing and activity policy", () => {
 describe("versioned JSON persistence", () => {
   it.each([
     ['{"format":"edu-circuit","version":5}', 'older-version'],
-    ['{"format":"edu-circuit","version":7}', 'newer-version'],
-    ['{"format":"edu-circuit","version":6}', 'invalid-data'],
+    ['{"format":"edu-circuit","version":8}', 'newer-version'],
+    ['{"format":"edu-circuit","version":7}', 'invalid-data'],
     ['{"format":"other","version":1}', 'invalid-data'],
     ['null', 'invalid-data'],
     ['{broken', 'invalid-data'],
@@ -485,7 +485,7 @@ describe("versioned JSON persistence", () => {
   it.each([
     ["malformed JSON", "{", "INVALID_JSON"],
     ["previous version", JSON.stringify({ ...fixture("FIX-01"), version: 5 }), "INVALID_DOCUMENT"],
-    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 7 }), "INVALID_DOCUMENT"],
+    ["future version", JSON.stringify({ ...fixture("FIX-01"), version: 8 }), "INVALID_DOCUMENT"],
     [
       "dangling semantic reference",
       JSON.stringify({
@@ -509,7 +509,7 @@ describe("versioned JSON persistence", () => {
   });
 
   it.each([
-    ["future version", { ...fixture("FIX-02"), version: 7 }],
+    ["future version", { ...fixture("FIX-02"), version: 8 }],
     [
       "dangling reference",
       {
@@ -531,7 +531,7 @@ describe("versioned JSON persistence", () => {
 
   it("does not write anything when asked to save an invalid document", () => {
     const storage = new MemoryStorage();
-    const invalid = { ...fixture("FIX-01"), version: 7 } as unknown as CircuitDocument;
+    const invalid = { ...fixture("FIX-01"), version: 8 } as unknown as CircuitDocument;
 
     const result = saveLocal(invalid, "auto", storage);
     expect(result.ok).toBe(false);
@@ -600,10 +600,10 @@ describe("versioned JSON persistence", () => {
   });
   it('migrates validated v5 explicitly without changing values, connections or layout', () => {
     const raw = readFileSync(join(root, 'tests/data/circuit-v5.json'), 'utf8');
-    const current = { ...JSON.parse(raw), version: 6 };
+    const current = { ...JSON.parse(raw), version: 7 };
     expect(parseDocument(raw).ok).toBe(false);
     expect(recoverDocument({ raw })).toEqual({ ok: true, document: current });
-    for (const version of [1, 4, 7, 999])
+    for (const version of [1, 4, 8, 999])
       expect(recoverDocument({ raw: JSON.stringify({ ...current, version }) }).ok).toBe(false);
     const broken = { ...current, version: 5, referenceNode: { kind: 'terminal', id: 'missing' } };
     expect(recoverDocument({ raw: JSON.stringify(broken) }).ok).toBe(false);

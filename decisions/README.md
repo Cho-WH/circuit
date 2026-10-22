@@ -53,3 +53,8 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-038](ADR-038-adjustable-dc-source.md) | 전지와 조절 가능한 직류 전원 | accepted | 전압원 모델·가변저항 조절 UI 공유 |
 | [ADR-039](ADR-039-circuit-recovery.md) | 읽지 못한 회로의 보호와 복원 | accepted | 원본 보관·세 선택지·명시적 v5 변환 |
 | [ADR-040](ADR-040-output-alignment.md) | 출력 표기 정렬과 파생 배치 정보 | accepted | 사용자 UX 네 항목 확정, 공통 기하·스냅·선택 정렬의 구현 전 설계 |
+| [ADR-041](ADR-041-linear-rc-transient.md) | 선형 RC 관찰과 최종 평형 전환 | accepted | 사용자 물리·UX 결정, C0~C4 구현·검증. C5 기술 확인, dev 배포 승인. 실제 기기·수업 사용자 수용은 후속 |
+| [ADR-042](ADR-042-rc-contracts-storage.md) | C1 축전기 공개 계약과 저장 버전 | accepted | 회로 v7·기록 v6, RC 품질·시간 출처, 회로 v5/v6 복원·기록 v5 원본 보존 변환 |
+| [ADR-043](ADR-043-rc-product-engine.md) | C2 순수 RC 엔진과 도선 질의 | accepted | 제품 컴파일 연결·정확 평형 승계·도선 KCL·인증 오차와 계산 예산 |
+| [ADR-044](ADR-044-rc-playback-session.md) | C3 RC 재생·조작·초기화 세션 | accepted | 원자적 후보 확정·명령 잠금·시계·평형 승계·진입 스냅샷 복원 |
+| [ADR-045](ADR-045-rc-observation-output.md) | RC 공통 관찰과 축전기 입력·출력 | accepted | 동일 프레임의 측정·2D/3D·기록, 판 기호·초기 조건 출력, C4 검토·C5 확인 경계 |

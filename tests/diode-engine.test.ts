@@ -32,7 +32,7 @@ const diodeProfile: OperatingProfile = {
 const resistorProfile: OperatingProfile = { id: 'test-resistor', revision: 1, boundaries: {} };
 function element(
   id: string,
-  type: CompiledElement['type'],
+  type: Exclude<CompiledElement['type'], 'capacitor'>,
   a: string,
   b: string,
   value: number | Rational = 0,

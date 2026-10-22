@@ -15,6 +15,8 @@ export function parseComponentValue(
 ): { ok: true; value: q.StoredScalar; fraction?: string } | { ok: false; error: string } {
   const definition = componentDefinition(component);
   const parsed = parseQuantity(draft, definition.unit);
+  if (component.type === 'capacitor' && (!parsed || q.sign(parsed.value) <= 0))
+    return { ok: false, error: '0보다 큰 전기용량을 입력하세요. 예: 100 µF, 1 mF' };
   if (!parsed || (definition.unit === 'Ω' && q.sign(parsed.value) < 0))
     return {
       ok: false,

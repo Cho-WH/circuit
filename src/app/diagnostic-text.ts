@@ -1,4 +1,13 @@
 export const diagnosticText: Record<string, { title: string; detail: string; action: string }> = {
+  RC_INVALID_INPUT: { title: '회로 설정을 확인해 주세요', detail: 'RC 계산에 필요한 입력을 확인하지 못했습니다.', action: '만들기로 돌아가 부품값을 확인하세요.' },
+  RC_UNSUPPORTED_ELEMENT: { title: '함께 분석할 수 없는 부품이 있어요', detail: '첫 RC 버전은 저항·축전기·직류 전원·스위치와 이상적인 계기를 지원합니다.', action: '다이오드 등 지원하지 않는 부품을 분리하세요.' },
+  RC_INITIAL_CONDITION_CONFLICT: { title: '초기 전압과 회로 연결이 맞지 않아요', detail: '축전기 초기 전압이 이상적인 전원·도선 제약과 충돌합니다.', action: '만들기에서 초기 전압을 바꾸거나 저항을 사이에 넣으세요.' },
+  RC_IMPULSE_REQUIRED: { title: '이 조작은 전압의 순간 변화를 요구해요', detail: '첫 RC 버전은 충격 전류가 필요한 순간 재분배를 계산하지 않습니다.', action: '이전 평형을 유지했습니다. 저항을 사이에 넣어 충전·방전하세요.' },
+  RC_SOURCE_CONFLICT: { title: '전원의 전압 조건이 충돌해요', detail: '새 회로의 이상적인 전압 제약이 서로 맞지 않습니다.', action: '전원 전압과 연결을 확인하세요.' },
+  RC_NO_FINITE_EQUILIBRIUM: { title: '도달 가능한 평형을 찾지 못했어요', detail: '현재 회로의 최종 평형을 확인하지 못했습니다.', action: '회로 연결을 확인하세요.' },
+  RC_NUMERICAL_UNVERIFIED: { title: '변화 과정을 정확도 기준 안에서 확인하지 못했어요', detail: '실패한 결과 대신 마지막 유효 결과를 유지합니다.', action: '부품값을 확인하거나 실험을 다시 시작하세요.' },
+  RC_BUDGET_EXCEEDED: { title: '이 회로는 현재 계산 범위를 넘었어요', detail: '정확도를 낮춰 대신 계산하지 않습니다.', action: '회로 크기나 부품값의 차이를 줄여 보세요.' },
+  RC_ENGINE_REQUIRED: { title: '축전기 회로의 분석은 아직 제공하지 않아요', detail: '축전기는 시간에 따른 충전 상태를 계산해야 합니다. 현재 직류 분석으로 대신 계산하지 않습니다.', action: '회로 파일은 보관할 수 있어요. 충전·방전 관찰 기능이 제공된 뒤 분석해 주세요.' },
   INDEPENDENT_VOLTAGE_REFERENCES: { title: '서로 독립된 기준이라 전압을 비교할 수 없어요', detail: '각 회로의 0 V는 별도의 기준입니다.', action: '같은 회로 안의 두 점을 선택하세요.' },
   WIRE_EDIT_UNAVAILABLE: { title: '이 위치에서는 연결을 바꿀 수 없어요', detail: '삽입 공간이 부족하거나 연결 경로·참조가 모호합니다.', action: '꺾임과 교차에서 떨어진 구간을 선택하세요. 교차 분리는 주석·기준점이 없는 네 갈래에서 사용할 수 있습니다.' },
   WIRE_CURRENT_UNDEFINED: { title: '이 도선의 전류는 하나로 정해지지 않아요', detail: '저항이 없는 도선끼리 고리를 이루고 있습니다.', action: '연결된 부품에서 측정해 주세요.' },

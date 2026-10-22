@@ -11,7 +11,8 @@ import { notationTokens, notationDisplayText } from '../notation';
 import type { Annotation, CircuitDocument, ComponentInstance, ComponentType, EndpointRef, Point, Wire, SimulationResult } from '../domain';
 
 export type ComponentKind = ComponentType | 'changeover-switch' | 'adjustable-voltage-source';
-export const componentDefinitions: Record<ComponentKind, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | ''; property?: string; hint?: 'analysis-control' }> = {
+export const componentDefinitions: Record<ComponentKind, { name: string; short: string; unit: 'V' | 'Ω' | 'A' | 'F' | ''; property?: string; hint?: 'analysis-control'; available?: false }> = {
+  capacitor: { name: '축전기', short: 'C', unit: 'F', property: 'capacitanceF' },
   'dc-voltage-source': { name: '전지', short: 'V', unit: 'V', property: 'voltageV' },
   'adjustable-voltage-source': { name: '직류 전원', short: 'V', unit: 'V', property: 'voltageV', hint: 'analysis-control' },
   resistor: { name: '저항', short: 'R', unit: 'Ω', property: 'resistanceOhm' },
@@ -36,6 +37,9 @@ export function componentValueDisplay(component: ComponentInstance) {
 }
 /** Low-level symbol/model template. Placement supplies a name from the shared allocator. */
 export function createComponent(kind: ComponentKind, id: string, position: Point, label = id): ComponentInstance {
+  if (kind === 'capacitor') return { id, type: 'capacitor', label, position, rotation: 0,
+    properties: { capacitanceF: q.store(q.rational(1n, 10000n)), initialVoltageV: q.store(0) },
+    terminals: [{ id: `${id}.a`, role: 'a' }, { id: `${id}.b`, role: 'b' }] };
   if (kind === 'changeover-switch') return {
     id, type: 'switch', label, position, rotation: 0,
     properties: { switchKind: 'spdt', state: 'a' },
@@ -57,7 +61,7 @@ function changeoverTerminalPosition(component: ComponentInstance, role: string):
 }
 export function terminalPosition(component: ComponentInstance, index: number): Point {
   const terminal = component.terminals[index];
-  const first = component.type === 'diode' ? terminal?.role === 'anode' : component.type === 'dc-voltage-source' && component.terminals.some(t => t.role === 'positive') ? terminal?.role === 'positive' : index === 0;
+  const first = component.type === 'capacitor' ? terminal?.role === 'a' : component.type === 'diode' ? terminal?.role === 'anode' : component.type === 'dc-voltage-source' && component.terminals.some(t => t.role === 'positive') ? terminal?.role === 'positive' : index === 0;
   const p = terminal?.localPosition ?? (isChangeoverSwitch(component)
     ? changeoverTerminalPosition(component, terminal?.role ?? '')
     : { x: (first ? -1 : 1) * (component.type === 'switch' ? 24 : 44), y: 0 });
@@ -214,6 +218,7 @@ export function componentValue(component: ComponentInstance, options?: QuantityF
 // Body dimensions are shared by the rendered paths and output gap references.
 // Leads, external polarity marks and terminal names are deliberately excluded.
 const symbolBody = {
+  capacitor: { halfWidth: 7, halfHeight: 22 },
   resistor: { halfWidth: 30, halfHeight: 10 },
   adjustment: { halfWidth: 18, halfHeight: 20 },
   diode: { halfWidth: 16, halfHeight: 18 },
@@ -234,7 +239,8 @@ export function componentSymbolBody(component: ComponentInstance, strokeWidth = 
   if (kind === 'resistor' || kind === 'resistive-load') {
     box(0, 0, symbolBody.resistor.halfWidth, symbolBody.resistor.halfHeight);
     if (kind === 'resistive-load') box(0, 0, symbolBody.adjustment.halfWidth, symbolBody.adjustment.halfHeight);
-  } else if (kind === 'diode') box(0, 0, symbolBody.diode.halfWidth, symbolBody.diode.halfHeight);
+  } else if (kind === 'capacitor') box(0, 0, symbolBody.capacitor.halfWidth, symbolBody.capacitor.halfHeight);
+  else if (kind === 'diode') box(0, 0, symbolBody.diode.halfWidth, symbolBody.diode.halfHeight);
   else if (kind === 'dc-voltage-source') {
     const b = symbolBody.battery;
     box(-b.plateX, 0, 0, b.longHalfHeight);
@@ -265,8 +271,38 @@ export function componentSymbolBody(component: ComponentInstance, strokeWidth = 
     width: Math.max(...world.map(p => p.x)) - x, height: Math.max(...world.map(p => p.y)) - y } };
 }
 
+/** Each plate and its lead stay at their own terminal potential, with no gap bridge. */
+export function capacitorPlatePaths(component: ComponentInstance) {
+  const { halfWidth: w, halfHeight: h } = symbolBody.capacitor;
+  const world = (p: Point): Point => {
+    const r = component.rotation === 90 ? { x: -p.y, y: p.x }
+      : component.rotation === 180 ? { x: -p.x, y: -p.y }
+      : component.rotation === 270 ? { x: p.y, y: -p.x } : p;
+    return { x: r.x + component.position.x, y: r.y + component.position.y };
+  };
+  return (['a', 'b'] as const).map((role, i) => {
+    const sign = i === 0 ? -1 : 1;
+    return { terminalId: component.terminals.find(t => t.role === role)!.id,
+      paths: [[{ x: sign * 44, y: 0 }, { x: sign * w, y: 0 }],
+        [{ x: sign * w, y: -h }, { x: sign * w, y: h }]].map(path => path.map(world)) };
+  });
+}
+
 /** Shared schematic geometry for live SVG and independent print rendering. */
-export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean; showSymbolPolarity?: boolean } = {}): string {
+export function symbolMarkup(component: ComponentInstance, options: { disconnectedSource?: boolean; terminalLabels?: boolean; showSymbolPolarity?: boolean; terminalColors?: Readonly<Record<string, string>> } = {}): string {
+  if (component.type === 'capacitor') {
+    const { halfWidth: w, halfHeight: h } = symbolBody.capacitor;
+    const polarity = options.showSymbolPolarity ? '<text x="-18" y="-29" text-anchor="middle" stroke="none" fill="currentColor" font-size="14">+</text><text x="18" y="-29" text-anchor="middle" stroke="none" fill="currentColor" font-size="14">−</text>' : '';
+    const plates = (['a', 'b'] as const).map((role, i) => {
+      const sign = i === 0 ? -1 : 1;
+      const terminal = component.terminals.find(t => t.role === role);
+      const color = terminal && options.terminalColors?.[terminal.id];
+      // Explicit child strokes retain potential colors under parent selection/hover styles.
+      // Without display colors, both paths inherit the normal schematic/print ink.
+      return `<path data-capacitor-plate="${role}" d="M${sign * 44} 0H${sign * w} M${sign * w} -${h}V${h}" fill="none"${color ? ` stroke="${escapeXml(color)}"` : ''}/>`;
+    }).join('');
+    return `<g data-symbol="capacitor">${plates}${polarity}</g>`;
+  }
   if (isAdjustableVoltageSource(component)) {
     const lead = options.disconnectedSource ? 32 : 44;
     const polarity = [-10, 10].map((x, i) => `<g transform="rotate(${-component.rotation} ${x} 0)"><path d="M${x-4} 0h8${i === 0 ? ` M${x} -4v8` : ''}"/></g>`).join('');
@@ -323,11 +359,16 @@ export function presentationText(properties:ComponentProperties,actual:string,pr
 export function componentPresentation(component: ComponentInstance, result?: SimulationResult, options?: QuantityFormatOptions): { label: string | null; value: string | null; voltage: string | null; current: string | null } {
   options=quantityFormatFor(component.properties,options);
   const value = componentValue(component, options);
+  const initialFraction = component.type === 'capacitor' ? storedFraction(component.properties, 'initialVoltageV', 'V') : undefined;
+  const initialVoltage = initialFraction && (!options?.mode || options.mode === 'auto')
+    ? `${initialFraction} V` : formatQuantity(component.properties.initialVoltageV as q.StoredScalar, 'V', options);
   const resultOptions={...options,modelApproximation:result?.provenance?.physicalModel==='component'};
   const rule=(actual:string,prefix:string)=>(component.properties[prefix+'Visible'] ?? (prefix==='answer' ? componentValueDisplay(component).outputVisible : true))===false ? null : component.properties[prefix+'Blank']===true ? '□' : actual;
   return {
     label: rule(component.label, 'label'), value: rule(value, 'answer'),
-    voltage: component.properties.showVoltage === true ? rule(formatQuantity(result?.componentVoltages[component.id], 'V', resultOptions), 'voltage') : null,
+    voltage: component.type === 'capacitor'
+      ? component.properties.voltageVisible === true ? `초기 전압 ${rule(initialVoltage, 'voltage')}` : null
+      : component.properties.showVoltage === true ? rule(formatQuantity(result?.componentVoltages[component.id], 'V', resultOptions), 'voltage') : null,
     current: component.properties.showCurrent === true ? rule(formatQuantity(result?.branchCurrents[component.id], 'A', resultOptions), 'current') : null,
   };
 }
