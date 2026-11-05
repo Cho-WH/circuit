@@ -16,7 +16,6 @@ function harness(
     initial?: number;
     resistance?: number;
     capacitance?: number;
-    reduced?: boolean;
     prepare?: (r: RcPrepareRequest) => RcResult<RcPlan> | Promise<RcResult<RcPlan>>;
     sample?: typeof rcEngine.sample;
   } = {},
@@ -33,7 +32,6 @@ function harness(
       published(h, s);
     },
     now: () => now,
-    reducedMotion: () => options.reduced ?? false,
     prepare: options.prepare,
     sample: options.sample,
   });
@@ -183,13 +181,6 @@ describe('RC session transaction and playback', () => {
       expect(q.equal(normal.session.state!.frame!.capacitorState[0].voltageV, 10)).toBe(true);
     },
   );
-  it('reduced motion uses the same exact equilibrium without a finite-time disguise', async () => {
-    const h = harness({ reduced: true });
-    await h.session.enter();
-    h.session.skip();
-    expect(h.session.state?.phase).toBe('equilibrium');
-    expect(h.session.state?.frame?.context.time.kind).toBe('equilibrium');
-  });
   it('prepares one candidate, discards extra clicks, and commits document+frame once', async () => {
     const d = deferredPrepare();
     const h = harness({ initial: 10, prepare: d.prepare });

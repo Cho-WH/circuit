@@ -79,7 +79,6 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
   let frame = 0,
     previous: number | null = null;
   let currentSignature: string | null = null;
-  const media = window.matchMedia('(prefers-reduced-motion: reduce)');
   function spacing(track: CurrentTrack) {
     const desired = currentSpacing(track.amperes, display!.scaleAmperes),
       length = flowLength(track.points);
@@ -159,7 +158,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
     view.blendStart = now;
   }
   const canAnimate = () =>
-    active && !disposed && !display?.paused && !media.matches && !doc.hidden && !visibility.hidden && tracks.size > 0;
+    active && !disposed && !display?.paused && !doc.hidden && !visibility.hidden && tracks.size > 0;
   function tick(now: number) {
     frame = 0;
     if (!canAnimate()) {
@@ -212,7 +211,6 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
       view.train.group.style.opacity = '1';
     }
   }, sync);
-  media.addEventListener?.('change', sync);
   doc.addEventListener('visibilitychange', sync);
   return {
     update(paths, size, nextDisplay, visible = true) {
@@ -228,7 +226,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
       }).sort((a, b) => String(a[0]).localeCompare(String(b[0])))]);
       const electricalChange = currentSignature !== null && signature !== currentSignature;
       visibility.update(!display.model.frameId && electricalChange,
-        !!display.changing, currentSignature === null || display.paused || media.matches || !active || doc.hidden);
+        !!display.changing, currentSignature === null || display.paused || !active || doc.hidden);
       currentSignature = signature;
       svg.setAttribute('viewBox', `0 0 ${Math.max(1, size.width)} ${Math.max(1, size.height)}`);
       svg.style.visibility = active ? 'visible' : 'hidden';
@@ -315,7 +313,7 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
         // gently refresh density at most four times a second, independently of physics time.
         if (display.model.frameId) {
           const now = performance.now();
-          if (display.paused || media.matches) {
+          if (display.paused) {
             view.retiring?.group.remove(); view.retiring = undefined;
             view.blendStart = null; view.pending = null;
             view.train.metric = track.points; view.train.spacing = spacing(track);
@@ -361,7 +359,6 @@ export function createCurrentOverlay(host: HTMLElement): CurrentOverlay {
       disposed = true;
       visibility.dispose();
       cancelAnimationFrame(frame);
-      media.removeEventListener?.('change', sync);
       doc.removeEventListener('visibilitychange', sync);
       svg.remove();
       bandViews.clear();

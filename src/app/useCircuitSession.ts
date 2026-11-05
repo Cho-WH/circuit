@@ -67,7 +67,6 @@ export function useCircuitSession(mode: WorkspaceMode) {
       setRcSession(state);
     },
     now: () => performance.now(),
-    reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
   }));
   const inRc = () => workspace.current === 'analysis' && hasCapacitor(current.current.present);
 
@@ -118,7 +117,6 @@ export function useCircuitSession(mode: WorkspaceMode) {
       if (operating.current === analysisSession)
         updateOperating({ ...analysisSession, phase: 'broken' });
     };
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
     const timer = window.setTimeout(finish, 500);
     return () => window.clearTimeout(timer);
   }, [analysisSession]);

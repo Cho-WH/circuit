@@ -61,7 +61,6 @@
 .terminal:focus-visible circle:last-of-type{r:7px;stroke:#245ebc;stroke-width:2.5;filter:drop-shadow(0 0 3px #245ebc70)}
 .editable-value:focus-visible{fill:#245ebc;text-decoration:underline;text-underline-offset:4px}
 .circuit-canvas [role=button]:focus-visible>circle{filter:drop-shadow(0 0 3px #245ebc70)}
-@media(prefers-reduced-motion:reduce){.circuit-element .component-lift{transform:none!important;transition:none}}
 .crossing-state{position:absolute;z-index:6;padding:5px 9px;background:#fff;border:1px solid #bed0e9;border-radius:9px;box-shadow:0 3px 10px #193e7820;font-size:12px;font-weight:650;color:#173f7a;pointer-events:none}
 .wiring-icons{position:absolute;z-index:7;top:12px;right:12px;display:flex;gap:6px}
 .wiring-icons button{width:44px;height:44px;padding:0;border:1px solid #bed0e9;border-radius:50%;background:white;box-shadow:0 3px 10px #193e7820;color:#174895}
@@ -246,7 +245,6 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
  .readings{display:flex}.readings>div{padding:8px;min-width:0}.readings strong{font-size:13px}
  .output-canvas-wrap{min-height:200px}.save-failure{left:8px;right:8px;bottom:8px;font-size:12px}.save-failure button{margin-left:auto;font-size:12px}.toast{bottom:16px;width:max-content;max-width:94vw}
 }
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}button:active:not(:disabled){transform:none}}
 
 .mode-worksheet .inspector-panel>.section-heading{float:right;margin:0;position:relative;z-index:1}.mode-worksheet .inspector-panel>.section-heading h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .library-panel{scrollbar-width:thin}
@@ -297,10 +295,8 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
  .canvas-shell.is-editing .inline-value-editor{left:calc(100% + 8px)!important;top:8px!important;width:280px;max-width:none;max-height:calc(100% - 16px);overflow:auto}
  .inline-value-editor button{min-height:44px}
 }
-@media(prefers-reduced-motion:reduce){.canvas-shell .circuit-element[data-dragging=true] .component-lift{transform:none}}
 .placement-failure { color: #b74b32; animation: placement-rejected 320ms ease-out both; }
 @keyframes placement-rejected { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .placement-failure { animation: none; } }
 
 .quantity-graph-scroll{max-width:100%;overflow-x:auto}
 

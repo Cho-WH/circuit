@@ -9,4 +9,3 @@
 .potential-tag.operating-tag svg{width:100%;height:100%;overflow:visible}
 @keyframes operating-entry{from{opacity:.35}to{opacity:1}}
 @keyframes damage-burst{from{opacity:1;transform:scale(.7)}to{opacity:0;transform:scale(1.3)}}
-@media(prefers-reduced-motion:reduce){.component-operating-mark,.component-operating-mark.is-breaking .damage-burst{animation:none}.damage-burst{display:none}}

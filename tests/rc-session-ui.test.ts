@@ -150,6 +150,30 @@ it('locks every hook command/history bypass, applies atomically, restores histor
   expect(session.history.present.components[0].properties.voltageV).toEqual(q.store(5));
 });
 
+it.each([false, true])('plays RC and retains its settling transition regardless of reduced motion (%s)', async reduced => {
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' && reduced }) as MediaQueryList);
+  saveLocal(rcSessionDocument());
+  await render('analysis');
+  const advance = (time: number) => act(() => {
+    now = time;
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach(run => run(now));
+  });
+  advance(1000);
+  expect(session.rcSession?.phase).toBe('running');
+  expect(session.rcSession?.seconds).toBe(1);
+  expect(q.toNumber(session.rcSession!.frame!.capacitorState[0].voltageV)).toBeGreaterThan(0);
+  act(() => session.rcPlayback.skip());
+  expect(session.rcSession?.phase).toBe('settling');
+  expect(session.canChangeValues()).toBe(false);
+  advance(1100);
+  expect(session.rcSession?.phase).toBe('settling');
+  advance(1300);
+  expect(session.rcSession?.phase).toBe('equilibrium');
+  expect(session.rcSession?.frame?.context.time.kind).toBe('equilibrium');
+});
+
 it('file replacement invalidates pending preparation and restores the DC path', async () => {
   saveLocal(rcSessionDocument(10));
   await render('analysis');

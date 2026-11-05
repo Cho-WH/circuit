@@ -1,8 +1,8 @@
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { collection, doc, documentId, getDocFromServer, getDocs, limit, orderBy, query, startAfter, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
-import type { AdminFeedbackPost, FeedbackAdminGateway } from '../feedback';
+import { collection, doc, documentId, getDocFromServer, getDocs, limit, orderBy, query, startAfter, runTransaction, serverTimestamp, type Firestore, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { validFeedbackReply, type AdminFeedbackPost, type FeedbackAdminGateway } from '../feedback';
 import { adminClient } from './client';
-import { entry, result } from './gateway';
+import { entry, result, publicFields, Rejection } from './gateway';
 
 export type AdminSession =
   | { state: 'checking' | 'signed-out' | 'error' }
@@ -18,6 +18,18 @@ export function createFirestoreAdminGateway(db: Firestore): FeedbackAdminGateway
       cursor = snapshot.size === 100 ? snapshot.docs.at(-1) : undefined;
     } while (cursor);
     return posts;
+  }), saveReply: ({ id, content }) => result(async () => {
+    if (!/^[A-Za-z0-9]{20}$/.test(id) || !validFeedbackReply(content)) throw new Rejection('INVALID_INPUT');
+    const ref = doc(db, 'feedbackPosts', id);
+    await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists() || snapshot.data().deletedAt !== null) throw new Rejection('NOT_FOUND');
+      const data = { ...snapshot.data(), reply: { content: content.trim(), updatedAt: serverTimestamp() } };
+      transaction.update(ref, { reply: data.reply });
+      if (snapshot.data().visibility === 'public') transaction.set(doc(db, 'feedbackPublic', id), publicFields(data));
+    });
+    const saved = await getDocFromServer(ref);
+    return entry(id, saved.data()!).reply!;
   }) };
 }
 export function createFirebaseAdminAccess() {

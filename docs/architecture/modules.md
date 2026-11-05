@@ -1,5 +1,7 @@
 # 모듈 구성과 공개 계약
 
+표시·재생 설계는 P-09와 [ADR-046](../../decisions/ADR-046-platform-independent-motion.md)을 따른다. 주요 기능과 일반 UI에서 운영체제·브라우저의 동작 줄이기 설정을 읽어 기능·연출을 정지하거나 즉시 완료하지 않는다. 재생 상태의 원본은 앱의 명시적 제어와 세션 수명이며, RC 세션에는 모션 선호를 의존성으로 전달하지 않는다. 숨겨진 화면·뷰 해제·오류 처리는 별도의 수명 관리로 유지한다.
+
 축전기의 선형 RC 과도응답은 [별도 구현 설계](rc-transient.md)와 accepted [ADR-041](../../decisions/ADR-041-linear-rc-transient.md)에 정의한다. [C0 계산 시제품](../testing/rc-c0-results.md)은 tools에 격리했다. [C1](../testing/rc-c1-results.md)에서 [ADR-042](../../decisions/ADR-042-rc-contracts-storage.md)의 RC 공개 타입·시간 출처·저장 버전을 구현했다. [C2 순수 엔진](../testing/rc-c2-results.md)은 [ADR-043](../../decisions/ADR-043-rc-product-engine.md)에 따라 구현했다. [C3 재생 세션](../testing/rc-c3-results.md)은 [ADR-044](../../decisions/ADR-044-rc-playback-session.md)에 따라 app에 연결했다. RcSession이 후보 검증·시계·프레임을, useCircuitSession이 문서·Undo·자동 저장을 소유한다. [C4 관찰](../testing/rc-c4-results.md)은 [ADR-045](../../decisions/ADR-045-rc-observation-output.md)에 따라 연결했다.
 
 `domain`은 `RcPrepareRequest`·불투명 `RcPlan`·`RcFrame`·`RcFrameContext`·`RcEngine`과 고정 정책을 공개한다. `simulation` index도 RC 계약을 재수출한다. simulation의 `rcEngine.prepare/sample/queryVoltage/queryCurrent/queryWireCurrent`를 구현했다. `rcCircuitRevision`·`rcInitialState`는 정상 컴파일 결과에서 요청을 만드는 공개 보조 함수다. UI는 행렬이나 모드에 접근하지 않는다. `connectivity`는 축전기의 C·초기 전압·a/b 단자 ID와 도선 KCL 질의 항을 컴파일하고 기존 DC solve는 축전기를 `RC_ENGINE_REQUIRED`로 거부한다. `measurement`는 RC 기록의 출처·시간·품질과 CSV를, `persistence`는 새 스키마와 이전 원본 보존을 담당한다.

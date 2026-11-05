@@ -20,3 +20,8 @@
 .feedback-identity-note{position:relative;display:flex;align-items:center;gap:3px;margin-top:10px;font-size:11px;color:#7c796b;line-height:1.7;width:fit-content;max-width:100%}
 .feedback-board .feedback-identity-note button{min-height:30px;width:30px;padding:6px;flex-shrink:0;color:#7f8575}
 .feedback-identity-tooltip{position:absolute;top:100%;left:0;z-index:5;width:340px;max-width:calc(100vw - 64px);padding:15px 17px;border:1px solid #d9dccf;border-radius:9px;background:#fffef9;box-shadow:0 5px 22px #3941321a;color:#626c57;font-size:12px;line-height:1.9;word-break:keep-all;overflow-wrap:anywhere}
+
+.feedback-reply{margin-top:14px;padding:14px 16px;border-left:3px solid #91a183;border-radius:0 8px 8px 0;background:#f0f3eb}
+.feedback-reply .feedback-post-heading strong{color:#53694b;font-size:12px}.feedback-reply time{font-size:11px;color:#7d8475}.feedback-reply .feedback-post-content{margin-top:6px}
+.feedback-board .feedback-reply-trigger{margin-top:10px;color:#53694b;font-size:12px;min-height:44px;padding:8px 0}
+.feedback-reply-editor{margin-top:14px}.feedback-reply-editor label{font-size:12px;color:#53694b}.feedback-reply-editor textarea{margin-top:8px}.feedback-reply-actions{display:flex;justify-content:flex-end;gap:8px}.feedback-reply-actions button{min-height:44px}

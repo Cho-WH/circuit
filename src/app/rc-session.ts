@@ -68,7 +68,6 @@ interface Dependencies {
   prepare?: (request: RcPrepareRequest) => RcResult<RcPlan> | Promise<RcResult<RcPlan>>;
   sample?: typeof rcEngine.sample;
   now: () => number;
-  reducedMotion: () => boolean;
 }
 
 /** Runtime-only transaction and clock. All physical evaluation uses the public engine. */
@@ -264,7 +263,7 @@ export class RcSession {
       if (seconds >= target) this.settle(now);
     } else if (state.phase === 'settling') {
       const u = Math.max(0, now - this.settlingMs) / 200;
-      if (u >= 1 || this.deps.reducedMotion()) {
+      if (u >= 1) {
         this.sample('equilibrium');
         return;
       }
@@ -287,7 +286,6 @@ export class RcSession {
     this.settlingMs = now;
     this.settlingSeconds = this.state.seconds;
     this.emit({ ...this.state, phase: 'settling' });
-    if (this.deps.reducedMotion()) this.sample('equilibrium');
   }
   pause() {
     if (this.state?.phase !== 'running') return;

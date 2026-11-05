@@ -1,5 +1,5 @@
 import { channelStorageKey, readChannelStorage } from '../release';
-import { feedbackDay, feedbackLimits, validFeedbackDraft, type FeedbackEntry, type FeedbackPost, type AdminFeedbackPost, type FeedbackDraft, type FeedbackGateway, type FeedbackAdminGateway, type FeedbackResult, type FeedbackError } from '../feedback';
+import { feedbackDay, feedbackLimits, validFeedbackReply, validFeedbackDraft, type FeedbackEntry, type FeedbackPost, type AdminFeedbackPost, type FeedbackDraft, type FeedbackGateway, type FeedbackAdminGateway, type FeedbackResult, type FeedbackError } from '../feedback';
 
 interface StoredPost extends AdminFeedbackPost { ownerId: string }
 interface Snapshot { version: 2; identity: string; posts: StoredPost[] }
@@ -15,7 +15,7 @@ const legacyKey = 'circuit.feedback.preview.v1';
 const fail = <T>(code: FeedbackError): FeedbackResult<T> => ({ ok: false, code });
 const ok = <T>(value: T): FeedbackResult<T> => ({ ok: true, value });
 function entry(post: StoredPost): FeedbackEntry {
-  return { id: post.id, nickname: post.nickname, content: post.content, kind: post.kind, visibility: post.visibility, createdAt: post.createdAt, updatedAt: post.updatedAt };
+  return { id: post.id, nickname: post.nickname, content: post.content, kind: post.kind, visibility: post.visibility, createdAt: post.createdAt, updatedAt: post.updatedAt, ...(post.reply ? { reply: post.reply } : {}) };
 }
 function publicPost(post: StoredPost, identity: string): FeedbackPost {
   return { ...entry(post), canManage: post.ownerId === identity && post.deletedAt === null };
@@ -31,6 +31,7 @@ function readSnapshot(value: unknown): Snapshot {
     if (!post || typeof post.id !== 'string' || ids.has(post.id) || typeof post.ownerId !== 'string' || !post.ownerId
       || !validDate(post.createdAt) || !(post.deletedAt === null || validDate(post.deletedAt))
       || (data.version === 2 && !(post.updatedAt === null || validDate(post.updatedAt))) || !validFeedbackDraft(post)) throw new Error('Invalid post');
+    if (post.reply && (!validFeedbackReply(post.reply.content) || !validDate(post.reply.updatedAt))) throw new Error('Invalid reply');
     ids.add(post.id);
     return { ...entry({ ...post, updatedAt: data.version === 1 ? null : post.updatedAt }), ownerId: post.ownerId, deletedAt: post.deletedAt };
   });
@@ -89,7 +90,15 @@ export function createLocalFeedback(deps: LocalDependencies): { gateway: Feedbac
       return ok(undefined);
     }),
   };
-  return { gateway, admin: { list: () => guarded(async data => ok([...data.posts].reverse().map(post => ({ ...entry(post), deletedAt: post.deletedAt })))) } };
+  return { gateway, admin: { list: () => guarded(async data => ok([...data.posts].reverse().map(post => ({ ...entry(post), deletedAt: post.deletedAt })))),
+    saveReply: ({ id, content }) => guarded(async data => {
+      if (!validFeedbackReply(content)) return fail('INVALID_INPUT');
+      const post = data.posts.find(post => post.id === id && !post.deletedAt);
+      if (!post) return fail('NOT_FOUND');
+      post.reply = { content: content.trim(), updatedAt: deps.now().toISOString() };
+      deps.storage.setItem(key, JSON.stringify(data));
+      return ok(post.reply);
+    }) } };
 }
 
 export function createBrowserFeedbackPreview() {

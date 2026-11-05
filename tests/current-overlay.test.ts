@@ -291,13 +291,18 @@ describe('current overlay ownership and motion', () => {
     expect(frames.size).toBe(0);
     expect(host.children).toHaveLength(0);
   });
-  it('stops on reduced motion, hidden documents, or an inactive view and restarts safely', () => {
+  it.each([false, true])('keeps flow moving across motion preference changes but respects visibility (reduced=%s)', reduced => {
+    Object.assign(media, { matches: reduced });
     overlay.update([path()], size, display);
-    Object.assign(media, { matches: true });
+    step(0);
+    const before = host.querySelector('.current-flow-mark')!.getAttribute('transform');
+    step(100);
+    expect(host.querySelector('.current-flow-mark')!.getAttribute('transform')).not.toBe(before);
+    Object.assign(media, { matches: !reduced });
     media.dispatchEvent(new Event('change'));
-    expect(frames.size).toBe(0);
-    Object.assign(media, { matches: false });
-    media.dispatchEvent(new Event('change'));
+    const changed = host.querySelector('.current-flow-mark')!.getAttribute('transform');
+    step(200);
+    expect(host.querySelector('.current-flow-mark')!.getAttribute('transform')).not.toBe(changed);
     expect(frames.size).toBe(1);
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
     document.dispatchEvent(new Event('visibilitychange'));

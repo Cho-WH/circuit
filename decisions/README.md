@@ -58,3 +58,4 @@ ADR은 기술 선택의 배경, 결정, 결과를 기록한다.
 | [ADR-043](ADR-043-rc-product-engine.md) | C2 순수 RC 엔진과 도선 질의 | accepted | 제품 컴파일 연결·정확 평형 승계·도선 KCL·인증 오차와 계산 예산 |
 | [ADR-044](ADR-044-rc-playback-session.md) | C3 RC 재생·조작·초기화 세션 | accepted | 원자적 후보 확정·명령 잠금·시계·평형 승계·진입 스냅샷 복원 |
 | [ADR-045](ADR-045-rc-observation-output.md) | RC 공통 관찰과 축전기 입력·출력 | accepted | 동일 프레임의 측정·2D/3D·기록, 판 기호·초기 조건 출력, C4 검토·C5 확인 경계 |
+| [ADR-046](ADR-046-platform-independent-motion.md) | 플랫폼 설정과 무관한 학습 동작과 화면 전환 | accepted | 주요 기능·일반 UI의 동작 줄이기 분기 제거, 명시적 재생 제어·수명 관리 유지 |

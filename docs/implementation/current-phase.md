@@ -1,10 +1,12 @@
 # 현재 작업 현황
 
-기준일: 2026-10-22. 앱 0.1.0, 작업 브랜치 dev. 저장은 회로 v7·측정 기록 v6다. 명시적 회로 v5/v6→v7 복원과 기록 v5→v6의 원본 보존 복사를 지원한다([ADR-042](../../decisions/ADR-042-rc-contracts-storage.md)). 읽지 못한 원본은 별도 보관한다([ADR-039](../../decisions/ADR-039-circuit-recovery.md)).
+기준일: 2026-11-06. 앱 0.1.0, 작업 브랜치 dev. 저장은 회로 v7·측정 기록 v6다. 명시적 회로 v5/v6→v7 복원과 기록 v5→v6의 원본 보존 복사를 지원한다([ADR-042](../../decisions/ADR-042-rc-contracts-storage.md)). 읽지 못한 원본은 별도 보관한다([ADR-039](../../decisions/ADR-039-circuit-recovery.md)).
 
 단계 0~5 MVP와 다이오드 확장 D0~D4는 구현했다. 단계 6 활동·공유와 단계 7 교실 알파는 미완료다. 후속 후보는 착수 승인이 아니다. [단계 계획](phases.md), [남은 작업](follow-up.md).
 
 ## 현재 지원 범위
+
+2026-11-06 로컬 구현: [ADR-046](../../decisions/ADR-046-platform-independent-motion.md)에 따라 주요 기능과 일반 UI는 동작 줄이기 설정과 무관하게 같은 재생·전환을 제공한다. 명시적 일시정지·탭 숨김·뷰 해제 처리는 유지한다. 공개 반영 여부는 배포된 release.json을 따른다.
 
 | 영역 | 현재 동작과 설계 기준 |
 |---|---|

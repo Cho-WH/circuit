@@ -390,6 +390,8 @@ describe('3D prepared first frame and camera lifetime', () => {
     expect(peak()).toBe(before);
     await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="보기 초기화"]')!.click());
     expect(peak()).toBeGreaterThan(before);
+    expect(observed.frames.size).toBe(1);
+    await advanceFrame(performance.now()+2000);
     expect(observed.frames.size).toBe(0);
   });
   it('updates surviving labels and removes obsolete ones without replacing unrelated nodes',async()=>{
@@ -453,15 +455,18 @@ describe('3D prepared first frame and camera lifetime', () => {
     expect(ready).toHaveBeenCalledOnce(); expect(entered).toHaveBeenCalledOnce(); expect(observed.frames.size).toBe(0);
     expect(host.querySelector('.floor-key')).toBeNull();
   });
-  it('still skips camera preset motion when reduced motion is enabled', async () => {
-    reduced = true; const { entered } = await mount();
+  it.each([false, true])('animates camera presets regardless of reduced motion (%s)', async motion => {
+    reduced = motion; const { entered } = await mount();
     await act(async () => resolveFont()); await act(async () => images[0].onload!());
     await advanceFrame(performance.now() + 2000);
     const [, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
     const initial = camera.position.clone(); camera.zoom = 2;
     const top = [...host.querySelectorAll('button')].find(button => button.textContent === '위')!;
     await act(async () => top.click());
-    expect(camera.position.equals(initial)).toBe(false); expect(camera.zoom).toBe(2);
+    expect(camera.position.equals(initial)).toBe(true); expect(camera.zoom).toBe(2);
+    expect(observed.frames.size).toBe(1);
+    await advanceFrame(performance.now() + 2000);
+    expect(camera.position.equals(initial)).toBe(false);
     expect(observed.frames.size).toBe(0); expect(entered).toHaveBeenCalledOnce();
   });
   it('preserves zoom during presets and cancels a camera flight at its current position', async () => {
