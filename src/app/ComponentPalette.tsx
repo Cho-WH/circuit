@@ -21,7 +21,7 @@ export function ComponentPalette({placement,onChoose,onClear,onDrag=()=>{},reset
     window.addEventListener('pointerdown',extra,true);window.addEventListener('pointerup',release,true);window.addEventListener('pointercancel',release,true);window.addEventListener('blur',blur);window.addEventListener('resize',cancel);window.addEventListener('keydown',escape);
     return()=>{cancel();window.removeEventListener('pointerdown',extra,true);window.removeEventListener('pointerup',release,true);window.removeEventListener('pointercancel',release,true);window.removeEventListener('blur',blur);window.removeEventListener('resize',cancel);window.removeEventListener('keydown',escape);};
   },[]);
-  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentKind[]).map(type=><div key={type} className={`component-palette-item${componentDefinitions[type].hint && onShowHint ? ' has-control-hint' : ''}`}><SelectionButton className={`component-tile${held===type?' is-held':''}`} selected={placement===type} draggable={!tapOnly}
+  return <div className="component-grid">{(Object.keys(componentDefinitions) as ComponentKind[]).filter(type => componentDefinitions[type].available !== false).map(type=><div key={type} className={`component-palette-item${componentDefinitions[type].hint && onShowHint ? ' has-control-hint' : ''}`}><SelectionButton className={`component-tile${held===type?' is-held':''}`} selected={placement===type} draggable={!tapOnly}
     onDragStart={e=>{if(lastInput.current==='touch'){e.preventDefault();return;}e.dataTransfer.setData('component',type);onChoose(type);}} onDragEnd={onClear}
     onContextMenu={e=>{if(lastInput.current==='touch')e.preventDefault();}}
     onPointerDown={e=>{

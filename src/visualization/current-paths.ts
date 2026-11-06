@@ -18,6 +18,7 @@ export interface CurrentPath {
 // Explicit support is deliberate: a future capacitor/diode must choose its own
 // presentation policy rather than automatically inheriting a conducting bridge.
 const policies: Record<ComponentType, (component: ComponentInstance) => boolean> = {
+  capacitor: () => false,
   resistor: () => true,
   diode: () => true,
   'resistive-load': () => true,

@@ -7,11 +7,13 @@ export function MeasurementDisplay({
   label = '측정값',
   compact = false,
   children,
+  live,
 }: {
   reading: string;
   label?: string;
   compact?: boolean;
   children?: ReactNode;
+  live?: 'off' | 'polite';
 }) {
   const unitStart = reading.lastIndexOf(' ');
   const value = unitStart < 0 ? reading : reading.slice(0, unitStart);
@@ -26,7 +28,7 @@ export function MeasurementDisplay({
       }
     >
       {children}
-      <output aria-label={label} aria-live={compact ? 'off' : 'polite'} aria-atomic="true">
+      <output aria-label={label} aria-live={live ?? (compact ? 'off' : 'polite')} aria-atomic="true">
         <span
           className="measure-lcd-value"
           style={

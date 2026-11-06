@@ -291,13 +291,18 @@ describe('current overlay ownership and motion', () => {
     expect(frames.size).toBe(0);
     expect(host.children).toHaveLength(0);
   });
-  it('stops on reduced motion, hidden documents, or an inactive view and restarts safely', () => {
+  it.each([false, true])('keeps flow moving across motion preference changes but respects visibility (reduced=%s)', reduced => {
+    Object.assign(media, { matches: reduced });
     overlay.update([path()], size, display);
-    Object.assign(media, { matches: true });
+    step(0);
+    const before = host.querySelector('.current-flow-mark')!.getAttribute('transform');
+    step(100);
+    expect(host.querySelector('.current-flow-mark')!.getAttribute('transform')).not.toBe(before);
+    Object.assign(media, { matches: !reduced });
     media.dispatchEvent(new Event('change'));
-    expect(frames.size).toBe(0);
-    Object.assign(media, { matches: false });
-    media.dispatchEvent(new Event('change'));
+    const changed = host.querySelector('.current-flow-mark')!.getAttribute('transform');
+    step(200);
+    expect(host.querySelector('.current-flow-mark')!.getAttribute('transform')).not.toBe(changed);
     expect(frames.size).toBe(1);
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
     document.dispatchEvent(new Event('visibilitychange'));
@@ -318,4 +323,23 @@ describe('current overlay ownership and motion', () => {
     expect(host.querySelector('.current-flow-band')).toBeNull();
     expect(host.querySelector('[data-band-state="overflow"]')).not.toBeNull();
   });
+});
+
+
+it('keeps RC current marks visible during changing samples and freezes them on pause', () => {
+  let now = 0;
+  vi.spyOn(performance,'now').mockImplementation(()=>now);
+  const rc = { ...display, model: { ...display.model, frameId: 'rc:0' } };
+  overlay.update([path(3)],size,rc); step(0);
+  for (let i=1;i<=12;i++) {
+    now=i*50;
+    overlay.update([path(3-i/10)],size,{...rc,model:{...rc.model,frameId:`rc:${i}`}});
+    step(now);
+    expect(host.querySelector<SVGGElement>('[data-flow-marks]')!.style.opacity).not.toBe('0');
+  }
+  const before = host.querySelector('[data-current-id]')!.getAttribute('data-amperes');
+  overlay.update([path(1.8)],size,{...rc,paused:true});
+  expect(frames.size).toBe(0);
+  expect(host.querySelector('[data-current-id]')!.getAttribute('data-amperes')).toBe(before);
+  expect(host.querySelector('.current-flow-overlay')!.getAttribute('data-motion')).toBe('paused');
 });

@@ -60,6 +60,33 @@ describe.skipIf(!enabled)('DAT-005: real Firestore rules and adapter (isolated d
     await assertFails(updateDoc(doc(userDb('alice'), 'feedbackPosts', post.id), { deletedAt: null, updatedAt: serverTimestamp() }));
     await assertFails(deleteDoc(doc(adminDb(), 'feedbackPosts', post.id)));
   });
+  it('publishes admin replies atomically, preserves them through owner edits and protects private/deleted posts', async () => {
+    const post = await created();
+    const admin = createFirestoreAdminGateway(adminDb());
+    expect(await admin.saveReply({ id: post.id, content: '확인했습니다.\n개선하겠습니다.' })).toMatchObject({ ok: true });
+    expect(await gateway('bob').list({ scope: 'public' })).toMatchObject({ ok: true, value: { posts: [{ reply: { content: '확인했습니다.\n개선하겠습니다.' } }] } });
+    expect(await admin.saveReply({ id: post.id, content: '수정한 답변' })).toMatchObject({ ok: true });
+    const source = doc(userDb('alice'), 'feedbackPosts', post.id);
+    await assertFails(updateDoc(source, { reply: { content: '위조', updatedAt: serverTimestamp() }, updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(adminDb(), 'feedbackPosts', post.id), { content: '원문 변조' }));
+    await assertFails(updateDoc(doc(adminDb(), 'feedbackPosts', post.id), { reply: { content: '사본 미갱신', updatedAt: serverTimestamp() } }));
+    expect(await createFirestoreAdminGateway(userDb('teacher-admin')).saveReply({ id: post.id, content: '가짜 관리자' })).toMatchObject({ ok: false });
+    expect(await gateway('alice').update({ id: post.id, draft: { ...draft, visibility: 'private' } })).toMatchObject({ ok: true });
+    expect(await admin.saveReply({ id: post.id, content: '비공개 답변' })).toMatchObject({ ok: true });
+    expect(await gateway('alice').list({ scope: 'mine' })).toMatchObject({ ok: true, value: { posts: [{ reply: { content: '비공개 답변' } }] } });
+    expect((await getDoc(doc(userDb('bob'), 'feedbackPublic', post.id))).exists()).toBe(false);
+    await assertFails(getDoc(doc(userDb('bob'), 'feedbackPosts', post.id)));
+    for (const reply of [{ content: '', updatedAt: serverTimestamp() }, { content: 'x'.repeat(2001), updatedAt: serverTimestamp() }, { content: '내용', updatedAt: Timestamp.fromMillis(0) }, { content: '내용', updatedAt: serverTimestamp(), extra: true }]) {
+      await assertFails(updateDoc(doc(adminDb(), 'feedbackPosts', post.id), { reply }));
+    }
+    expect(await gateway('alice').update({ id: post.id, draft })).toMatchObject({ ok: true });
+    expect(await gateway('bob').list({ scope: 'public' })).toMatchObject({ ok: true, value: { posts: [{ reply: { content: '비공개 답변' } }] } });
+    await gateway('alice').remove({ id: post.id });
+    expect(await admin.saveReply({ id: post.id, content: '삭제 후 답변' })).toMatchObject({ ok: false, code: 'NOT_FOUND' });
+    await assertFails(updateDoc(doc(adminDb(), 'feedbackPosts', post.id), { reply: { content: '삭제 후 답변', updatedAt: serverTimestamp() } }));
+    expect(await admin.list()).toMatchObject({ ok: true, value: [{ reply: { content: '비공개 답변' } }] });
+    await assertFails(proposed(userDb('alice'), 'alice', { reply: { content: '생성 위조', updatedAt: serverTimestamp() } }).batch.commit());
+  });
   it('denies guest access, private cross-user reads, broad source queries and arbitrary writes', async () => {
     const post = await created('alice', 'private');
     const guest = env.unauthenticatedContext().firestore() as unknown as Firestore;

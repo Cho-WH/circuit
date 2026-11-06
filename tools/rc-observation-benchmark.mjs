@@ -1,0 +1,12 @@
+import { build } from 'esbuild';
+import { mkdir } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const directory = new URL('../.tools/rc-c0-tmp/', import.meta.url);
+await mkdir(directory, { recursive: true });
+const outfile = fileURLToPath(new URL('observation-benchmark.cjs', directory));
+await build({ entryPoints: [fileURLToPath(new URL('rc-observation-benchmark.ts', import.meta.url))], outfile, bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent' });
+const child = spawnSync(process.execPath, [outfile], { cwd: root, stdio: 'inherit', windowsHide: true });
+if (child.error) throw child.error;
+process.exitCode = child.status ?? 1;

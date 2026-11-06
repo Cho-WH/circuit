@@ -648,11 +648,35 @@ describe('workspace transitions and file actions', () => {
     const onNotice = vi.fn();
     await act(async () => root.render(createElement(FileMenu, { document: layoutExample(examples[1].document), onOpen: vi.fn(), onNew: vi.fn(), onSave: vi.fn(), onRestore: vi.fn(), onNotice })));
     await click('파일');
+    const originalSetItem = window.localStorage.setItem;
     vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
-    await click('현재 회로 보관');
-    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('회로 파일'), 'error');
-    expect(button('보관했어요')).toBeUndefined();
-    expect(button('보관한 회로 불러오기').disabled).toBe(true);
+    try {
+      await click('현재 회로 보관');
+      expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('회로 파일'), 'error');
+      expect(button('보관했어요')).toBeUndefined();
+      expect(button('보관한 회로 불러오기').disabled).toBe(true);
+    } finally {
+      // happy-dom's Storage proxy ignores assignments to existing methods.
+      Object.defineProperty(window.localStorage, 'setItem', { configurable: true, writable: true, value: originalSetItem });
+    }
   });
 });
 
+
+it('aligns output parts through the toolbar as one undo and protects multi-selection from deletion',async()=>{
+  const doc=layoutExample(examples[1].document);
+  doc.components.find(c=>c.id==='R2')!.properties.answerOffsetY=45;
+  saveLocal(doc);await act(async()=>root.render(createElement(App)));await click('회로도 출력');
+  const part=(id:string)=>host.querySelector<SVGGElement>(`g[data-output-id="${id}"][data-output-part="value"]`)!;
+  const baseline=(id:string)=>Number(part(id).querySelector('text')!.getAttribute('y'));
+  const before=[baseline('R1'),baseline('R2')];
+  await act(async()=>part('R1').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})));
+  await act(async()=>part('R2').dispatchEvent(new KeyboardEvent('keydown',{key:' ',shiftKey:true,bubbles:true})));
+  expect(button('정렬').disabled).toBe(false);
+  await act(async()=>document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Delete',bubbles:true})));
+  expect(part('R1')).not.toBeNull();expect(part('R2')).not.toBeNull();
+  await click('정렬');await click('글자 기준선 맞춤');
+  expect(baseline('R1')).toBeCloseTo(baseline('R2'));
+  await click('출력 실행 취소');expect([baseline('R1'),baseline('R2')]).toEqual(before);
+  await click('출력 다시 실행');expect(baseline('R1')).toBeCloseTo(baseline('R2'));
+});

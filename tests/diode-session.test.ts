@@ -138,7 +138,8 @@ it.each([false, true])('matches initial analysis when adjusting resistance (adju
   expect(session.analysisSession.phase).toBe('overload');
 });
 
-it('locks damage and the last value synchronously, including queued edits and undo, and restores only the session',()=>{
+it.each([false, true])('locks damage and preserves its transition regardless of reduced motion (%s)',reduced=>{
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' && reduced }) as MediaQueryList);
   saveLocal(circuit(1000,true));render('build');
   act(()=>session.changeWorkspace('analysis'));render('analysis');
   expect(session.analysisSession.phase).toBe('normal');

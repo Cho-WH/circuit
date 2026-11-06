@@ -17,6 +17,18 @@ function setup() {
 }
 
 describe('DAT-005: feedback adapter contract', () => {
+  it('preserves replies through preview reload, owner updates and deletion', async () => {
+    const { gateway, admin, deps } = setup();
+    const post = value(await gateway.create(draft));
+    const reply = value(await admin.saveReply({ id: post.id, content: '  확인했습니다.  ' }));
+    expect(reply.content).toBe('확인했습니다.');
+    const restored = createLocalFeedback(deps);
+    expect(value(await restored.gateway.list({ scope: 'public' })).posts[0].reply).toEqual(reply);
+    expect(value(await restored.gateway.update({ id: post.id, draft: { ...draft, visibility: 'private' } })).reply).toEqual(reply);
+    await restored.gateway.remove({ id: post.id });
+    expect(value(await restored.admin.list())[0].reply).toEqual(reply);
+    expect(await restored.admin.saveReply({ id: post.id, content: '추가 답변' })).toEqual({ ok: false, code: 'NOT_FOUND' });
+  });
   it('edits all content fields and visibility without changing ownership, order or quota', async () => {
     const { gateway, deps, setTime } = setup();
     const original = value(await gateway.create(draft));

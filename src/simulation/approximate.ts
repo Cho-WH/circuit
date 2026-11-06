@@ -1,4 +1,4 @@
-import type { Approximation, Rational, SimulationResult } from '../domain';
+import type { DcApproximation, Rational, SimulationResult } from '../domain';
 import * as q from '../rational';
 import type { Mna } from './mna';
 
@@ -25,7 +25,7 @@ const norm = (a: number[][]) =>
   Math.max(...a.map((row) => row.reduce((s, v) => s + Math.abs(v), 0)));
 export function approximateSolve(
   model: Mna,
-  reason: Approximation['reason'],
+  reason: DcApproximation['reason'],
 ): {
   x: Rational[];
   quality: NonNullable<SimulationResult['quality']>;

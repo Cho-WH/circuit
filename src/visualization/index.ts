@@ -1,4 +1,4 @@
-import type { CompiledCircuit, SimulationResult } from '../domain';
+import type { CompiledCircuit, CircuitObservation } from '../domain';
 export type { ComponentLabelLayout, ScreenRectangle } from './component-labels';
 export { operatingMarkSvg, type ComponentOperatingMark } from './operating';
 export { buildCurrentModel, currentBand, currentFullWidth, type CurrentModel, type CurrentSample, type CurrentValue, type CurrentDisplay } from './current';
@@ -43,7 +43,7 @@ export function makePath(circuit: CompiledCircuit, ids: string[]): CircuitPath |
   }
   return null;
 }
-export function pathVoltages(path: CircuitPath, result: SimulationResult) {
+export function pathVoltages(path: CircuitPath, result: CircuitObservation) {
   return path.steps.map(step => {
     const a = result.referenceGroups?.find(group => group.netIds.includes(step.from));
     const b = result.referenceGroups?.find(group => group.netIds.includes(step.to));

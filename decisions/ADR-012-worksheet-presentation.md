@@ -26,7 +26,7 @@ output.fontScale은 0.5~2의 문서 설정이다. 글자 및 사각 빈칸의 �
 
 ## 출력 계약
 
-exportSvg(document, options?, result?)와 createSvgExport는 동일한 문서 좌표를 사용한다. createSvgExport는 svg, 내부 content, bounds, 정규화 options를 반환한다. componentPresentation(component, result?)과 annotationPlacements(document)는 공통 표기를 제공한다. exportPng는 SVG를 래스터화하고 copyPng는 복사 여부와 PNG Blob을 반환한다.
+exportSvg(document, options?, result?)와 createSvgExport는 동일한 문서 좌표를 사용한다. createSvgExport는 svg, 내부 content, bounds, 정규화 options를 반환한다. 2026-10-21 ADR-040에서 파생 layout을 추가했다. 출력 부분 복수 선택·스냅·정렬은 같은 기하와 기존 명령 배열을 사용하며 한 조작은 한 번의 실행 취소다. componentPresentation(component, result?)과 annotationPlacements(document)는 공통 표기를 제공한다. exportPng는 SVG를 래스터화하고 copyPng는 복사 여부와 PNG Blob을 반환한다.
 
 사용자 옵션은 접지 표시·기호 +/− 표시·투명 배경·고해상도 출력 토글이다. 전류계·전압계의 +/−는 첫 번째/두 번째 단자의 측정 부호를 나타내며 공통 기호에서 회전 위치를 따른다. 전지의 보조 + 표기도 같은 showSymbolPolarity를 따른다. 이 옵션은 기본 false이고 그림 설정에서 켤 수 있다. 직류 전원의 원 안 +/−는 전원 종류를 나타내는 기호 자체이므로 유지한다. 만들기·분석 및 circuitOnly의 3D 바닥 회로에는 표시한다. 기존 ExportOptions 경로를 사용하며 회로 저장 형식과 계산은 바꾸지 않는다. 접지는 기본으로 숨기며 showGround=true이면 접지 기호만 그린다. 출력 접지에는 0 V 문자를 붙이지 않는다. 이 설정은 회로 연결과 기준 전위에 영향을 주지 않으며 3D 바닥 회로의 기준점 표시는 유지한다. 숫자는 ADR-019의 공통 표시 옵션을 적용하며 기본값은 자동 단위다. 기본 출력은 검은색, 여백 16 문서 단위, PNG 1배다. highResolution=true이면 기본 PNG의 정수 픽셀 가로·세로를 정확히 두 배로 생성한다. 저수준 렌더러의 monochrome·margin은 3D 바닥 회로 등의 호출에만 사용한다. 3D 바닥 회로가 사용하는 circuitOnly=true는 출력 장식·문구·배율 없이 실제 회로 기호와 이름·값을 그린다. 기본 출력에서는 단자와 분기점 점을 생략하며 비연결 교차의 아치를 유지한다. 점 도구로 추가한 점만 별도로 그린다. 사용자 문구와 식별자는 XML escape한다.
 

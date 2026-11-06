@@ -7,6 +7,7 @@
 | 계약·저장 | specifications, editor-persistence, circuit-session, release-storage | 현재 형식 왕복·지원 밖 입력 거부, 참조 무결성, 백업·저장 실패·채널 분리 |
 | 계산 | simulation, exact-dc, rational, bounded-dc | 물리 fixture, 정확한 0·KCL/KVL·전력, 결정론, 계산 예산·근사 오차·실패 |
 | 다이오드·독립 회로 | diode-engine, diode-domain, diode-kinds, diode-session, independent-references | 평형·차단 전류, 작동 경계, 프로필·분석 잠금, 다른 기준 사이의 측정 차단 |
+| 선형 RC | rc-prototype, rc-contracts-storage, rc-engine, rc-session, rc-session-ui, rc-observation | 초기 전하·평형·오차 보증·시간, 원자적 조작·잠금·초기화, 공통 관찰·판 색·기록·출력. [C0~C5 근거](rc-transient-cases.md) |
 | 연결·편집 | wire-editing, wire-routing, junction-editing, component-deletion, changeover-switch | ID 기반 연결, 국소 경로 보존, 원자적 명령·권한·Undo/Redo |
 | 입력·복사·접지 | context-wiring, canvas-drag, touch-interactions, copy-placement, selection-copy-ui, reference-editing, component-names | 실제 포인터/키 입력, 취소·후속 클릭 억제, 복사 ID/이름, 수동 접지와 열린 배선 끝 |
 | 측정·조절 | measurement, non-contact-measurement, resistance-mode, measurement-notebook, meter-readouts, live-value, adjustable-parameter | 부호·미정·전원 분리, 조건별 기록·CSV, 계기 동시 표시·실시간 갱신 |

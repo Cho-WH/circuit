@@ -2,7 +2,9 @@
  * authorization and atomic quota checks, never the view. */
 export type FeedbackKind = 'review' | 'idea' | 'issue';
 export type FeedbackVisibility = 'public' | 'private';
+export interface FeedbackReply { content: string; updatedAt: string }
 export interface FeedbackEntry {
+  reply?: FeedbackReply;
   id: string;
   nickname: string;
   content: string;
@@ -34,7 +36,9 @@ export interface FeedbackGateway {
 /** Separate privileged port. Remote implementations must authorize every request. */
 export interface FeedbackAdminGateway {
   list(): Promise<FeedbackResult<AdminFeedbackPost[]>>;
+  saveReply(input: { id: string; content: string }): Promise<FeedbackResult<FeedbackReply>>;
 }
+export const validFeedbackReply = (content: string) => typeof content === 'string' && content.trim().length > 0 && content.trim().length <= 2000;
 export const feedbackLimits = { nickname: 20, content: 2000, daily: 3, pageSize: 20 } as const;
 export function validFeedbackDraft(draft: FeedbackDraft): boolean {
   return typeof draft.nickname === 'string' && draft.nickname.trim().length > 0 && draft.nickname.trim().length <= feedbackLimits.nickname

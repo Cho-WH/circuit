@@ -38,7 +38,7 @@ describe('diode document and component contracts', () => {
     expect(compileCircuit(document).circuit.elements[0].explicitCharacteristics).toBe(true);
     expect(serialized).not.toMatch(/branchCurrents|assessment|damaged/);
     expect(validateDocument({ ...document, version: 5 }).ok).toBe(false);
-    expect(validateDocument({ ...document, version: 7 }).ok).toBe(false);
+    expect(validateDocument({ ...document, version: 8 }).ok).toBe(false);
   });
 
   it('rejects ambiguous polarity, unknown profile versions and nonpositive slopes', () => {

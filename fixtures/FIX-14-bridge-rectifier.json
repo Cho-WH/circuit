@@ -4,7 +4,7 @@
   "title": "브릿지 정류 회로",
   "purpose": "전환 스위치로 ±5 V 입력을 선택해도 부하 전류는 오른쪽에서 왼쪽으로 3.6 mA 유지",
   "document": {
-    "format": "edu-circuit", "version": 6, "documentId": "fix-14", "title": "브릿지 정류 회로",
+    "format": "edu-circuit", "version": 7, "documentId": "fix-14", "title": "브릿지 정류 회로",
     "components": [
       {"id":"V1","type":"dc-voltage-source","label":"V1","position":{"x":480,"y":360},"rotation":90,"properties":{"voltageV":{"numerator":"5","denominator":"1"}},"terminals":[{"id":"V1.p","role":"positive"},{"id":"V1.n","role":"negative"}]},
       {"id":"V2","type":"dc-voltage-source","label":"V2","position":{"x":320,"y":360},"rotation":270,"properties":{"voltageV":{"numerator":"5","denominator":"1"}},"terminals":[{"id":"V2.p","role":"positive"},{"id":"V2.n","role":"negative"}]},

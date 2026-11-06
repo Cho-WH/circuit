@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { AnalysisPanel, MeasurementKind } from './AnalysisTools';
 import type {
-  CircuitDocument, CompileResult, EndpointRef, Diagnostic, SimulationResult,
+  CircuitDocument, CompileResult, EndpointRef, Diagnostic, CircuitObservation,
 } from '../domain';
 import { equivalentResistance } from '../simulation';
 import { quantityFormatForTargets } from '../component-library';
@@ -38,7 +38,7 @@ interface Props {
   children: ReactNode;
   document: CircuitDocument;
   compilation: CompileResult;
-  result: SimulationResult;
+  result: CircuitObservation;
   canRecord?: () => boolean;
   stopped?: boolean;
   resistanceDisabled?: boolean;
@@ -159,7 +159,8 @@ export function MeasurementPanel(props: Props) {
       unit,
       targetIds: kind === 'current' ? [measuredTarget!.id] : [red, black],
       recordedAt: new Date().toISOString(),
-      ...(kind !== 'resistance' ? { provenance: props.result.provenance } : {}),
+      ...('rcFrame' in props.result ? { transient: props.result.rcFrame.context }
+        : kind !== 'resistance' ? { provenance: props.result.provenance } : {}),
     });
     if (saved.ok) {
       setEntries((previous) => [
@@ -281,7 +282,7 @@ export function MeasurementPanel(props: Props) {
         )}
       </div>
       <div className="measure-readout">
-        <MeasurementDisplay reading={formattedReading}>
+        <MeasurementDisplay reading={formattedReading} live={'rcFrame' in props.result && props.canRecord?.() === false ? 'off' : 'polite'}>
           <div className="measure-lcd-header">
             <span className="measure-lcd-caption">
               {kind === 'voltage' ? '전압' : kind === 'current' ? '전류' : '저항'}
@@ -358,6 +359,7 @@ export function MeasurementPanel(props: Props) {
           {props.mobile.measuring && kind ? <CompactMeasurementBar
             stopped={props.stopped}
             resistanceDisabled={props.resistanceDisabled}
+            quiet={'rcFrame' in props.result && props.canRecord?.() === false}
             kind={kind} onChoose={props.mobile.onChoose} onBack={props.mobile.onBack}
             reading={formattedReading} ready={ready} potentials={{red: probePotentials('red'), black: probePotentials('black')}}
             activeProbe={props.activeProbe} onActiveProbe={props.onActiveProbe} targetName={targetName}

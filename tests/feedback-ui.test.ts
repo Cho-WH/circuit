@@ -42,6 +42,28 @@ async function compose() {
 async function submit(selector: string) { await act(async () => { host.querySelector(selector)!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); }
 
 describe('DAT-005: feedback board interaction', () => {
+  it('retains failed reply drafts, saves and edits inline, and displays the reply in the board', async () => {
+    const reply = { content: '확인했습니다.\n수정했습니다.', updatedAt: '2026-11-06T01:00:00Z' };
+    const saveReply = vi.fn<FeedbackAdminGateway['saveReply']>().mockResolvedValueOnce({ ok: false, code: 'UNAVAILABLE' }).mockResolvedValue({ ok: true, value: reply });
+    const admin: FeedbackAdminGateway = { list: async () => ({ ok: true, value: [{ ...post, deletedAt: null }] }), saveReply };
+    await act(async () => root.render(createElement(FeedbackAdminPage, { gateway: admin })));
+    await click(button('답변 작성'));
+    expect(button('답변 등록').disabled).toBe(true);
+    await fill('textarea', reply.content);
+    await submit('.feedback-reply-editor');
+    expect(host.querySelector('textarea')?.value).toBe(reply.content);
+    expect(host.querySelector('[role=alert]')).not.toBeNull();
+    await submit('.feedback-reply-editor');
+    expect(host.querySelector('.feedback-reply')?.textContent).toContain(reply.content);
+    expect(host.querySelector('textarea')).toBeNull();
+    await click(button('답변 수정'));
+    expect(host.querySelector('textarea')?.value).toBe(reply.content);
+    await click(button('취소'));
+    const port = gateway(); port.list = async () => ({ ok: true, value: { posts: [{ ...post, reply }], nextCursor: null } });
+    await render(port);
+    expect(host.querySelector('.feedback-reply')?.textContent).toContain(reply.content);
+    expect(button('답변 수정')).toBeUndefined();
+  });
   it('contains Firebase initializer errors and initializes again on retry', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const initialize = vi.spyOn(firebase, 'createFirebaseFeedbackGateway').mockImplementation(() => {
@@ -152,7 +174,7 @@ describe('DAT-005: feedback board interaction', () => {
     expect(host.textContent).toContain('관리자 보관함에는 기록이 남습니다');
   });
   it('shows retained deleted bodies only through the supplied administrator port', async () => {
-    await act(async () => root.render(createElement(FeedbackAdminPage, { gateway: { list: async (): ReturnType<FeedbackAdminGateway['list']> => ({ ok: true, value: [{ ...post, deletedAt: '2026-09-23T01:00:00Z' }, { ...post, id: 'private', content: '비공개 원문', visibility: 'private', deletedAt: null }] }) } })));
+    await act(async () => root.render(createElement(FeedbackAdminPage, { gateway: { saveReply: async () => ({ ok: false as const, code: 'FORBIDDEN' as const }), list: async (): ReturnType<FeedbackAdminGateway['list']> => ({ ok: true, value: [{ ...post, deletedAt: '2026-09-23T01:00:00Z' }, { ...post, id: 'private', content: '비공개 원문', visibility: 'private', deletedAt: null }] }) } })));
     expect(host.querySelector('dialog')).toBeNull();
     expect(host.textContent).toContain('삭제된 글');
     expect(host.textContent).toContain(post.content);
@@ -170,7 +192,7 @@ describe('DAT-005: feedback board interaction', () => {
     expect(host.querySelector('article')).toBeNull();
   });
   it('handles administrator access denial without exposing cached records', async () => {
-    await act(async () => root.render(createElement(FeedbackAdminPage, { gateway: { list: async (): ReturnType<FeedbackAdminGateway['list']> => ({ ok: false, code: 'FORBIDDEN' }) } })));
+    await act(async () => root.render(createElement(FeedbackAdminPage, { gateway: { saveReply: async () => ({ ok: false as const, code: 'FORBIDDEN' as const }), list: async (): ReturnType<FeedbackAdminGateway['list']> => ({ ok: false, code: 'FORBIDDEN' }) } })));
     expect(host.textContent).toContain('관리자 권한을 확인할 수 없습니다');
     expect(host.querySelector('article')).toBeNull();
   });

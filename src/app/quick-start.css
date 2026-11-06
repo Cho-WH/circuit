@@ -314,12 +314,3 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@media (prefers-reduced-motion: reduce) {
-  /* This welcome transition intentionally remains enabled at the product owner's request. */
-  .quick-start-backdrop .quick-start-dialog {
-    animation: var(--quick-start-enter) !important;
-  }
-  .quick-start-backdrop .quick-start-scrim {
-    animation: var(--quick-start-dim) !important;
-  }
-}

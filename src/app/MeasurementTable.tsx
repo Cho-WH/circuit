@@ -16,6 +16,7 @@ import {
   measurementTableHtml,
   measurementTableText,
   measurementValue,
+  measurementMoment,
 } from './measurement-records';
 
 function ConditionSummary({ entry }: { entry: MeasurementEntry }) {
@@ -30,6 +31,7 @@ function ConditionSummary({ entry }: { entry: MeasurementEntry }) {
           </span>
         ))}
         {entry.sourcesDisconnected && <span className="record-isolation">모든 전원 분리</span>}
+        {entry.record.transient && <span className="record-isolation">이상적 RC · {measurementMoment(entry)}</span>}
         {entry.record.provenance?.physicalModel === 'component' && (
           <span className="record-isolation">부품 특성</span>
         )}
@@ -131,6 +133,7 @@ export function MeasurementTable({
   const [previewId, setPreviewId] = useState<string | null>(null);
   const preview = entries.find((entry) => entry.id === previewId);
   const groups = measurementConditions(entries);
+  const hasRc = entries.some(entry => entry.record.transient);
   async function copy() {
     try {
       const text = measurementTableText(entries);
@@ -247,6 +250,7 @@ export function MeasurementTable({
                 <th scope="col">측정 위치</th>
                 <th scope="col">측정</th>
                 <th scope="col">측정값</th>
+                {hasRc && <th scope="col">관찰 시각</th>}
                 <th scope="col">메모</th>
                 <th scope="col">
                   <span className="measurement-sr-only">삭제</span>
@@ -256,7 +260,7 @@ export function MeasurementTable({
             {groups.map((group) => (
               <tbody key={group.entry.id}>
                 <tr className="record-condition">
-                  <th colSpan={6} scope="rowgroup">
+                  <th colSpan={hasRc ? 7 : 6} scope="rowgroup">
                     <div className="record-condition-heading">
                       <strong>조건 {group.number}</strong>
                       <ConditionSummary entry={group.entry} />
@@ -279,6 +283,7 @@ export function MeasurementTable({
                       </td>
                       <td className="record-quantity">{measurementQuantityName(entry)}</td>
                       <td className="record-value">{measurementValue(entry)}</td>
+                      {hasRc && <td>{measurementMoment(entry)}</td>}
                       <td>
                         <input
                           aria-label={`기록 ${index} 메모`}

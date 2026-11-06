@@ -10,17 +10,23 @@ export interface StoredScalar {
   approximation?: Approximation;
 }
 /** Absent on exact scalars. Error is an absolute SI uncertainty estimate. */
-export interface Approximation {
+export interface DcApproximation {
   reason: 'integer-limit' | 'operation-limit';
   policy: 'dc-budget-1';
   absoluteError: number;
 }
+export interface RcApproximation {
+  reason: 'rc-modal';
+  policy: 'rc-modal-1';
+  absoluteError: number;
+}
+export type Approximation = DcApproximation | RcApproximation;
 export function validApproximation(value: unknown): value is Approximation {
   if (!value || typeof value !== 'object') return false;
   const v = value as Approximation;
   return (
-    (v.reason === 'integer-limit' || v.reason === 'operation-limit') &&
-    v.policy === 'dc-budget-1' &&
+    (((v.reason === 'integer-limit' || v.reason === 'operation-limit') && v.policy === 'dc-budget-1') ||
+      (v.reason === 'rc-modal' && v.policy === 'rc-modal-1')) &&
     Number.isFinite(v.absoluteError) &&
     v.absoluteError >= 0
   );
@@ -36,6 +42,8 @@ export const physicalProperties = [
   'sourceResistanceOhm',
   'diodeThresholdV',
   'diodeOnResistanceOhm',
+  'capacitanceF',
+  'initialVoltageV',
 ] as const;
 function scalarData(n: bigint, d = 1n): StoredScalar {
   if (d === 0n) throw new RangeError('ZERO_DENOMINATOR');

@@ -24,7 +24,9 @@
 
 ## 핵심 타입 예시
 
-현재 v6 저장·공개 계산 계약은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 따른다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 현재 형식만 지원한다.
+현재 회로 저장은 v7이며 [ADR-042](../../decisions/ADR-042-rc-contracts-storage.md)를 따른다. DC 정확값은 [ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)와 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 유지한다. 물리값은 실행 중 BigInt 분자·분모, JSON에서 정수 문자열 쌍을 사용한다. 정상 읽기는 v7만 허용하고 명시적 복원에서 검증된 v5/v6를 변환한다.
+
+축전기는 양의 정확값 `capacitanceF`와 부호 있는 정확값 `initialVoltageV`를 저장한다. `a`·`b` 역할의 단자가 하나씩 있으며 초기 전압은 Va−Vb다. 단자 배열·화면 회전으로 부호를 바꾸지 않는다. 계산 중 전하·현재 전압·재생 시각은 문서에 저장하지 않는다. `RcPrepareRequest`·불투명 `RcPlan`·`RcFrame`은 별도 실행 계약이며 [RC 설계](rc-transient.md)를 따른다. C1 타입·검증에 이어 C2 제품 RC 계산을 연결했다. 컴파일 결과의 선택적 `wireCurrentTerms`는 도선 시작→끝 전류의 단자 KCL 합 또는 고리의 null을 담으며 문서에 저장하지 않는다. RcFrame의 도선 전류와 질의 실패 구분은 [ADR-043](../../decisions/ADR-043-rc-product-engine.md)을 따른다.
 
 ```ts
 interface Rational { readonly numerator: bigint; readonly denominator: bigint }
@@ -36,7 +38,7 @@ type EndpointRef =
 
 interface CircuitDocument {
   format: 'edu-circuit';
-  version: 6;
+  version: 7;
   documentId: string;
   title: string;
   components: ComponentInstance[];

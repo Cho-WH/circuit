@@ -1,7 +1,9 @@
 import { isStoredScalar, physicalProperties, type Rational, type ComponentProperties } from './scalar';
-export { validApproximation, type Approximation, isStoredScalar, physicalProperties, type Rational, type StoredScalar, type ComponentProperties } from './scalar';
+export { rcPolicy, validRcFrameContext, type RcTime, type RcFrameContext, type RcCapacitorState, type RcInitialState, type RcPrepareRequest, type RcDiagnosticCode, type RcDiagnostic, type RcResult, type RcPlanSummary, type RcPlan, type RcFrame, type RcReading, type RcEngine } from './rc';
+export { validApproximation, type Approximation, type DcApproximation, type RcApproximation, isStoredScalar, physicalProperties, type Rational, type StoredScalar, type ComponentProperties } from './scalar';
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../schemas/circuit-document.schema.json';
+export type { CircuitObservation, RcObservation } from './rc';
 import { isChangeoverSwitch, validSwitchState } from './switches';
 import { isAdjustableVoltageSource, adjustableRangeDefinition } from './adjustable';
 export { isAdjustableVoltageSource, adjustableRangeDefinition } from './adjustable';
@@ -11,7 +13,7 @@ export { defaultOperatingProfileRef, operatingProfileFor, diodeProfileRef, diode
 
 export type Point = { x: number; y: number };
 export type EndpointRef = { kind: 'terminal' | 'junction'; id: string };
-export type ComponentType = 'dc-voltage-source' | 'resistor' | 'switch' | 'ammeter' | 'voltmeter' | 'resistive-load' | 'diode';
+export type ComponentType = 'dc-voltage-source' | 'resistor' | 'switch' | 'ammeter' | 'voltmeter' | 'resistive-load' | 'diode' | 'capacitor';
 export interface Terminal { id: string; role: string; localPosition?: Point }
 export interface ComponentInstance {
   id: string; type: ComponentType; label: string; position: Point;
@@ -32,7 +34,7 @@ export interface ActivityDefinition {
   resetSnapshotId?: string | null; [key: string]: unknown;
 }
 export interface CircuitDocument {
-  $schema?: string; format: 'edu-circuit'; version: 6; output?: { fontScale?: number }; documentId: string; title: string;
+  $schema?: string; format: 'edu-circuit'; version: 7; output?: { fontScale?: number }; documentId: string; title: string;
   components: ComponentInstance[]; wires: Wire[]; junctions: Junction[];
   annotations: Annotation[]; referenceNode: EndpointRef | null; activity: ActivityDefinition | null;
 }
@@ -58,10 +60,14 @@ export interface Diagnostic {
 export const diagnostic = (code: string, affectedIds: string[] = [], severity: Diagnostic['severity'] = 'error', parameters: Diagnostic['parameters'] = {}): Diagnostic =>
   ({ code, severity, affectedIds: [...new Set(affectedIds)], parameters, suggestedActions: ['INSPECT_CONNECTIONS'] });
 export interface Net { id: string; endpointIds: string[]; wireIds: string[] }
-export interface CompiledElement { id: string; type: ComponentType; a: string; b: string; value: Rational; closed: boolean; operatingProfile?: OperatingProfile; explicitCharacteristics?: boolean }
+interface CompiledElementBase { id: string; a: string; b: string; value: Rational; closed: boolean; operatingProfile?: OperatingProfile; explicitCharacteristics?: boolean }
+export type CompiledElement = (CompiledElementBase & { type: Exclude<ComponentType, 'capacitor'> })
+  | (CompiledElementBase & { type: 'capacitor'; initialVoltageV: Rational; aTerminalId: string; bTerminalId: string });
 export interface CompiledCircuit {
   nets: Net[]; elements: CompiledElement[]; endpointToNet: Record<string, string>;
   referenceNetId?: string;
+  /** RC wire start -> end KCL cuts; null means an ideal conductor cycle. Runtime only. */
+  wireCurrentTerms?: Record<string, readonly { componentId: string; coefficient: number }[] | null>;
 }
 export interface CompileResult { circuit: CompiledCircuit; diagnostics: Diagnostic[] }
 export interface CircuitCompiler { compile(document: CircuitDocument): CompileResult }
@@ -91,6 +97,13 @@ export function validateDocument(input: unknown): DocumentValidation {
   const diagnostics: Diagnostic[] = [];
   const endpoints = new Map<string, EndpointRef['kind']>();
   for (const c of doc.components) {
+    if (c.type === 'capacitor') {
+      for (const key of ['capacitanceF', 'initialVoltageV'] as const) {
+        const value = c.properties[key];
+        if (!isStoredScalar(value) || value.approximation || (key === 'capacitanceF' && BigInt(value.numerator) <= 0n))
+          diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: key }));
+      }
+    }
     if (c.properties.sourceKind !== undefined && !isAdjustableVoltageSource(c))
       diagnostics.push(diagnostic('INVALID_COMPONENT_VALUE', [c.id], 'error', { property: 'sourceKind' }));
     if (!isAdjustableVoltageSource(c) && (c.properties.voltageMinV !== undefined || c.properties.voltageMaxV !== undefined))
@@ -147,7 +160,7 @@ export function requireDocument(input: unknown): CircuitDocument {
   return cloneDocument(checked.document);
 }
 export function emptyDocument(id = 'untitled'): CircuitDocument {
-  return { format: 'edu-circuit', version: 6, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
+  return { format: 'edu-circuit', version: 7, documentId: id, title: '새 회로', components: [], wires: [], junctions: [], annotations: [], referenceNode: null, activity: null };
 }
 
 export function normalizeComponentLabel(input:string):string|null {

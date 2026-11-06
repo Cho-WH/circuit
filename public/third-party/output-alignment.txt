@@ -1,0 +1,36 @@
+Output alignment mathematical adaptations
+
+Excalidraw commit 1d4dc2c0e6e476911d0760e9c3cf3694f2d43384:
+https://github.com/excalidraw/excalidraw/tree/1d4dc2c0e6e476911d0760e9c3cf3694f2d43384
+packages/element/src/align.ts: calculateTranslation arithmetic.
+packages/element/src/distribute.ts: nonnegative gap/span arithmetic.
+packages/excalidraw/snapping.ts: screen distance/zoom and gap offset arithmetic.
+Modified 2026-10-21 for Circuit: immutable OutputLayout units, baseline alignment,
+fixed distribution endpoints, negative-gap rejection, axis scales, semantic candidate
+priority, hysteresis, visible and nearby references. Scene, bindings, caches and UI omitted.
+
+maxGraph Guide.ts at 8fa78c2f290fa4521de65583e3e93cf3ca838e8d was a structural
+reference for independent-axis edge/centre comparisons only. No maxGraph code copied.
+https://github.com/maxGraph/maxGraph/blob/8fa78c2f290fa4521de65583e3e93cf3ca838e8d/packages/core/src/view/other/Guide.ts
+
+MIT License
+
+Copyright (c) 2020 Excalidraw
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

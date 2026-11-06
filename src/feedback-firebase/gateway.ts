@@ -20,9 +20,10 @@ export function entry(id: string, data: DocumentData) {
     kind: data.kind as FeedbackDraft['kind'], visibility: data.visibility as FeedbackDraft['visibility'],
     createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
     updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
+    ...(data.reply ? { reply: { content: data.reply.content as string, updatedAt: (data.reply.updatedAt as Timestamp).toDate().toISOString() } } : {}),
   };
 }
-class Rejection extends Error {
+export class Rejection extends Error {
   constructor(readonly reason: FeedbackError) { super(reason); }
 }
 export async function result<T>(work: () => Promise<T>): Promise<FeedbackResult<T>> {
@@ -33,8 +34,8 @@ export async function result<T>(work: () => Promise<T>): Promise<FeedbackResult<
     return { ok: false, code: code === 'permission-denied' ? 'FORBIDDEN' : 'UNAVAILABLE' };
   }
 }
-function publicFields(data: DocumentData) {
-  return { nickname: data.nickname, content: data.content, kind: data.kind, visibility: data.visibility, createdAt: data.createdAt, updatedAt: data.updatedAt };
+export function publicFields(data: DocumentData) {
+  return { nickname: data.nickname, content: data.content, kind: data.kind, visibility: data.visibility, createdAt: data.createdAt, updatedAt: data.updatedAt, ...(data.reply ? { reply: data.reply } : {}) };
 }
 function cursorConstraints(value: string | undefined, scope: string): QueryConstraint[] {
   if (!value) return [];

@@ -1,14 +1,22 @@
 # 모듈 구성과 공개 계약
 
+표시·재생 설계는 P-09와 [ADR-046](../../decisions/ADR-046-platform-independent-motion.md)을 따른다. 주요 기능과 일반 UI에서 운영체제·브라우저의 동작 줄이기 설정을 읽어 기능·연출을 정지하거나 즉시 완료하지 않는다. 재생 상태의 원본은 앱의 명시적 제어와 세션 수명이며, RC 세션에는 모션 선호를 의존성으로 전달하지 않는다. 숨겨진 화면·뷰 해제·오류 처리는 별도의 수명 관리로 유지한다.
+
+축전기의 선형 RC 과도응답은 [별도 구현 설계](rc-transient.md)와 accepted [ADR-041](../../decisions/ADR-041-linear-rc-transient.md)에 정의한다. [C0 계산 시제품](../testing/rc-c0-results.md)은 tools에 격리했다. [C1](../testing/rc-c1-results.md)에서 [ADR-042](../../decisions/ADR-042-rc-contracts-storage.md)의 RC 공개 타입·시간 출처·저장 버전을 구현했다. [C2 순수 엔진](../testing/rc-c2-results.md)은 [ADR-043](../../decisions/ADR-043-rc-product-engine.md)에 따라 구현했다. [C3 재생 세션](../testing/rc-c3-results.md)은 [ADR-044](../../decisions/ADR-044-rc-playback-session.md)에 따라 app에 연결했다. RcSession이 후보 검증·시계·프레임을, useCircuitSession이 문서·Undo·자동 저장을 소유한다. [C4 관찰](../testing/rc-c4-results.md)은 [ADR-045](../../decisions/ADR-045-rc-observation-output.md)에 따라 연결했다.
+
+`domain`은 `RcPrepareRequest`·불투명 `RcPlan`·`RcFrame`·`RcFrameContext`·`RcEngine`과 고정 정책을 공개한다. `simulation` index도 RC 계약을 재수출한다. simulation의 `rcEngine.prepare/sample/queryVoltage/queryCurrent/queryWireCurrent`를 구현했다. `rcCircuitRevision`·`rcInitialState`는 정상 컴파일 결과에서 요청을 만드는 공개 보조 함수다. UI는 행렬이나 모드에 접근하지 않는다. `connectivity`는 축전기의 C·초기 전압·a/b 단자 ID와 도선 KCL 질의 항을 컴파일하고 기존 DC solve는 축전기를 `RC_ENGINE_REQUIRED`로 거부한다. `measurement`는 RC 기록의 출처·시간·품질과 CSV를, `persistence`는 새 스키마와 이전 원본 보존을 담당한다.
+
+`CircuitObservation`은 DC 결과 또는 엔진 소유 프레임을 검증한 `RcObservation`이다. `simulation.observeRcFrame`과 `observationVoltage/observationCurrent/observationWireCurrent`를 통해 측정·시각화가 공개 질의만 사용한다. RC는 DC provenance·전력·affine solution을 꾸미지 않는다. 2D/3D·계기·기록·판별 전하가 같은 프레임을 사용하며 문서에는 저장하지 않는다. 공통 기호와 초기 조건 출력은 component-library/export, 입력 초안과 재생 제어는 app에 둔다.
+
 ## 정확 연산 계약
 
-[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 구현했다. domain은 최소 타입·정규형 직렬화·현재 문서 검증을, rational은 순수 사칙연산·비교·표시 변환을, quantity는 단위 입력·표시 반올림을 담당한다. domain은 rational에 역으로 의존하지 않는다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 현재 저장은 회로 v6·측정 기록 v5만 지원한다.
+[ADR-024](../../decisions/ADR-024-exact-dc-arithmetic.md)의 [정확 연산 명세](../physics/exact-dc-arithmetic.md)를 구현했다. domain은 최소 타입·정규형 직렬화·현재 문서 검증을, rational은 순수 사칙연산·비교·표시 변환을, quantity는 단위 입력·표시 반올림을 담당한다. domain은 rational에 역으로 의존하지 않는다. 행렬은 simulation 내부에 남고 measurement의 도선 KCL·기록까지 정확값을 유지한다. 현재 저장은 회로 v7·측정 기록 v6다. 회로 v5/v6 명시적 복원과 기록 v5 검증 변환의 경계는 ADR-042를 따른다.
 
 ## 구현된 근사 경로의 경계
 
 [ADR-025](../../decisions/ADR-025-bounded-approximate-dc.md)에 따라 simulation이 요청별 정확 계산 예산과 공통 MNA 구성, 정확/근사 풀이, 수용 검사·진단을 소유한다. domain의 공개 결과에는 정확/근사 품질과 측정에 필요한 오차 정보를 명시한다. measurement는 그 품질을 전압차·도선 KCL·등가저항·기록까지 전파하고 quantity/visualization이 ≈와 방향 불확실을 공통으로 표현한다. 렌더러·UI는 행렬·근사 전환·자체 허용오차를 다루지 않는다.
 
-rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v5가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다.
+rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다. 전역 카운터와 시계에 의존하지 않는다. 두 풀이에 실제로 필요한 회로식/결과 경계만 공유하며 범용 수치 프레임워크를 추가하지 않는다. SimulationResult.quality와 스칼라 approximation을 공개하며 측정 기록 v6가 이를 보존한다. rational.createArithmetic은 요청별 계측기를 주입받고 기본 순수 연산에도 동일한 메타데이터 전파를 적용한다. RC의 `rc-modal-1` 오차 인증은 일반 유리수 연산만으로 보장되지 않으며 별도 RC 엔진의 잔차 에너지 상한과 구간 연산이 담당한다.
 
 ## 선택과 복사 배치
 
@@ -39,7 +47,7 @@ rational은 순수하게 유지하고 연산 계수는 요청별로 전달한다
 | `editor` | 문서 편집 명령, 권한 검사, 실행 취소 | 포인터·React 상태, 물리 계산식 구현 |
 | `wire-geometry` | Point 배열의 직각 경로·국소 변형·정리 | 문서·ID·UI·렌더러·명령·저장. domain 타입 외 모듈 의존 금지 |
 | `measurement` | 측정 도구를 질의나 임시 회로 요소로 변환 | 원본 문서의 몰래 영구 변경 |
-| `visualization` | `SimulationResult`를 2D 레이어로 변환 | 재계산 수행 |
+| `visualization` | `CircuitObservation`을 2D 레이어로 변환 | 재계산 수행 |
 | `potential-3d` | 2D 위치와 전위를 3D 장면으로 변환 | 회로 해석 직접 수행 |
 | `current-view` | 2D·3D가 투영한 화면 경로에 비례 띠·방향 무늬를 표시하고 표시용 프레임 수명을 관리 | 회로 해석·전하 적분·React·Three.js 의존 |
 | `export` | 공통 기호 자원에서 인쇄용 SVG·PNG 생성 | 화면 캡처에 의존 |
@@ -126,7 +134,9 @@ DeleteElements의 연결 정책은 editor 내부 `delete-elements.ts`가 담당�
 
 분석 화면의 측정 도구은 `probeCurrent`의 부호 있는 전류와 기준 방향을 읽는다. 도선은 해당 edge를 제거한 연결 그래프와 단자 전류 합으로 처리하며, 도선 고리에는 미정 진단을 반환한다. 화면의 배치·스냅은 `app/measurement-tools`에 격리한다. 기존 전류계 삽입 공개 함수는 학습·계약 호환용으로 유지하며 분석 화면의 측정 도구에서는 호출하지 않는다. 이 함수는 선택 부품의 첫 전기 단자를 사용하되 전원은 positive 단자를 우선한다. 복제한 임시 문서·계기 ID·변경된 연결 정보를 반환하며 원본을 보존한다. 등가저항과 KCL·KVL 해석은 `simulation`의 공개 함수를 사용한다. 저항 측정 UI는 `equivalentResistance`의 `excludeSourceIds`에 모든 직류 전원 ID를 전달해 개방하며 원본 문서를 수정하지 않는다. 저수준 API의 나머지 독립원 비활성화 계약은 유지한다. `CircuitCanvas`의 측정 표시 옵션과 공통 `symbolMarkup(component, { disconnectedSource })`는 전원의 리드 단절·흐림만 표현하며 전기 계산에 관여하지 않는다. 물리 의미와 기록·실험 규칙은 [측정 규약](../physics/measurement-and-display.md)을 따른다.
 
-`component-library`의 공통 표기와 `export`의 SVG·PNG·클립보드 함수 및 옵션은 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)에 모았다. `domain`의 `Exporter<TOptions>`는 확장용 인터페이스이며 앱은 현재 `exportSvg`, `exportPng`, `copyPng` 함수를 사용한다.
+`component-library`의 공통 표기와 `export`의 SVG·PNG·클립보드 함수 및 옵션은 [ADR-012](../../decisions/ADR-012-worksheet-presentation.md)에 모았다. `domain`의 `Exporter<TOptions>`는 확장용 인터페이스이며 앱은 현재 `exportSvg`, `exportPng`, `copyPng` 함수를 사용한다. `createSvgExport`는 같은 렌더링 계산에서 문서 좌표의 `layout`도 반환한다. `OutputRef`·`OutputLayoutItem`·`OutputLayout`은 export의 공개 파생 타입이며 저장하지 않는다. app/output-layout이 부분 선택·스냅·정렬의 순수 계산과 명령 배열 조립을 맡는다. [ADR-040](../../decisions/ADR-040-output-alignment.md).
+
+`component-library.componentSymbolBody`는 공통 기호 치수에서 연결선을 제외한 본체의 문서 좌표 외곽·표시 종류·회전을 반환한다. export는 이를 `OutputLayoutItem.symbolBody`에 제공하며 app의 단일 이름/값 본체 간격 스냅만 참조한다. 기존 `referencePoint` 중심 스냅과 구분하고 DOM 선택 외곽·출력 자르기 경계로 대체하지 않는다. 저장 형식에는 추가하지 않는다.
 
 ## 의존성 규칙
 
