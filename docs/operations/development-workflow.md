@@ -81,6 +81,14 @@ ADR 상태는 `proposed`, `accepted`, `superseded`, `rejected` 중 하나다.
 - 핵심 자산과 파일 입출력은 서버 API에 의존하지 않는다.
 
 
+### 과학 포털 운영판
+
+Vercel의 `scope-circuit` 프로젝트는 이 저장소의 `main`을 운영 브랜치로 사용한다. `npm run build -- --mode sco-portal`로 `dist/sim/circuit/`에 안정판을 만들고 `dist/`를 제공한다. 과학 포털은 `/sim/circuit/` 아래 요청을 이 프로젝트로 전달한다. [공개 회로봄](https://sco.pe.kr/sim/circuit/) · [포털 배포 운영 기준](https://github.com/Cho-WH/scope-portal/blob/main/docs/deployment.md)
+
+Vercel에서 게시 커밋을 확인한 뒤 공개 주소에서 예제 회로, 3D, SVG·PNG 출력과 후기 접근을 확인한다. 회로봄 앱에 회귀가 있으면 `scope-circuit`의 마지막 정상 운영 배포로 복구한다. 주소 연결은 포털 프로젝트에서 관리한다.
+
+기존 GitHub Pages 주소에서도 안정판과 개발판을 제공한다. 브라우저 자동 저장과 익명 후기 인증은 주소별로 보관된다. 예전 주소의 회로를 가져오려면 회로 파일을 저장한 뒤 새 주소에서 연다. 관리자 경로는 `/sim/circuit/admin/feedback/`이며 Firebase Authentication의 허용 도메인에 `sco.pe.kr`이 필요하다.
+
 ### 안정판과 개발판 게시
 
 | 브랜치 | 주소 | 빌드 채널 |
