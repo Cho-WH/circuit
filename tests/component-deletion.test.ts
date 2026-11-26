@@ -6,7 +6,7 @@ import { createHistory, executeCommand, previewCommand, undo, redo, insertionCan
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { serializeDocument, parseDocument } from '../src/persistence';
-import { exportSvg } from '../src/export';
+import { createSvgExport } from '../src/export';
 import { compactWirePoints, orthogonalRoute } from '../src/wire-geometry';
 import source from '../fixtures/ux/wire-editing.json';
 
@@ -55,7 +55,7 @@ describe('component deletion preserves wiring locally', () => {
     expect(undo(history).present).toEqual(doc);
     expect(redo(undo(history)).present).toEqual(next);
     expect(parseDocument(serializeDocument(next))).toMatchObject({ ok: true, document: next });
-    expect(exportSvg(next).match(/<path d="[^"]+"/g)).toContain('<path d="M156 200 L320 200 L320 300 L400 300"');
+    expect(createSvgExport(next).svg.match(/<path d="[^"]+"/g)).toContain('<path d="M156 200 L320 200 L320 300 L400 300"');
   });
 
   it.each<ComponentType>(['resistor', 'resistive-load', 'switch', 'ammeter', 'voltmeter', 'dc-voltage-source'])('applies the same two-terminal rule to %s at every rotation', type => {

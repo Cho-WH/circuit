@@ -22,7 +22,7 @@ import {
 } from '../src/component-library';
 import { emptyDocument } from '../src/domain';
 import { createHistory, executeCommand, executeCommands, undo } from '../src/editor';
-import { exportSvg } from '../src/export';
+import { createSvgExport } from '../src/export';
 
 describe('shared physical quantities', () => {
   it('preserves component preferences across save and atomic undo without changing physical values',()=>{
@@ -145,7 +145,7 @@ describe('shared physical quantities', () => {
     for (const mode of ['auto', 'scientific', 'plain'] as const) {
       const expected = componentValue(component, { mode });
       expect(componentPresentation(component, undefined, { mode }).value).toBe(expected);
-      expect(exportSvg(doc, { quantityFormat: { mode } })).toContain(expected);
+      expect(createSvgExport(doc, { quantityFormat: { mode } }).svg).toContain(expected);
     }
     expect(component.properties.resistanceOhm).toEqual(q.store(90000));
   });

@@ -14,7 +14,7 @@ import { QUICK_START_SEEN_KEY } from '../src/app/useQuickStart';
 import { createMeasurementRecord } from '../src/measurement';
 import { conditionValues, measurementConditionKey, measurementTableText, measurementValue } from '../src/app/measurement-records';
 import { componentPresentation } from '../src/component-library';
-import { exportSvg } from '../src/export';
+import { createSvgExport } from '../src/export';
 
 let root: Root, host: HTMLDivElement, session: ReturnType<typeof useCircuitSession>;
 function Harness({mode}: {mode: WorkspaceMode}) { session=useCircuitSession(mode); return null; }
@@ -283,7 +283,7 @@ it('keeps model/profile provenance in measurement grouping and uses a display ap
   const presentation=componentPresentation(diode,evaluated.result);
   expect(presentation.value).toBeNull();
   expect(presentation.voltage).toContain('≈');expect(presentation.current).toContain('≈');
-  expect(exportSvg(doc,{},evaluated.result)).toContain('≈');
+  expect(createSvgExport(doc,{},evaluated.result).svg).toContain('≈');
 });
 
 

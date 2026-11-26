@@ -19,13 +19,17 @@ import {
   type CircuitDocument,
 } from '../src/domain';
 import { createHistory, executeCommand, redo, undo } from '../src/editor';
-import { copyPng, exportPng, exportSvg as standaloneSvg } from '../src/export';
+import { copyPng, createSvgExport, exportPng } from '../src/export';
 import { solveCircuit } from '../src/simulation';
 import { outputMoveCommand } from '../src/app/OutputCanvas';
 import { parseDocument, serializeDocument } from '../src/persistence';
 
-// Geometry assertions omit binary font payload; embedding is tested separately.
-function exportSvg(...args:Parameters<typeof standaloneSvg>){return standaloneSvg(...args).replace(/<style>[\s\S]*?<\/style>/g,'');}
+// Exercise render geometry synchronously. Standalone font embedding is tested below.
+function renderSvg(...args: Parameters<typeof createSvgExport>) {
+  return createSvgExport(...args).svg;
+}
+
+const mathFontBytes = Uint8Array.from(readFileSync('src/typography/LibertinusMath-Regular.woff2'));
 
 function fixture(name = 'FIX-02-series.json'): CircuitDocument {
   const raw = JSON.parse(
@@ -235,8 +239,8 @@ describe('independent worksheet SVG export', () => {
     const documentBefore = cloneDocument(document);
     const resultBefore = structuredClone(result);
 
-    const first = exportSvg(document, {}, result);
-    const second = exportSvg(document, {}, result);
+    const first = renderSvg(document, {}, result);
+    const second = renderSvg(document, {}, result);
     expect(second).toBe(first);
     expect(first.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true);
     expect(first.endsWith('</svg>')).toBe(true);
@@ -262,7 +266,7 @@ describe('independent worksheet SVG export', () => {
     };
     const snapshot = cloneDocument(document);
 
-    const problem = exportSvg(document, {}, result);
+    const problem = renderSvg(document, {}, result);
     expect(problem).toContain('>3 Ω</text>');
     expect(problem).toContain('>𝑅1</text>');
     expect(problem).toContain('width="84" height="36"');
@@ -283,7 +287,7 @@ describe('independent worksheet SVG export', () => {
       visibility: 'always',
     }];
 
-    const svg = exportSvg(document, {});
+    const svg = renderSvg(document, {});
     expect(svg).not.toContain('<script>');
     expect(svg).not.toContain('<img');
     expect(svg).not.toContain('<b>');
@@ -304,7 +308,7 @@ describe('independent worksheet SVG export', () => {
       { id: 'hidden', kind: 'note', anchor: { kind: 'terminal', id: 'R1.a' }, content: 'SECRET', visibility: 'hidden' },
     ];
 
-    const problem = exportSvg(document, {});
+    const problem = renderSvg(document, {});
     expect(problem).toContain('>A</text>');
     expect(problem).toContain('>𝐼</text>');
     expect(problem).toContain('>?</text>');
@@ -320,7 +324,7 @@ describe('independent worksheet SVG export', () => {
     document.components[1].properties.showVoltage = true;
     document.components[1].properties.showCurrent = true;
 
-    const transparent = exportSvg(document, {
+    const transparent = renderSvg(document, {
       monochrome: true,
       background: 'transparent',
       margin: 10,
@@ -330,7 +334,7 @@ describe('independent worksheet SVG export', () => {
     expect(transparent).toContain('>3 Ω</text>');
     expect(transparent).toContain('>𝑈 = 3 V</text>');
 
-    const white = exportSvg(document, { background: 'white', margin: 50 }, result);
+    const white = renderSvg(document, { background: 'white', margin: 50 }, result);
     expect(white).toMatch(/<rect [^>]*fill="#ffffff"\/>/);
     const small = svgDimensions(transparent);
     const large = svgDimensions(white);
@@ -347,7 +351,7 @@ describe('independent worksheet SVG export', () => {
     empty.junctions = [];
     empty.annotations = [];
     empty.referenceNode = null;
-    expect(svgDimensions(exportSvg(empty, { margin: 0 }))).toEqual({
+    expect(svgDimensions(renderSvg(empty, { margin: 0 }))).toEqual({
       width: 800,
       height: 500,
       viewBox: [100, 100, 800, 500],
@@ -360,7 +364,7 @@ describe('independent worksheet SVG export', () => {
       id: 'long', kind: 'note', anchor: { kind: 'terminal', id: 'R1.a' },
       content: '긴 설명 '.repeat(100), visibility: 'always',
     }];
-    const dimensions = svgDimensions(exportSvg(document, { margin: 24 }));
+    const dimensions = svgDimensions(renderSvg(document, { margin: 24 }));
     expect(dimensions.width).toBeGreaterThan(1000);
     expect(dimensions.height).toBeGreaterThan(200);
     expect(dimensions.viewBox.every(Number.isFinite)).toBe(true);
@@ -370,8 +374,8 @@ describe('independent worksheet SVG export', () => {
     const document = fixture();
     const invalid = cloneDocument(document);
     invalid.wires[0].start.id = 'missing';
-    expect(() => exportSvg(invalid)).toThrow();
-    expect(() => exportSvg(document, { margin: -1 })).toThrow(/margin/);
+    expect(() => renderSvg(invalid)).toThrow();
+    expect(() => renderSvg(document, { margin: -1 })).toThrow(/margin/);
   });
 });
 
@@ -381,6 +385,7 @@ describe('PNG rasterization and clipboard fallback', () => {
   function installRasterMocks() {
     const canvases: Array<{ width: number; height: number }> = [];
     const drawImage = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(mathFontBytes)));
     vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ close: vi.fn() })));
     vi.stubGlobal('document', {
       createElement: (tag: string) => {
@@ -403,7 +408,7 @@ describe('PNG rasterization and clipboard fallback', () => {
   it.each([false,true])('rasterizes at 1x or exactly 2x when highResolution=%s', async highResolution => {
     const document = fixture();
     const { canvases, drawImage } = installRasterMocks();
-    const svg = svgDimensions(exportSvg(document, { margin: 24 }));
+    const svg = svgDimensions(renderSvg(document, { margin: 24 }));
     const blob = await exportPng(document, { margin: 24, highResolution });
 
     expect(blob.type).toBe('image/png');
@@ -463,7 +468,7 @@ describe('free output layout', () => {
     const doc=history.present;
     expect(solve(doc)).toEqual(before);
     expect(parseDocument(serializeDocument(doc))).toEqual({ok:true,document:doc});
-    const svg=exportSvg(doc);
+    const svg=renderSvg(doc);
     expect(svg).toContain('font-size="33.75"');
     expect(svg).toContain('width="126" height="54"');
     expect(svg).toContain('M150 100L150 200');
@@ -472,7 +477,7 @@ describe('free output layout', () => {
     apply({type:'SetProperties',id:'R1',properties:{answerVisible:false}});
     expect(componentPresentation(history.present.components.find(c=>c.id==='R1')!).value).toBeNull();
     apply({type:'SetOutputScale',scale:0.5});
-    expect(exportSvg(history.present,{circuitOnly:true})).not.toContain('I₁');
+    expect(renderSvg(history.present,{circuitOnly:true})).not.toContain('I₁');
   });
 
   it('rejects a free decoration without a position and invalid scale without adding history', () => {
@@ -493,10 +498,10 @@ describe('output ground and embedded math font',()=>{
       battery.rotation = rotation;
       const live = symbolMarkup(battery);
       expect(live).toContain('data-symbol="battery-polarity"');
-      expect(exportSvg(doc)).not.toContain('data-symbol="battery-polarity"');
-      expect(exportSvg(doc, { showSymbolPolarity: false })).not.toContain('data-symbol="battery-polarity"');
-      expect(exportSvg(doc, { showSymbolPolarity: true })).toContain(live);
-      expect(exportSvg(doc, { circuitOnly: true, showSymbolPolarity: false })).toContain(live);
+      expect(renderSvg(doc)).not.toContain('data-symbol="battery-polarity"');
+      expect(renderSvg(doc, { showSymbolPolarity: false })).not.toContain('data-symbol="battery-polarity"');
+      expect(renderSvg(doc, { showSymbolPolarity: true })).toContain(live);
+      expect(renderSvg(doc, { circuitOnly: true, showSymbolPolarity: false })).toContain(live);
     }
     battery.rotation = before.components.find(component => component.id === battery.id)!.rotation;
     expect(doc).toEqual(before);
@@ -514,10 +519,10 @@ describe('output ground and embedded math font',()=>{
       expect(live).toContain('>+</text>');
       expect(live).toContain('>−</text>');
       expect(live).toContain('rotate(' + -rotation + ' -34 -10)');
-      expect(exportSvg(doc)).not.toContain('data-symbol="meter-polarity"');
-      expect(exportSvg(doc, { showSymbolPolarity: false })).not.toContain('data-symbol="meter-polarity"');
-      expect(exportSvg(doc, { showSymbolPolarity: true })).toContain(live);
-      expect(exportSvg(doc, { circuitOnly: true, showSymbolPolarity: false })).toContain(live);
+      expect(renderSvg(doc)).not.toContain('data-symbol="meter-polarity"');
+      expect(renderSvg(doc, { showSymbolPolarity: false })).not.toContain('data-symbol="meter-polarity"');
+      expect(renderSvg(doc, { showSymbolPolarity: true })).toContain(live);
+      expect(renderSvg(doc, { circuitOnly: true, showSymbolPolarity: false })).toContain(live);
     }
     expect(doc.components.slice(0, -1)).toEqual(before.components);
     expect(doc.wires).toEqual(before.wires);
@@ -525,19 +530,35 @@ describe('output ground and embedded math font',()=>{
   it('hides ground by default, shows only its symbol on request, and preserves the 3D reference',()=>{
     const doc=fixture();
     expect(doc.referenceNode).not.toBeNull();
-    expect(exportSvg(doc)).not.toContain('data-output-ground');
-    const shown=exportSvg(doc,{showGround:true});
+    expect(renderSvg(doc)).not.toContain('data-output-ground');
+    const shown=renderSvg(doc,{showGround:true});
     expect(shown).toContain('data-output-ground="true"');
     expect(shown).not.toContain('>0 V</text>');
-    expect(exportSvg(doc,{showGround:false})).not.toContain('data-output-ground');
-    expect(exportSvg(doc,{circuitOnly:true})).toContain('>0 V</text>');
+    expect(renderSvg(doc,{showGround:false})).not.toContain('data-output-ground');
+    expect(renderSvg(doc,{circuitOnly:true})).toContain('>0 V</text>');
   });
-  it('embeds a standalone WOFF2 font for SVG and PNG notation',()=>{
-    const svg=standaloneSvg(fixture());
-    expect(svg).toContain("font-family:'Libertinus Math'");
-    expect(svg).toMatch(/data:font\/woff2;base64,d09GMg/);
-    expect(svg).toContain('font-synthesis:none');
-    expect(svg).not.toContain('fonts.googleapis.com');
+  it('retries a failed font download and shares the same bytes between the screen and standalone SVG', async () => {
+    vi.resetModules();
+    const { loadMathFont } = await import('../src/typography');
+    const { createSvgExport, exportSvg } = await import('../src/export');
+    const fetchFont = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(mathFontBytes));
+    vi.stubGlobal('fetch', fetchFont);
+    try {
+      const document = fixture();
+      expect(createSvgExport(document).svg).not.toContain('data:font');
+      expect(fetchFont).not.toHaveBeenCalled();
+      await expect(exportSvg(document)).rejects.toMatchObject({ name: 'MathFontError' });
+      const [, svg] = await Promise.all([loadMathFont(), exportSvg(document)]);
+      expect(await exportSvg(document)).toBe(svg);
+      expect(fetchFont).toHaveBeenCalledTimes(2);
+      expect(svg).toContain(`data:font/woff2;base64,${Buffer.from(mathFontBytes).toString('base64')}`);
+      expect(svg).toContain('font-synthesis:none');
+      expect(svg).not.toContain('cdn.jsdelivr.net');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -552,7 +573,7 @@ describe('variable resistor presentation and compatibility', () => {
     resistor.type='resistive-load';
     expect(componentDefinitions[resistor.type].name).toBe('가변저항');
     expect(symbolMarkup(resistor)).toContain('adjustment-arrow');
-    expect(exportSvg(document)).toContain('adjustment-arrow');
+    expect(renderSvg(document)).toContain('adjustment-arrow');
     expect(resistor.terminals).toEqual(terminals);
     expect(solve(document).result).toEqual(before);
     expect(parseDocument(serializeDocument(document))).toEqual({ok:true,document});

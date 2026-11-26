@@ -19,7 +19,7 @@ import {
   terminalPosition,
   wirePoints,
 } from '../component-library';
-import { mathFontFace, mathFontFamily } from '../typography';
+import { embeddedMathFontFace, mathFontFamily } from '../typography';
 import { notationTokens } from '../notation';
 import {
   DocumentError,
@@ -307,7 +307,6 @@ export function createSvgExport(
   const chunks: string[] = [];
   const items: OutputLayoutItem[] = [];
   const wireSegments: OutputLayout['wireSegments'][number][] = [];
-  const fontDefinition = `<defs><style>${mathFontFace}</style></defs>`;
   const scale = circuitTextScale*(options.circuitOnly ? 1 : document.output?.fontScale ?? 1);
 
   chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${numberAttribute(bounds.width)}" height="${numberAttribute(bounds.height)}" viewBox="${numberAttribute(bounds.x)} ${numberAttribute(bounds.y)} ${numberAttribute(bounds.width)} ${numberAttribute(bounds.height)}" role="img">`);
@@ -315,7 +314,7 @@ export function createSvgExport(
   if (options.background === 'white') {
     chunks.push(`<rect x="${numberAttribute(bounds.x)}" y="${numberAttribute(bounds.y)}" width="${numberAttribute(bounds.width)}" height="${numberAttribute(bounds.height)}" fill="#ffffff"/>`);
   }
-  chunks.push(`${fontDefinition}<g font-family="${mathFontFamily}" style="font-synthesis:none">`);
+  chunks.push(`<g font-family="${mathFontFamily}" style="font-synthesis:none">`);
 
   const crossings=wireCrossings(document);
   for (const wire of document.wires) {
@@ -370,11 +369,17 @@ export function createSvgExport(
 
   chunks.push('</g></svg>');
   const svg = chunks.join('');
-  return { svg, content: svg.slice(svg.indexOf('>')+1, -6).replace(fontDefinition, ''), bounds, options, layout: { items, wireSegments } };
+  return { svg, content: svg.slice(svg.indexOf('>')+1, -6), bounds, options, layout: { items, wireSegments } };
 }
 
-export function exportSvg(document: CircuitDocument, options: ExportOptions = {}, result?: SimulationResult): string {
-  return createSvgExport(document, options, result).svg;
+async function embedFont(svg: string): Promise<string> {
+  const font = await embeddedMathFontFace();
+  const start = svg.indexOf('>') + 1;
+  return `${svg.slice(0, start)}<defs><style>${font}</style></defs>${svg.slice(start)}`;
+}
+
+export async function exportSvg(document: CircuitDocument, options: ExportOptions = {}, result?: SimulationResult): Promise<string> {
+  return embedFont(createSvgExport(document, options, result).svg);
 }
 
 async function loadSvgImage(blob: Blob): Promise<CanvasImageSource & { close?: () => void }> {
@@ -422,7 +427,8 @@ export async function exportPng(document: CircuitDocument, options: ExportOption
   canvas.height = height;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('PNG export requires a 2D canvas');
-  const source = await loadSvgImage(new Blob([generated.svg], { type: 'image/svg+xml;charset=utf-8' }));
+  const svg = await embedFont(generated.svg);
+  const source = await loadSvgImage(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
   try {
     context.drawImage(source, 0, 0, width, height);
   } finally {

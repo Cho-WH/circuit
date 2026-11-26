@@ -7,7 +7,7 @@ import { createHistory, executeCommand, previewCommand, undo, redo, insertionCan
 import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { parseDocument, serializeDocument } from '../src/persistence';
-import { exportSvg } from '../src/export';
+import { createSvgExport } from '../src/export';
 
 const fixture=()=>requireDocument(source);
 function apply(document:CircuitDocument,command:Command){const result=executeCommand(createHistory(document),command);if(!result.ok)throw new Error(JSON.stringify(result.diagnostics));return result.history;}
@@ -109,10 +109,10 @@ describe('wire insertion and explicit crossing edits',()=>{
   it('uses the same unmasked bridges in transparent monochrome exports, including joined and separated states',()=>{
     const doc=crossingFixture(),path=wirePath(doc,doc.wires[0]);
     expect(path.match(/ A/g)).toHaveLength(2);
-    const svg=exportSvg(doc,{monochrome:true,background:'transparent'});expect(svg).toContain(`d="${path}"`);expect(svg).not.toContain('<mask');
+    const svg=createSvgExport(doc,{monochrome:true,background:'transparent'}).svg;expect(svg).toContain(`d="${path}"`);expect(svg).not.toContain('<mask');
     const joined=apply(doc,join).present;
-    expect(exportSvg(joined,{monochrome:true})).not.toContain('cx="200" cy="200"');
-    expect(exportSvg(joined,{monochrome:true}).match(/ A7/g)).toHaveLength(1);
+    expect(createSvgExport(joined,{monochrome:true}).svg).not.toContain('cx="200" cy="200"');
+    expect(createSvgExport(joined,{monochrome:true}).svg.match(/ A7/g)).toHaveLength(1);
     expect(wirePath(joined,joined.wires[0])).not.toContain(' A');
     const split=apply(joined,{type:'DisconnectCrossing',junctionId:'J'}).present;expect(wirePath(split,split.wires[0])).toBe(path);
   });

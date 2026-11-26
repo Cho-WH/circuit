@@ -1,4 +1,3 @@
-@font-face{font-family:'Libertinus Math';src:url('./LibertinusMath-Regular.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap}
 /* Only circuit notation and physical quantities; application controls keep the UI typeface. */
 .circuit-canvas text,.potential-graph text,.sweep-graph text,.tile-symbol svg text,
 .notation,.math-notation,.unit-input input,.unit-input>span,.inline-value-editor input,.inline-value-editor>div>span,

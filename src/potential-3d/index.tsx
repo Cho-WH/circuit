@@ -15,6 +15,7 @@ import { createHorizontalAttraction } from './camera-snap';
 import { adjustableParameter, componentValue, htmlNotation, terminalPosition, endpointPosition } from '../component-library';
 import { beginPrimitives, endPrimitives, line, tube, dot } from './primitives';
 import { exportSvg } from '../export';
+import { MathFontError } from '../typography';
 import { sceneAnchors, sceneExtent, selectedVoltage, obliqueDirection, projectedSize, sceneBounds, automaticHeight, fitPotentialHeight, minorVoltageTicks } from './model';
 import { createVoltageMeasurementOverlay, type VoltageMeasurement } from './voltage-measurement';
 export type { VoltageMeasurement } from './voltage-measurement';
@@ -337,42 +338,75 @@ export function Potential3D(props: Potential3DProps) {
   useEffect(() => {
     const r = runtime.current; if (!r) return;
     let cancelled = false;
+    let url: string | undefined;
+    const releaseUrl = () => {
+      if (url) URL.revokeObjectURL(url);
+      url = undefined;
+    };
     r.floorReady = false;
     const schematic: CircuitDocument = JSON.parse(schematicKey);
-    const svg = exportSvg(schematic, { quantityFormat: props.quantityFormat, background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 });
-    const root = new DOMParser().parseFromString(svg,'image/svg+xml').documentElement;
-    const adjustableIds = new Set(schematic.components.filter(c => adjustableParameter(c)).map(c => c.id));
-    root.querySelectorAll('[data-output-part="value"]').forEach(node => { if (adjustableIds.has(node.getAttribute('data-output-id')!)) node.remove(); });
-    const [x,y,width,height] = root.getAttribute('viewBox')!.split(' ').map(Number);
-    // Rasterize the vector source at the texture's actual pixel size, not its CSS size.
-    const maxSide = Math.min(4096, r.renderer.capabilities.maxTextureSize);
-    const resolution = Math.min(4, maxSide / Math.max(width, height), Math.sqrt(8_000_000 / (width * height)));
-    const pixelWidth = Math.max(1, Math.floor(width * resolution)), pixelHeight = Math.max(1, Math.floor(height * resolution));
-    root.setAttribute('width', String(pixelWidth)); root.setAttribute('height', String(pixelHeight));
-    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(root)], { type:'image/svg+xml' }));
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url); if (cancelled) return;
-      try {
-      const canvas = window.document.createElement('canvas');
-      canvas.width = pixelWidth; canvas.height = pixelHeight;
-      const context = canvas.getContext('2d'); if (!context) { latest.current.onError?.('texture'); return; }
-      context.drawImage(image,0,0,canvas.width,canvas.height);
-      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = Math.min(16, r.renderer.capabilities.getMaxAnisotropy());
-      texture.minFilter = THREE.LinearMipmapLinearFilter; texture.magFilter = THREE.LinearFilter;
-      const material = new THREE.MeshBasicMaterial({map:texture,transparent:true,opacity:.66,side:THREE.DoubleSide,depthWrite:false});
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width,height),material);
-      mesh.position.set(x+width/2,-y-height/2,-.25);
-      dispose(r.floor); r.floor.clear(); r.floor.add(mesh); r.floorReady = true; r.begin(); r.render();
-      } catch { latest.current.onError?.('texture'); }
+    let image: HTMLImageElement | undefined;
+    void exportSvg(schematic, { quantityFormat: props.quantityFormat, background: 'transparent', monochrome: true, circuitOnly: true, margin: 55 }).then(svg => {
+      if (cancelled) return;
+      const root = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+      const adjustableIds = new Set(schematic.components.filter(c => adjustableParameter(c)).map(c => c.id));
+      root.querySelectorAll('[data-output-part="value"]').forEach(node => {
+        if (adjustableIds.has(node.getAttribute('data-output-id')!)) node.remove();
+      });
+      const [x, y, width, height] = root.getAttribute('viewBox')!.split(' ').map(Number);
+      // Rasterize at the texture's actual pixel size.
+      const maxSide = Math.min(4096, r.renderer.capabilities.maxTextureSize);
+      const resolution = Math.min(4, maxSide / Math.max(width, height), Math.sqrt(8_000_000 / (width * height)));
+      const pixelWidth = Math.max(1, Math.floor(width * resolution));
+      const pixelHeight = Math.max(1, Math.floor(height * resolution));
+      root.setAttribute('width', String(pixelWidth));
+      root.setAttribute('height', String(pixelHeight));
+      const floorImage = new Image();
+      image = floorImage;
+      floorImage.onload = () => {
+        releaseUrl();
+        if (cancelled) return;
+        try {
+          const canvas = window.document.createElement('canvas');
+          canvas.width = pixelWidth;
+          canvas.height = pixelHeight;
+          const context = canvas.getContext('2d');
+          if (!context) { latest.current.onError?.('texture'); return; }
+          context.drawImage(floorImage, 0, 0, canvas.width, canvas.height);
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = Math.min(16, r.renderer.capabilities.getMaxAnisotropy());
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: .66, side: THREE.DoubleSide, depthWrite: false });
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+          mesh.position.set(x + width / 2, -y - height / 2, -.25);
+          dispose(r.floor);
+          r.floor.clear();
+          r.floor.add(mesh);
+          r.floorReady = true;
+          r.begin();
+          r.render();
+        } catch { latest.current.onError?.('texture'); }
+      };
+      floorImage.onerror = () => {
+        releaseUrl();
+        if (!cancelled) latest.current.onError?.('texture');
+      };
+      url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(root)], { type: 'image/svg+xml' }));
+      floorImage.src = url;
+    }).catch(error => {
+      releaseUrl();
+      if (!cancelled) latest.current.onError?.(error instanceof MathFontError ? 'font' : 'texture');
+    });
+    return () => {
+      cancelled = true;
+      if (image) {
+        image.onload = null;
+        image.onerror = null;
+      }
+      releaseUrl();
     };
-    image.onerror = () => { URL.revokeObjectURL(url); if (!cancelled) latest.current.onError?.('texture'); };
-    // DOM labels and the SVG image use the same bundled mathematics font.
-    const fonts = window.document.fonts;
-    const fontReady = fonts ? fonts.load('18px "Libertinus Math"') : Promise.resolve([]);
-    fontReady.then(() => { if (!cancelled) image.src = url; }).catch(() => { if (!cancelled) latest.current.onError?.('font'); });
-    return () => { cancelled = true; image.onload = null; image.onerror = null; URL.revokeObjectURL(url); };
   }, [schematicKey,props.quantityFormat]);
 
   useEffect(() => {

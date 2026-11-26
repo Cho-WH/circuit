@@ -8,7 +8,7 @@ import {
   symbolMarkup,
   parameterValueAt,
 } from '../src/component-library';
-import { exportSvg } from '../src/export';
+import { createSvgExport } from '../src/export';
 import { parseParameterRange, parameterRangeProperties } from '../src/app/parameters';
 import { parseDocument, serializeDocument } from '../src/persistence';
 import { executeCommand, createHistory } from '../src/editor';
@@ -157,7 +157,7 @@ describe('adjustable voltage source', () => {
       expect(parameterContext(doc, source.id, adjustableParameter(source)!)).toBe(context);
       for (const rotation of [0, 90, 180, 270] as const) {
         source.rotation = rotation;
-        expect(exportSvg(doc)).toContain(symbolMarkup(source));
+        expect(createSvgExport(doc).svg).toContain(symbolMarkup(source));
         expect(symbolMarkup(source)).toContain('data-symbol="dc-supply"');
         expect(symbolMarkup(source, { disconnectedSource: true })).toContain('M-32 0H-23');
         expect(analyze(doc).result.componentVoltages[source.id]).toEqual(

@@ -13,6 +13,12 @@ import { compileCircuit } from '../src/connectivity';
 import { solveCircuit } from '../src/simulation';
 import { buildCurrentModel, buildPotentialModel } from '../src/visualization';
 import { createComponent } from '../src/component-library';
+import { embeddedMathFontFace, MathFontError } from '../src/typography';
+
+vi.mock('../src/typography', async importOriginal => ({
+  ...(await importOriginal<typeof import('../src/typography')>()),
+  embeddedMathFontFace: vi.fn(),
+}));
 
 const observed = vi.hoisted(() => ({ render: vi.fn(), dispose: vi.fn(), start: () => {}, end: () => {}, change: () => {}, resize: () => {}, frames: new Map<number, FrameRequestCallback>(), nextFrame: 0, target: null as THREE.Vector3 | null }));
 vi.mock('three', async importOriginal => {
@@ -46,8 +52,11 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
-  const font = new Promise<FontFace[]>((resolve, reject) => { resolveFont = () => resolve([]); rejectFont = () => reject(new Error('font')); });
-  Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => font } });
+  const font = new Promise<string>((resolve, reject) => {
+    resolveFont = () => resolve('');
+    rejectFont = () => reject(new MathFontError(new Error('font')));
+  });
+  vi.mocked(embeddedMathFontFace).mockReturnValue(font);
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -411,7 +420,7 @@ describe('3D prepared first frame and camera lifetime', () => {
   });
   it('waits for mathematics font and floor texture, then renders aligned top view before announcing ready', async () => {
     const { ready, entered } = await mount();
-    expect(images[0].src).toBe(''); expect(ready).not.toHaveBeenCalled();
+    expect(images).toHaveLength(0); expect(ready).not.toHaveBeenCalled();
     await act(async () => resolveFont()); expect(images[0].src).toContain('blob:'); expect(ready).not.toHaveBeenCalled();
     await act(async () => images[0].onload!()); expect(ready).toHaveBeenCalledOnce(); expect(entered).not.toHaveBeenCalled();
     const [scene, camera] = observed.render.mock.lastCall as [THREE.Scene, THREE.OrthographicCamera];
@@ -488,7 +497,7 @@ describe('3D prepared first frame and camera lifetime', () => {
   });
   it('reports font failure without starting texture loading or announcing readiness', async () => {
     const { ready, error } = await mount(); await act(async () => rejectFont());
-    expect(error).toHaveBeenCalledWith('font'); expect(ready).not.toHaveBeenCalled(); expect(images[0].src).toBe('');
+    expect(error).toHaveBeenCalledWith('font'); expect(ready).not.toHaveBeenCalled(); expect(images).toHaveLength(0);
   });
   it('reports texture failure and disposes GPU resources when removed', async () => {
     const { ready, error } = await mount(); await act(async () => resolveFont()); await act(async () => images[0].onerror!());

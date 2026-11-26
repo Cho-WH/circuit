@@ -11,6 +11,7 @@ import type { CircuitDocument, SimulationResult } from '../domain';
 import type { Command } from '../editor';
 import { annotationPlacements, componentPresentation, componentDefinition, componentValueDisplay } from '../component-library';
 import { createSvgExport, exportSvg, exportPng, copyPng, type ExportOptions, type OutputRef } from '../export';
+import { MathFontError } from '../typography';
 import { alignmentLabels, alignmentMoves, movementCommands, selectionUnits, type Alignment } from './output-layout';
 import type { OutputTool } from './OutputCanvas';
 import './panels.css';
@@ -57,10 +58,12 @@ export function WorksheetPanel(props: Props) {
     setBusy(true);
     try {
       const name=doc.title||'회로도';
-      if(action==='svg')saveBlob(new Blob([exportSvg(doc,options,props.result)],{type:'image/svg+xml;charset=utf-8'}),name+'.svg');
+      if(action==='svg')saveBlob(new Blob([await exportSvg(doc,options,props.result)],{type:'image/svg+xml;charset=utf-8'}),name+'.svg');
       else if(action==='copy'){const copied=await copyPng(doc,options,props.result);if(copied.copied)setCopied(true);else{saveBlob(copied.blob,name+'.png');props.onNotice('그림 복사를 지원하지 않아 PNG로 저장했습니다.');}}
       else {const blob=await exportPng(doc,options,props.result);if(action==='preview')setPreview(URL.createObjectURL(blob));else saveBlob(blob,name+'.png');}
-    }catch{props.onNotice('출력을 만들지 못했어요. 다시 시도해 주세요.', 'error');}
+    }catch(error){props.onNotice(error instanceof MathFontError
+      ? '수식 글꼴을 불러오지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.'
+      : '출력을 만들지 못했어요. 다시 시도해 주세요.', 'error');}
     finally{setBusy(false);}
   }
   function property(values:ComponentProperties){if(component)props.dispatch({type:'SetProperties',id:component.id,properties:values});}
